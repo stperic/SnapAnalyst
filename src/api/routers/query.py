@@ -26,7 +26,7 @@ router = APIRouter(tags=["query"])
 class SQLQueryRequest(BaseModel):
     """Request to execute SQL query"""
     sql: str = Field(..., description="SQL query to execute (SELECT only)")
-    limit: int = Field(1000, ge=1, le=10000, description="Maximum rows to return")
+    limit: int = Field(50000, ge=1, le=100000, description="Maximum rows to return")
     format: str = Field("json", description="Response format: json, markdown, csv")
 
 

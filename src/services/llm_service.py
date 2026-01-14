@@ -55,16 +55,24 @@ class LLMService:
     def __init__(self):
         """Initialize LLM service with configured provider"""
         self.provider = settings.llm_provider
-        self.model = settings.default_llm_model
+        self.sql_model = settings.sql_model  # Model for SQL generation
+        self.summary_model = settings.summary_model  # Model for summaries
         self.vanna = None
+        self.vanna_summary = None  # Separate instance for summaries
         self._initialized = False
         
-        logger.info(f"LLM Service initialized with provider: {self.provider}, model: {self.model}")
+        logger.info(f"LLM Service initialized with provider: {self.provider}")
+        logger.info(f"  SQL Model (input): {self.sql_model}")
+        logger.info(f"  Summary Model (output): {self.summary_model}")
     
-    def _initialize_vanna(self):
-        """Initialize Vanna with the configured LLM provider and ChromaDB"""
+    def _initialize_vanna(self, model: str = None):
+        """Initialize Vanna with the configured LLM provider and ChromaDB
+        
+        Args:
+            model: Optional model override. If not provided, uses self.sql_model
+        """
         config = {
-            "model": self.model,
+            "model": model or self.sql_model,
             "temperature": settings.llm_temperature,
             "max_tokens": settings.llm_max_tokens,
         }
@@ -73,19 +81,19 @@ class LLMService:
             if not settings.openai_api_key:
                 raise ValueError("OpenAI API key not configured. Set OPENAI_API_KEY in .env")
             config["api_key"] = settings.openai_api_key
-            logger.info(f"Initializing Vanna with OpenAI ({self.model}) and ChromaDB")
+            logger.info(f"Initializing Vanna with OpenAI ({config['model']}) and ChromaDB")
             return VannaOpenAI(config=config)
         
         elif self.provider == "anthropic":
             if not settings.anthropic_api_key:
                 raise ValueError("Anthropic API key not configured. Set ANTHROPIC_API_KEY in .env")
             config["api_key"] = settings.anthropic_api_key
-            logger.info(f"Initializing Vanna with Anthropic Claude ({self.model}) and ChromaDB")
+            logger.info(f"Initializing Vanna with Anthropic Claude ({config['model']}) and ChromaDB")
             return VannaAnthropic(config=config)
         
         elif self.provider == "ollama":
             config["host"] = settings.ollama_base_url
-            logger.info(f"Initializing Vanna with Ollama ({self.model} at {settings.ollama_base_url}) and ChromaDB")
+            logger.info(f"Initializing Vanna with Ollama ({config['model']} at {settings.ollama_base_url}) and ChromaDB")
             return VannaOllama(config=config)
         
         else:
@@ -282,11 +290,60 @@ class LLMService:
             logger.warning(f"Could not generate followup questions: {e}")
             return []
     
+    def generate_text(self, prompt: str, max_tokens: int = 150) -> str:
+        """
+        Generate text using the SUMMARY MODEL (separate from SQL model).
+        
+        Args:
+            prompt: Text prompt for the LLM
+            max_tokens: Maximum tokens to generate
+        
+        Returns:
+            Generated text response
+        """
+        if not self._initialized:
+            self.initialize()
+        
+        try:
+            logger.info(f"Generating text with {self.summary_model} (max_tokens={max_tokens})")
+            
+            # Use OpenAI directly for summaries to use the summary model
+            if self.provider == "openai":
+                from openai import OpenAI
+                client = OpenAI(api_key=settings.openai_api_key)
+                
+                response = client.chat.completions.create(
+                    model=self.summary_model,
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=max_tokens,
+                    temperature=0.3
+                )
+                
+                if response.choices and response.choices[0].message.content:
+                    return response.choices[0].message.content.strip()
+                else:
+                    logger.warning("Empty response from OpenAI")
+                    return "Unable to generate summary."
+                    
+            else:
+                # For other providers, use Vanna (will use SQL model)
+                response = self.vanna.submit_prompt(prompt, kwargs={"max_tokens": max_tokens})
+                
+                if response:
+                    return response.strip()
+                else:
+                    return "Unable to generate summary."
+                
+        except Exception as e:
+            logger.error(f"Error generating text: {e}", exc_info=True)
+            return "Unable to generate summary."
+    
     def get_provider_info(self) -> Dict:
         """Get information about the current LLM provider and configuration"""
         return {
             "provider": self.provider,
-            "model": self.model,
+            "sql_model": self.sql_model,
+            "summary_model": self.summary_model,
             "temperature": settings.llm_temperature,
             "max_tokens": settings.llm_max_tokens,
             "initialized": self._initialized,

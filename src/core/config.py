@@ -84,7 +84,9 @@ class Settings(BaseSettings):
 
     # LLM Configuration
     llm_provider: str = Field(default="ollama", pattern="^(openai|anthropic|ollama)$")
-    llm_model: Optional[str] = None  # Auto-selected based on provider if not set
+    llm_model: Optional[str] = None  # Auto-selected based on provider if not set (legacy)
+    llm_model_sql: Optional[str] = None  # Model for SQL generation (input)
+    llm_model_summary: Optional[str] = None  # Model for summary generation (output)
     llm_temperature: float = Field(default=0.1, ge=0.0, le=2.0)
     llm_max_tokens: int = Field(default=2000, ge=100, le=8000)
     
@@ -110,13 +112,39 @@ class Settings(BaseSettings):
     
     @property
     def default_llm_model(self) -> str:
-        """Get default model based on provider"""
+        """Get default model based on provider (legacy - use sql or summary specific)"""
         defaults = {
             "openai": "gpt-4-turbo-preview",
             "anthropic": "claude-3-5-sonnet-20241022",
             "ollama": "llama3.1:8b"
         }
         return self.llm_model or defaults.get(self.llm_provider, "llama3.1:8b")
+    
+    @property
+    def sql_model(self) -> str:
+        """Get model for SQL generation (input processing)"""
+        if self.llm_model_sql:
+            return self.llm_model_sql
+        # Default to more powerful models for SQL generation
+        defaults = {
+            "openai": "gpt-4-turbo-preview",
+            "anthropic": "claude-3-5-sonnet-20241022",
+            "ollama": "llama3.1:8b"
+        }
+        return defaults.get(self.llm_provider, "gpt-4-turbo-preview")
+    
+    @property
+    def summary_model(self) -> str:
+        """Get model for summary generation (output processing)"""
+        if self.llm_model_summary:
+            return self.llm_model_summary
+        # Default to faster/cheaper models for summaries
+        defaults = {
+            "openai": "gpt-3.5-turbo",
+            "anthropic": "claude-3-5-haiku-20241022",
+            "ollama": "llama3.1:8b"
+        }
+        return defaults.get(self.llm_provider, "gpt-3.5-turbo")
 
 
 @lru_cache()

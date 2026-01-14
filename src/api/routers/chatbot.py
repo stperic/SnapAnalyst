@@ -43,6 +43,30 @@ class ChatQueryRequest(BaseModel):
     )
 
 
+class TextGenerationRequest(BaseModel):
+    """Request model for general text generation"""
+    
+    prompt: str = Field(
+        ...,
+        min_length=10,
+        max_length=2000,
+        description="Text prompt for the LLM"
+    )
+    max_tokens: int = Field(
+        default=150,
+        ge=10,
+        le=500,
+        description="Maximum tokens to generate"
+    )
+
+
+class TextGenerationResponse(BaseModel):
+    """Response model for text generation"""
+    
+    text: str = Field(..., description="Generated text")
+    tokens_used: Optional[int] = Field(None, description="Approximate tokens used")
+
+
 class ChatQueryResponse(BaseModel):
     """Response model for natural language query"""
     
@@ -129,10 +153,17 @@ async def chat_query(request: ChatQueryRequest) -> ChatQueryResponse:
                 detail="Could not generate SQL from the question. Please rephrase."
             )
         
+        # Debug: Log SQL before filter
+        logger.info(f"SQL before filter: {sql}")
+        
         # Apply global filter to generated SQL
         from src.core.filter_manager import get_filter_manager
         filter_manager = get_filter_manager()
-        sql = filter_manager.apply_to_sql(sql)
+        sql_after_filter = filter_manager.apply_to_sql(sql)
+        
+        # Debug: Log SQL after filter
+        logger.info(f"SQL after filter: {sql_after_filter}")
+        sql = sql_after_filter
         
         # Get provider info
         provider_info = llm_service.get_provider_info()
@@ -172,7 +203,7 @@ async def chat_query(request: ChatQueryRequest) -> ChatQueryResponse:
             row_count=row_count,
             followup_questions=followup_questions,
             provider=provider_info["provider"],
-            model=provider_info["model"],
+            model=provider_info["sql_model"],  # Use SQL model for query generation
         )
         
     except ValueError as e:
@@ -279,3 +310,33 @@ async def get_example_questions() -> List[str]:
         "How many households receive the minimum benefit?",
     ]
     return examples
+
+
+@router.post(
+    "/generate-text",
+    response_model=TextGenerationResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Generate text using LLM",
+    description="Generate text response for a given prompt (not SQL-specific)",
+)
+async def generate_text_endpoint(request: TextGenerationRequest):
+    """Generate text using the configured LLM"""
+    try:
+        llm_service = get_llm_service()
+        if not llm_service._initialized:
+            initialize_llm_service()
+            llm_service = get_llm_service()
+        
+        generated_text = llm_service.generate_text(request.prompt, request.max_tokens)
+        
+        return TextGenerationResponse(
+            text=generated_text,
+            tokens_used=request.max_tokens
+        )
+    except Exception as e:
+        logger.error(f"Error generating text: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate text: {str(e)}"
+        )
+

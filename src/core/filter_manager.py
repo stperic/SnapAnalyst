@@ -7,7 +7,7 @@ Filter persists until application restart.
 Designed for extensibility - can easily support multiple states/years in future.
 """
 from typing import Optional, List, Dict, Any
-from threading import Lock
+from threading import RLock  # Use RLock (reentrant) instead of Lock to prevent deadlocks
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -116,7 +116,7 @@ class FilterManager:
     
     def __init__(self):
         self._filter = DataFilter()
-        self._lock = Lock()
+        self._lock = RLock()  # Reentrant lock allows same thread to acquire multiple times
     
     def get_filter(self) -> DataFilter:
         """Get current filter (thread-safe)."""
@@ -211,12 +211,15 @@ class FilterManager:
         filter_clause = " AND ".join(conditions)
         
         # Inject into SQL
-        sql_upper = sql.upper()
+        # Normalize whitespace to handle newlines
+        sql_normalized = ' '.join(sql.split())
+        sql_upper = sql_normalized.upper()
         
         # Case 1: SQL already has WHERE clause
         if " WHERE " in sql_upper:
-            # Add to existing WHERE with AND
-            return sql.replace(" WHERE ", f" WHERE ({filter_clause}) AND ", 1).replace(" where ", f" WHERE ({filter_clause}) AND ", 1)
+            # Add to existing WHERE with AND (case-insensitive single replacement)
+            import re
+            return re.sub(r'\s+WHERE\s+', f' WHERE ({filter_clause}) AND ', sql_normalized, count=1, flags=re.IGNORECASE)
         
         # Case 2: SQL has GROUP BY, ORDER BY, LIMIT, etc. but no WHERE
         # Insert WHERE before these clauses
@@ -224,14 +227,14 @@ class FilterManager:
             if keyword in sql_upper:
                 # Find position (case-insensitive)
                 import re
-                match = re.search(keyword, sql, re.IGNORECASE)
+                match = re.search(keyword, sql_normalized, re.IGNORECASE)
                 if match:
                     pos = match.start()
-                    return sql[:pos] + f" WHERE {filter_clause} " + sql[pos:]
+                    return sql_normalized[:pos] + f" WHERE {filter_clause} " + sql_normalized[pos:]
         
         # Case 3: Simple SELECT without WHERE or other clauses
         # Add WHERE at the end
-        return sql.rstrip().rstrip(';') + f" WHERE {filter_clause}"
+        return sql_normalized.rstrip().rstrip(';') + f" WHERE {filter_clause}"
 
 
 # Global filter manager instance

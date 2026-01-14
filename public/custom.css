@@ -1,0 +1,81 @@
+/* Custom CSS for SnapAnalyst - Following Chainlit Documentation */
+/* Reference: https://docs.chainlit.io/customisation/custom-css */
+
+/* ============================================
+   FILTER INDICATOR STYLING
+   ============================================ */
+
+/* Filter indicator above input box */
+.step-filter-indicator {
+    position: fixed !important;
+    bottom: 70px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    padding: 4px 12px !important;
+    font-size: 11px !important;
+    color: #666 !important;
+    background: transparent !important;
+    z-index: 1000 !important;
+    pointer-events: none !important;
+    text-align: center !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+    white-space: nowrap !important;
+}
+
+/* Make filter indicator messages subtle */
+.message-filter-indicator {
+    font-size: 11px !important;
+    color: #666 !important;
+    text-align: center !important;
+    margin: 0 !important;
+    padding: 2px !important;
+}
+
+/* ============================================
+   ACTION BUTTON STYLING (Documented Approach)
+   ============================================ */
+
+/* Target action buttons using official .cl-action class */
+.cl-action {
+    padding: 3px 8px !important;
+    font-size: 11px !important;
+    min-height: 22px !important;
+    height: 22px !important;
+    line-height: 1.2 !important;
+    border-radius: 3px !important;
+    background-color: #f8fafc !important;
+    border: 1px solid #e2e8f0 !important;
+    color: #64748b !important;
+    font-weight: 500 !important;
+    transition: all 0.15s ease !important;
+}
+
+.cl-action:hover {
+    background-color: #f1f5f9 !important;
+    border-color: #cbd5e1 !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Action button container - reduce gap and align to flex */
+.cl-action-container {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 4px !important;
+    justify-content: flex-end !important;
+    margin: 0 !important;
+    padding: 4px 0 0 0 !important;
+}
+
+/* Reduce spacing between message content and actions */
+.step-content,
+.message-content {
+    margin-bottom: 0 !important;
+}
+
+/* Target all action-related divs to reduce spacing */
+div[class*="action"] {
+    margin-top: 4px !important;
+    margin-bottom: 0 !important;
+    padding-top: 0 !important;
+}

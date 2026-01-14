@@ -226,28 +226,28 @@ async def get_statistics():
         session = SessionLocal()
         
         try:
-            # Get fiscal years present
+            # Get fiscal years present (fast query)
             fiscal_years_query = session.query(Household.fiscal_year).distinct()
             fiscal_years = sorted([fy[0] for fy in fiscal_years_query.all() if fy[0]])
             
-            # Overall counts
-            total_households = session.query(Household).count()
-            total_members = session.query(HouseholdMember).count()
-            total_error_records = session.query(QCError).count()
+            # Overall counts - use func.count() for speed (only counts, doesn't load data)
+            total_households = session.query(func.count()).select_from(Household).scalar()
+            total_members = session.query(func.count()).select_from(HouseholdMember).scalar()
+            total_error_records = session.query(func.count()).select_from(QCError).scalar()
             
-            # QC Error breakdown - simplified
+            # QC Error breakdown - optimized
             households_with_errors = session.query(
                 func.count(func.distinct(QCError.case_id))
             ).scalar() or 0
             
             households_without_errors = total_households - households_with_errors
             
-            # By fiscal year
+            # By fiscal year - optimized with func.count()
             by_year = []
             for fy in fiscal_years:
-                households = session.query(Household).filter(
+                households = session.query(func.count()).select_from(Household).filter(
                     Household.fiscal_year == fy
-                ).count()
+                ).scalar()
                 
                 by_year.append({
                     "fiscal_year": fy,

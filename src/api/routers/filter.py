@@ -87,16 +87,19 @@ async def set_filter(request: FilterSetRequest):
              -d '{"state": "Connecticut", "fiscal_year": 2023}'
         ```
     """
+    logger.info(f"🔍 [FILTER] Endpoint called with state={request.state}, fiscal_year={request.fiscal_year}")
     try:
+        logger.info("🔍 [FILTER] Getting filter manager...")
         manager = get_filter_manager()
         
+        logger.info("🔍 [FILTER] Setting filter...")
         # Set filter
         updated_filter = manager.set_filter(
             state=request.state,
             fiscal_year=request.fiscal_year
         )
         
-        logger.info(f"Filter updated: {updated_filter.get_description()}")
+        logger.info(f"✅ [FILTER] Filter updated: {updated_filter.get_description()}")
         
         return FilterResponse(
             status="success",
@@ -105,7 +108,7 @@ async def set_filter(request: FilterSetRequest):
         )
         
     except Exception as e:
-        logger.error(f"Error setting filter: {e}")
+        logger.error(f"❌ [FILTER] Error setting filter: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to set filter: {str(e)}")
 
 
