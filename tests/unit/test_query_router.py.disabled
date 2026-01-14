@@ -1,0 +1,323 @@
+"""
+Unit Tests for Query Router
+
+Tests the SQL execution endpoint, schema documentation, and query validation.
+"""
+import pytest
+import json
+from pathlib import Path
+
+from src.api.routers.query import QueryValidator, router
+
+
+class TestQueryValidator:
+    """Test SQL query validation"""
+    
+    def test_validate_select_query(self):
+        """Test that valid SELECT queries pass"""
+        sql = "SELECT * FROM households WHERE fiscal_year = 2023"
+        is_valid, error = QueryValidator.validate_query(sql)
+        assert is_valid is True
+        assert error is None
+    
+    def test_block_drop_query(self):
+        """Test that DROP queries are blocked"""
+        sql = "DROP TABLE households"
+        is_valid, error = QueryValidator.validate_query(sql)
+        assert is_valid is False
+        assert "DROP" in error
+    
+    def test_block_delete_query(self):
+        """Test that DELETE queries are blocked"""
+        sql = "DELETE FROM households WHERE id = 1"
+        is_valid, error = QueryValidator.validate_query(sql)
+        assert is_valid is False
+        assert "DELETE" in error
+    
+    def test_block_update_query(self):
+        """Test that UPDATE queries are blocked"""
+        sql = "UPDATE households SET snap_benefit = 0"
+        is_valid, error = QueryValidator.validate_query(sql)
+        assert is_valid is False
+        assert "UPDATE" in error
+    
+    def test_block_insert_query(self):
+        """Test that INSERT queries are blocked"""
+        sql = "INSERT INTO households (case_id) VALUES ('TEST')"
+        is_valid, error = QueryValidator.validate_query(sql)
+        assert is_valid is False
+        assert "INSERT" in error
+    
+    def test_block_alter_query(self):
+        """Test that ALTER queries are blocked"""
+        sql = "ALTER TABLE households ADD COLUMN test VARCHAR(50)"
+        is_valid, error = QueryValidator.validate_query(sql)
+        assert is_valid is False
+        assert "ALTER" in error
+    
+    def test_block_multiple_statements(self):
+        """Test that multiple statements are blocked"""
+        sql = "SELECT * FROM households; DROP TABLE households;"
+        is_valid, error = QueryValidator.validate_query(sql)
+        assert is_valid is False
+        # Either caught as multiple statements or forbidden keyword (both are valid)
+        assert "Multiple statements" in error or "forbidden keyword" in error
+    
+    def test_block_comments(self):
+        """Test that comments are blocked"""
+        sql = "SELECT * FROM households -- comment"
+        is_valid, error = QueryValidator.validate_query(sql)
+        assert is_valid is False
+        assert "Comments" in error
+    
+    def test_must_start_with_select(self):
+        """Test that queries must start with SELECT"""
+        sql = "SHOW TABLES"
+        is_valid, error = QueryValidator.validate_query(sql)
+        assert is_valid is False
+        assert "SELECT" in error
+    
+    def test_sanitize_adds_limit(self):
+        """Test that LIMIT is added if missing"""
+        sql = "SELECT * FROM households"
+        sanitized = QueryValidator.sanitize_query(sql, 1000)
+        assert "LIMIT 1000" in sanitized
+    
+    def test_sanitize_preserves_existing_limit(self):
+        """Test that existing LIMIT is preserved"""
+        sql = "SELECT * FROM households LIMIT 10"
+        sanitized = QueryValidator.sanitize_query(sql, 1000)
+        assert "LIMIT 10" in sanitized
+        assert "LIMIT 1000" not in sanitized
+    
+    def test_sanitize_removes_semicolon(self):
+        """Test that trailing semicolons are removed"""
+        sql = "SELECT * FROM households;"
+        sanitized = QueryValidator.sanitize_query(sql, 1000)
+        assert not sanitized.endswith(';')
+    
+    def test_validate_complex_select(self):
+        """Test that complex SELECT queries pass"""
+        sql = """
+        SELECT h.state_code, AVG(h.snap_benefit) as avg_benefit
+        FROM households h
+        JOIN household_members m ON (m.case_id = h.case_id AND m.fiscal_year = h.fiscal_year)
+        WHERE h.fiscal_year = 2023
+        GROUP BY h.state_code
+        ORDER BY avg_benefit DESC
+        """
+        is_valid, error = QueryValidator.validate_query(sql)
+        assert is_valid is True
+        assert error is None
+    
+    def test_validate_case_when(self):
+        """Test that CASE WHEN statements pass"""
+        sql = """
+        SELECT 
+          CASE 
+            WHEN age < 18 THEN 'Child'
+            WHEN age >= 65 THEN 'Elderly'
+            ELSE 'Adult'
+          END as age_group,
+          COUNT(*) as count
+        FROM household_members m
+        JOIN households h ON (h.case_id = m.case_id AND h.fiscal_year = m.fiscal_year)
+        GROUP BY age_group
+        """
+        is_valid, error = QueryValidator.validate_query(sql)
+        assert is_valid is True
+
+
+class TestSchemaDocumentation:
+    """Test schema documentation endpoint"""
+    
+    def test_schema_file_exists(self):
+        """Test that schema documentation file exists"""
+        schema_path = Path(__file__).parent.parent.parent / "schema_documentation.json"
+        assert schema_path.exists(), "Schema documentation file should exist"
+    
+    def test_schema_valid_json(self):
+        """Test that schema file is valid JSON"""
+        schema_path = Path(__file__).parent.parent.parent / "schema_documentation.json"
+        
+        with open(schema_path, 'r') as f:
+            schema = json.load(f)
+        
+        assert isinstance(schema, dict)
+        assert "database" in schema
+        assert "tables" in schema
+    
+    def test_schema_has_required_tables(self):
+        """Test that schema includes all required tables"""
+        schema_path = Path(__file__).parent.parent.parent / "schema_documentation.json"
+        
+        with open(schema_path, 'r') as f:
+            schema = json.load(f)
+        
+        tables = schema["tables"]
+        assert "households" in tables
+        assert "household_members" in tables
+        assert "qc_errors" in tables
+    
+    def test_schema_table_has_columns(self):
+        """Test that tables have column definitions"""
+        schema_path = Path(__file__).parent.parent.parent / "schema_documentation.json"
+        
+        with open(schema_path, 'r') as f:
+            schema = json.load(f)
+        
+        households = schema["tables"]["households"]
+        assert "columns" in households
+        assert len(households["columns"]) > 0
+        
+        # Check specific important columns
+        assert "case_id" in households["columns"]
+        assert "fiscal_year" in households["columns"]
+        assert "snap_benefit" in households["columns"]
+    
+    def test_schema_columns_have_descriptions(self):
+        """Test that columns have proper descriptions"""
+        schema_path = Path(__file__).parent.parent.parent / "schema_documentation.json"
+        
+        with open(schema_path, 'r') as f:
+            schema = json.load(f)
+        
+        snap_benefit = schema["tables"]["households"]["columns"]["snap_benefit"]
+        assert "description" in snap_benefit
+        assert "type" in snap_benefit
+        assert "example" in snap_benefit
+        assert len(snap_benefit["description"]) > 20  # Should have meaningful description
+
+
+class TestExampleQueries:
+    """Test example queries"""
+    
+    def test_examples_file_exists(self):
+        """Test that examples file exists"""
+        examples_path = Path(__file__).parent.parent.parent / "query_examples.json"
+        assert examples_path.exists(), "Query examples file should exist"
+    
+    def test_examples_valid_json(self):
+        """Test that examples file is valid JSON"""
+        examples_path = Path(__file__).parent.parent.parent / "query_examples.json"
+        
+        with open(examples_path, 'r') as f:
+            examples = json.load(f)
+        
+        assert isinstance(examples, dict)
+        assert "examples" in examples
+    
+    def test_has_minimum_examples(self):
+        """Test that we have at least 50 examples"""
+        examples_path = Path(__file__).parent.parent.parent / "query_examples.json"
+        
+        with open(examples_path, 'r') as f:
+            examples = json.load(f)
+        
+        assert len(examples["examples"]) >= 50
+    
+    def test_examples_have_required_fields(self):
+        """Test that examples have all required fields"""
+        examples_path = Path(__file__).parent.parent.parent / "query_examples.json"
+        
+        with open(examples_path, 'r') as f:
+            examples = json.load(f)
+        
+        for example in examples["examples"][:5]:  # Check first 5
+            assert "id" in example
+            assert "category" in example
+            assert "question" in example
+            assert "sql" in example
+            assert "explanation" in example
+    
+    def test_all_example_queries_valid(self):
+        """Test that all example queries pass validation"""
+        examples_path = Path(__file__).parent.parent.parent / "query_examples.json"
+        
+        with open(examples_path, 'r') as f:
+            examples = json.load(f)
+        
+        invalid_queries = []
+        for example in examples["examples"]:
+            is_valid, error = QueryValidator.validate_query(example["sql"])
+            if not is_valid:
+                invalid_queries.append({
+                    "id": example["id"],
+                    "question": example["question"],
+                    "error": error
+                })
+        
+        assert len(invalid_queries) == 0, f"Found {len(invalid_queries)} invalid example queries: {invalid_queries}"
+    
+    def test_examples_cover_all_categories(self):
+        """Test that examples cover diverse categories"""
+        examples_path = Path(__file__).parent.parent.parent / "query_examples.json"
+        
+        with open(examples_path, 'r') as f:
+            examples = json.load(f)
+        
+        categories = set(ex["category"] for ex in examples["examples"])
+        
+        # Should have at least these categories
+        assert "basic" in categories
+        assert "benefits" in categories
+        assert "income" in categories
+        assert "demographics" in categories
+        assert "errors" in categories
+        assert "complex" in categories
+
+
+class TestQueryFormatting:
+    """Test query result formatting"""
+    
+    def test_format_markdown_empty(self):
+        """Test markdown formatting with empty data"""
+        from src.api.routers.query import _format_as_markdown
+        
+        result = _format_as_markdown([], [])
+        assert result == "No results"
+    
+    def test_format_markdown_with_data(self):
+        """Test markdown formatting with data"""
+        from src.api.routers.query import _format_as_markdown
+        
+        columns = ["state_code", "count"]
+        data = [
+            {"state_code": "CA", "count": 100},
+            {"state_code": "TX", "count": 200}
+        ]
+        
+        result = _format_as_markdown(columns, data)
+        assert "state_code" in result
+        assert "count" in result
+        assert "CA" in result
+        assert "TX" in result
+        assert "|" in result  # Markdown table separator
+    
+    def test_format_csv_empty(self):
+        """Test CSV formatting with empty data"""
+        from src.api.routers.query import _format_as_csv
+        
+        result = _format_as_csv([], [])
+        assert result == ""
+    
+    def test_format_csv_with_data(self):
+        """Test CSV formatting with data"""
+        from src.api.routers.query import _format_as_csv
+        
+        columns = ["state_code", "count"]
+        data = [
+            {"state_code": "CA", "count": 100},
+            {"state_code": "TX", "count": 200}
+        ]
+        
+        result = _format_as_csv(columns, data)
+        lines = result.split("\n")
+        assert len(lines) == 3  # Header + 2 data rows
+        assert lines[0] == "state_code,count"
+        assert "CA" in lines[1]
+        assert "TX" in lines[2]
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v", "-s"])

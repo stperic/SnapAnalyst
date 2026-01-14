@@ -1,0 +1,135 @@
+"""
+SnapAnalyst Pytest Configuration and Fixtures
+
+Shared fixtures for all tests.
+"""
+import os
+from decimal import Decimal
+from pathlib import Path
+from typing import Generator
+
+import pytest
+from sqlalchemy import create_engine, event
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import Session, sessionmaker
+
+from src.database.engine import Base
+
+# Test database URL
+TEST_DATABASE_URL = os.getenv(
+    "TEST_DATABASE_URL",
+    "postgresql://test:test@localhost:5433/test_snapanalyst"
+)
+
+# Test data directory
+TEST_DATA_DIR = Path(__file__).parent / "data"
+
+
+@pytest.fixture(scope="session")
+def test_engine() -> Generator[Engine, None, None]:
+    """
+    Create test database engine (session scope).
+    
+    Creates all tables at start, drops them at end.
+    """
+    engine = create_engine(TEST_DATABASE_URL, echo=False)
+    
+    # Create all tables
+    Base.metadata.create_all(engine)
+    
+    yield engine
+    
+    # Drop all tables
+    Base.metadata.drop_all(engine)
+    engine.dispose()
+
+
+@pytest.fixture(scope="function")
+def db_session(test_engine: Engine) -> Generator[Session, None, None]:
+    """
+    Create a clean database session for each test (function scope).
+    
+    Uses transaction rollback to ensure test isolation.
+    """
+    connection = test_engine.connect()
+    transaction = connection.begin()
+    
+    SessionLocal = sessionmaker(bind=connection)
+    session = SessionLocal()
+    
+    yield session
+    
+    session.close()
+    transaction.rollback()
+    connection.close()
+
+
+@pytest.fixture
+def test_csv_path() -> Path:
+    """Path to test CSV file"""
+    return TEST_DATA_DIR / "test.csv"
+
+
+@pytest.fixture
+def small_csv_path(tmp_path: Path) -> Path:
+    """Create a small test CSV with 10 rows"""
+    csv_path = tmp_path / "small_test.csv"
+    
+    # Read first 11 lines from test CSV (header + 10 rows)
+    test_csv = TEST_DATA_DIR / "test.csv"
+    if test_csv.exists():
+        with open(test_csv, 'r') as f:
+            lines = [f.readline() for _ in range(11)]
+        
+        with open(csv_path, 'w') as f:
+            f.writelines(lines)
+    
+    return csv_path
+
+
+@pytest.fixture
+def sample_household_data() -> dict:
+    """Sample household data for testing"""
+    return {
+        "case_id": "TEST001",
+        "fiscal_year": 2023,
+        "state_code": "CA",
+        "state_name": "California",
+        "snap_benefit": Decimal("284.50"),
+        "gross_income": Decimal("2000.00"),
+        "net_income": Decimal("1500.00"),
+        "certified_household_size": 3,
+    }
+
+
+@pytest.fixture
+def sample_member_data() -> dict:
+    """Sample member data for testing"""
+    return {
+        "case_id": "TEST001",
+        "member_number": 1,
+        "age": 35,
+        "sex": 2,
+        "snap_affiliation_code": 1,
+        "wages": Decimal("2000.00"),
+        "social_security": Decimal("0.00"),
+        "ssi": Decimal("0.00"),
+    }
+
+
+@pytest.fixture
+def sample_error_data() -> dict:
+    """Sample error data for testing"""
+    return {
+        "case_id": "TEST001",
+        "error_number": 1,
+        "element_code": 520,
+        "nature_code": 75,
+        "error_amount": Decimal("100.00"),
+    }
+
+
+@pytest.fixture
+def fiscal_year() -> int:
+    """Default fiscal year for testing"""
+    return 2023

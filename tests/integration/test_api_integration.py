@@ -1,0 +1,338 @@
+"""
+API Integration Tests
+
+Tests the FastAPI endpoints with actual database operations.
+"""
+import pytest
+from pathlib import Path
+import time
+
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+
+from src.api.main import app
+from src.database.models import Base, Household, HouseholdMember, QCError
+from src.core.config import settings
+
+
+@pytest.fixture(scope="module")
+def test_engine():
+    """Create test database engine"""
+    engine = create_engine(str(settings.database_url))
+    Base.metadata.create_all(engine)
+    yield engine
+    Base.metadata.drop_all(engine)
+    engine.dispose()
+
+
+@pytest.fixture
+def test_session(test_engine):
+    """Create test database session"""
+    connection = test_engine.connect()
+    transaction = connection.begin()
+    session = Session(bind=connection)
+    
+    yield session
+    
+    session.close()
+    transaction.rollback()
+    connection.close()
+
+
+@pytest.fixture
+def client(test_engine):
+    """FastAPI test client - ensures database tables exist"""
+    return TestClient(app)
+
+
+@pytest.fixture
+def sample_csv_file(tmp_path):
+    """Create a sample CSV file for testing"""
+    csv_content = """HHLDNO,STATE,STATENAME,YRMONTH,FSBEN,RAWGROSS,RAWNET,CERTHHSZ,FSUSIZE,HWGT,FYWGT,FSAFIL1,AGE1,SEX1,WAGES1,SOCSEC1,SSI1
+API001,CA,California,202310,500.00,2000.00,1500.00,2,2,1.5,1.0,1,35,2,1500.00,0.00,0.00
+API002,TX,Texas,202310,750.50,3000.00,2500.00,3,3,1.8,1.0,1,42,1,2000.00,0.00,0.00
+API003,NY,New York,202310,1200.00,1500.00,1200.00,4,4,2.1,1.0,1,28,2,1200.00,0.00,0.00"""
+    
+    csv_file = tmp_path / "api_test_data.csv"
+    csv_file.write_text(csv_content)
+    
+    # Create snapdata directory and copy file
+    snapdata_path = Path(settings.snapdata_path)
+    snapdata_path.mkdir(parents=True, exist_ok=True)
+    
+    dest_file = snapdata_path / "test_fy2099.csv"
+    dest_file.write_text(csv_content)
+    
+    yield dest_file
+    
+    # Cleanup
+    if dest_file.exists():
+        dest_file.unlink()
+
+
+class TestRootEndpoints:
+    """Test root and health endpoints"""
+    
+    def test_root_endpoint(self, client):
+        """Test GET /"""
+        response = client.get("/")
+        assert response.status_code == 200
+        
+        data = response.json()
+        assert data["application"] == "SnapAnalyst"
+        assert "version" in data
+        assert "status" in data
+    
+    def test_health_endpoint(self, client):
+        """Test GET /health"""
+        response = client.get("/health")
+        assert response.status_code == 200
+        
+        data = response.json()
+        assert data["status"] == "healthy"
+        assert data["application"] == "SnapAnalyst"
+
+
+class TestFileEndpoints:
+    """Test file discovery endpoints"""
+    
+    def test_list_files(self, client, sample_csv_file):
+        """Test GET /api/v1/data/files"""
+        response = client.get("/api/v1/data/files")
+        assert response.status_code == 200
+        
+        data = response.json()
+        assert "files" in data
+        assert "total_files" in data
+        assert isinstance(data["files"], list)
+    
+    def test_get_file_info(self, client, sample_csv_file):
+        """Test GET /api/v1/data/files/{filename}"""
+        response = client.get(f"/api/v1/data/files/{sample_csv_file.name}")
+        
+        if response.status_code == 200:
+            data = response.json()
+            assert data["filename"] == sample_csv_file.name
+            assert "size_mb" in data
+            assert "fiscal_year" in data
+
+
+class TestManagementEndpoints:
+    """Test database management endpoints"""
+    
+    def test_health_check(self, client):
+        """Test GET /api/v1/data/health"""
+        response = client.get("/api/v1/data/health")
+        assert response.status_code in [200, 503]  # May fail if DB not available
+        
+        data = response.json()
+        assert "status" in data
+        assert "database" in data
+        assert "tables" in data
+    
+    def test_get_statistics(self, client):
+        """Test GET /api/v1/data/stats"""
+        response = client.get("/api/v1/data/stats")
+        assert response.status_code == 200
+        
+        data = response.json()
+        assert "summary" in data
+        assert "by_fiscal_year" in data
+        assert "total_households" in data["summary"]
+    
+    def test_reset_database_without_confirmation(self, client):
+        """Test POST /api/v1/data/reset without confirmation"""
+        response = client.post("/api/v1/data/reset", json={
+            "confirm": False
+        })
+        assert response.status_code == 400
+        assert "confirm" in response.json()["detail"].lower()
+    
+    def test_reset_database_with_confirmation(self, client, test_session):
+        """Test POST /api/v1/data/reset with confirmation"""
+        # Add some test data first
+        test_household = Household(
+            case_id="RESET_TEST",
+            fiscal_year=2099,
+            state_code="CA",
+            snap_benefit=100.00
+        )
+        test_session.add(test_household)
+        test_session.commit()
+        
+        # Reset database
+        response = client.post("/api/v1/data/reset", json={
+            "confirm": True,
+            "fiscal_years": [2099]
+        })
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "success"
+        assert "deleted" in data
+
+
+class TestDataLoadingEndpoints:
+    """Test data loading endpoints"""
+    
+    def test_load_data_file_not_found(self, client):
+        """Test POST /api/v1/data/load with non-existent file"""
+        response = client.post("/api/v1/data/load", json={
+            "fiscal_year": 9999,
+            "batch_size": 100
+        })
+        
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"].lower()
+    
+    def test_load_data_success(self, client, sample_csv_file):
+        """Test POST /api/v1/data/load with valid file"""
+        response = client.post("/api/v1/data/load", json={
+            "fiscal_year": 2099,
+            "filename": sample_csv_file.name,
+            "batch_size": 100,
+            "skip_validation": False
+        })
+        
+        assert response.status_code == 202  # Accepted
+        data = response.json()
+        assert data["status"] == "accepted"
+        assert "job_id" in data
+        assert "progress_url" in data
+        
+        # Check job status
+        job_id = data["job_id"]
+        time.sleep(0.5)  # Give background task time to start
+        
+        status_response = client.get(f"/api/v1/data/load/status/{job_id}")
+        if status_response.status_code == 200:
+            status_data = status_response.json()
+            assert status_data["job_id"] == job_id
+            assert "status" in status_data
+            assert "progress" in status_data
+    
+    def test_list_jobs(self, client):
+        """Test GET /api/v1/data/load/jobs"""
+        response = client.get("/api/v1/data/load/jobs")
+        assert response.status_code == 200
+        
+        data = response.json()
+        assert "jobs" in data
+        assert isinstance(data["jobs"], list)
+    
+    def test_load_multiple_years(self, client, sample_csv_file):
+        """Test POST /api/v1/data/load-multiple"""
+        response = client.post("/api/v1/data/load-multiple", json={
+            "fiscal_years": [2099],
+            "batch_size": 100
+        })
+        
+        assert response.status_code == 202
+        data = response.json()
+        assert "job_ids" in data
+        assert isinstance(data["job_ids"], list)
+
+
+class TestEndToEndAPI:
+    """End-to-end API workflow tests"""
+    
+    def test_complete_load_workflow(self, client, sample_csv_file, test_session):
+        """Test complete workflow: health check → list files → load → check status → verify data"""
+        
+        # Step 1: Check health
+        health_response = client.get("/api/v1/data/health")
+        assert health_response.status_code in [200, 503]
+        
+        # Step 2: List available files
+        files_response = client.get("/api/v1/data/files")
+        assert files_response.status_code == 200
+        files_data = files_response.json()
+        assert len(files_data["files"]) > 0
+        
+        # Step 3: Get statistics before load
+        stats_before = client.get("/api/v1/data/stats")
+        assert stats_before.status_code == 200
+        
+        # Step 4: Load data
+        load_response = client.post("/api/v1/data/load", json={
+            "fiscal_year": 2099,
+            "filename": sample_csv_file.name,
+            "batch_size": 100,
+            "skip_validation": False
+        })
+        
+        assert load_response.status_code == 202
+        load_data = load_response.json()
+        job_id = load_data["job_id"]
+        
+        # Step 5: Poll job status
+        max_attempts = 10
+        for attempt in range(max_attempts):
+            time.sleep(1)
+            
+            status_response = client.get(f"/api/v1/data/load/status/{job_id}")
+            if status_response.status_code == 200:
+                status_data = status_response.json()
+                
+                if status_data["status"] in ["completed", "failed"]:
+                    assert status_data["status"] == "completed", \
+                        f"Job failed: {status_data.get('error_message')}"
+                    break
+        
+        # Step 6: Get statistics after load
+        stats_after = client.get("/api/v1/data/stats")
+        assert stats_after.status_code == 200
+        stats_after_data = stats_after.json()
+        
+        # Should have loaded 3 households
+        assert stats_after_data["summary"]["total_households"] >= 3
+        
+        # Step 7: Verify data in database
+        households = test_session.query(Household).filter(
+            Household.fiscal_year == 2099
+        ).all()
+        assert len(households) >= 3
+        
+        # Step 8: Clean up - reset the test data
+        reset_response = client.post("/api/v1/data/reset", json={
+            "confirm": True,
+            "fiscal_years": [2099]
+        })
+        assert reset_response.status_code == 200
+        
+        print("\n✓ Complete API workflow successful:")
+        print(f"  - Loaded {len(households)} households")
+        print(f"  - Job ID: {job_id}")
+        print(f"  - Status: completed")
+
+
+class TestAPIErrorHandling:
+    """Test API error handling"""
+    
+    def test_invalid_fiscal_year(self, client):
+        """Test loading with invalid fiscal year"""
+        response = client.post("/api/v1/data/load", json={
+            "fiscal_year": 1900,  # Too old
+            "batch_size": 100
+        })
+        
+        assert response.status_code in [400, 404, 422]
+    
+    def test_invalid_batch_size(self, client):
+        """Test loading with invalid batch size"""
+        response = client.post("/api/v1/data/load", json={
+            "fiscal_year": 2023,
+            "batch_size": 50  # Below minimum
+        })
+        
+        assert response.status_code == 422  # Validation error
+    
+    def test_nonexistent_job_status(self, client):
+        """Test checking status of non-existent job"""
+        response = client.get("/api/v1/data/load/status/fake_job_id")
+        assert response.status_code == 404
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v", "-s"])

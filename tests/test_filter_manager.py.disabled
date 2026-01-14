@@ -1,0 +1,381 @@
+"""
+Unit Tests for Filter Manager
+
+Tests the global filter functionality including:
+- Setting/clearing filters
+- SQL condition generation
+- SQL query modification
+- Thread safety
+"""
+import pytest
+from src.core.filter_manager import FilterManager, DataFilter
+
+
+class TestDataFilter:
+    """Test DataFilter class."""
+    
+    def test_empty_filter(self):
+        """Test empty filter."""
+        f = DataFilter()
+        assert f.is_empty
+        assert not f.is_active
+        assert f.state is None
+        assert f.fiscal_year is None
+        assert f.get_sql_conditions() == []
+        assert f.get_description() == "No filter (All data)"
+    
+    def test_state_filter(self):
+        """Test filter with only state."""
+        f = DataFilter(states=["Connecticut"])
+        assert not f.is_empty
+        assert f.is_active
+        assert f.state == "Connecticut"
+        assert f.fiscal_year is None
+        assert f.get_sql_conditions() == ["state_name = 'Connecticut'"]
+        assert f.get_description() == "State: Connecticut"
+    
+    def test_year_filter(self):
+        """Test filter with only fiscal year."""
+        f = DataFilter(fiscal_years=[2023])
+        assert not f.is_empty
+        assert f.is_active
+        assert f.state is None
+        assert f.fiscal_year == 2023
+        assert f.get_sql_conditions() == ["fiscal_year = 2023"]
+        assert f.get_description() == "FY2023"
+    
+    def test_both_filters(self):
+        """Test filter with both state and year."""
+        f = DataFilter(states=["Connecticut"], fiscal_years=[2023])
+        assert not f.is_empty
+        assert f.is_active
+        assert f.state == "Connecticut"
+        assert f.fiscal_year == 2023
+        conditions = f.get_sql_conditions()
+        assert "state_name = 'Connecticut'" in conditions
+        assert "fiscal_year = 2023" in conditions
+        assert f.get_description() == "State: Connecticut | FY2023"
+    
+    def test_multiple_states_future(self):
+        """Test filter with multiple states (future feature)."""
+        f = DataFilter(states=["Connecticut", "Massachusetts", "New York"])
+        conditions = f.get_sql_conditions()
+        assert len(conditions) == 1
+        assert "state_name IN ('Connecticut', 'Massachusetts', 'New York')" in conditions[0]
+    
+    def test_multiple_years_future(self):
+        """Test filter with multiple years (future feature)."""
+        f = DataFilter(fiscal_years=[2021, 2022, 2023])
+        conditions = f.get_sql_conditions()
+        assert len(conditions) == 1
+        assert "fiscal_year IN (2021, 2022, 2023)" in conditions[0]
+
+
+class TestFilterManager:
+    """Test FilterManager class."""
+    
+    def test_initial_empty(self):
+        """Test manager starts with empty filter."""
+        manager = FilterManager()
+        f = manager.get_filter()
+        assert f.is_empty
+    
+    def test_set_state(self):
+        """Test setting state filter."""
+        manager = FilterManager()
+        f = manager.set_state("Connecticut")
+        assert f.state == "Connecticut"
+        assert f.fiscal_year is None
+        
+        # Verify persists
+        f2 = manager.get_filter()
+        assert f2.state == "Connecticut"
+    
+    def test_set_year(self):
+        """Test setting fiscal year filter."""
+        manager = FilterManager()
+        f = manager.set_fiscal_year(2023)
+        assert f.state is None
+        assert f.fiscal_year == 2023
+        
+        # Verify persists
+        f2 = manager.get_filter()
+        assert f2.fiscal_year == 2023
+    
+    def test_set_both(self):
+        """Test setting both filters."""
+        manager = FilterManager()
+        f = manager.set_filter(state="Connecticut", fiscal_year=2023)
+        assert f.state == "Connecticut"
+        assert f.fiscal_year == 2023
+    
+    def test_clear(self):
+        """Test clearing filter."""
+        manager = FilterManager()
+        manager.set_filter(state="Connecticut", fiscal_year=2023)
+        
+        # Clear
+        f = manager.clear()
+        assert f.is_empty
+        assert f.state is None
+        assert f.fiscal_year is None
+    
+    def test_replace_filter(self):
+        """Test replacing existing filter."""
+        manager = FilterManager()
+        manager.set_state("Connecticut")
+        
+        # Replace with new state
+        f = manager.set_state("Massachusetts")
+        assert f.state == "Massachusetts"
+        
+        # Old state should be gone
+        f2 = manager.get_filter()
+        assert f2.state == "Massachusetts"
+    
+    def test_clear_with_none(self):
+        """Test clearing filter by passing None."""
+        manager = FilterManager()
+        manager.set_filter(state="Connecticut", fiscal_year=2023)
+        
+        # Clear state only
+        f = manager.set_state(None)
+        assert f.state is None
+        assert f.fiscal_year == 2023  # Year should still be there
+        
+        # Clear year only
+        f = manager.set_fiscal_year(None)
+        assert f.is_empty
+
+
+class TestSQLApplication:
+    """Test applying filter to SQL queries."""
+    
+    def test_simple_select_no_filter(self):
+        """Test SQL without filter (passthrough)."""
+        manager = FilterManager()
+        manager.clear()
+        
+        sql = "SELECT * FROM households"
+        result = manager.apply_to_sql(sql)
+        assert result == sql  # No change
+    
+    def test_simple_select_with_state(self):
+        """Test adding state filter to simple SELECT."""
+        manager = FilterManager()
+        manager.set_state("Connecticut")
+        
+        sql = "SELECT * FROM households"
+        result = manager.apply_to_sql(sql)
+        assert "WHERE state_name = 'Connecticut'" in result
+    
+    def test_simple_select_with_year(self):
+        """Test adding year filter to simple SELECT."""
+        manager = FilterManager()
+        manager.set_fiscal_year(2023)
+        
+        sql = "SELECT * FROM households"
+        result = manager.apply_to_sql(sql)
+        assert "WHERE fiscal_year = 2023" in result
+    
+    def test_simple_select_with_both(self):
+        """Test adding both filters to simple SELECT."""
+        manager = FilterManager()
+        manager.set_filter(state="Connecticut", fiscal_year=2023)
+        
+        sql = "SELECT * FROM households"
+        result = manager.apply_to_sql(sql)
+        assert "WHERE state_name = 'Connecticut' AND fiscal_year = 2023" in result
+    
+    def test_select_with_existing_where(self):
+        """Test adding filter to SQL with existing WHERE."""
+        manager = FilterManager()
+        manager.set_state("Connecticut")
+        
+        sql = "SELECT * FROM households WHERE status = 2"
+        result = manager.apply_to_sql(sql)
+        
+        # Should prepend filter to existing WHERE
+        assert "WHERE (state_name = 'Connecticut') AND" in result
+        assert "status = 2" in result
+    
+    def test_select_with_order_by(self):
+        """Test adding filter to SQL with ORDER BY."""
+        manager = FilterManager()
+        manager.set_state("Connecticut")
+        
+        sql = "SELECT * FROM households ORDER BY case_id"
+        result = manager.apply_to_sql(sql)
+        
+        # Should add WHERE before ORDER BY
+        assert "WHERE state_name = 'Connecticut'" in result
+        assert "ORDER BY case_id" in result
+        assert result.index("WHERE") < result.index("ORDER BY")
+    
+    def test_select_with_group_by(self):
+        """Test adding filter to SQL with GROUP BY."""
+        manager = FilterManager()
+        manager.set_fiscal_year(2023)
+        
+        sql = "SELECT state_name, COUNT(*) FROM households GROUP BY state_name"
+        result = manager.apply_to_sql(sql)
+        
+        # Should add WHERE before GROUP BY
+        assert "WHERE fiscal_year = 2023" in result
+        assert "GROUP BY state_name" in result
+        assert result.index("WHERE") < result.index("GROUP BY")
+    
+    def test_select_with_limit(self):
+        """Test adding filter to SQL with LIMIT."""
+        manager = FilterManager()
+        manager.set_state("Connecticut")
+        
+        sql = "SELECT * FROM households LIMIT 100"
+        result = manager.apply_to_sql(sql)
+        
+        # Should add WHERE before LIMIT
+        assert "WHERE state_name = 'Connecticut'" in result
+        assert "LIMIT 100" in result
+        assert result.index("WHERE") < result.index("LIMIT")
+    
+    def test_complex_query(self):
+        """Test adding filter to complex query."""
+        manager = FilterManager()
+        manager.set_filter(state="Connecticut", fiscal_year=2023)
+        
+        sql = """
+        SELECT h.state_name, COUNT(*) as count, AVG(h.snap_benefit) as avg_benefit
+        FROM households h
+        JOIN household_members m ON (h.case_id = m.case_id AND h.fiscal_year = m.fiscal_year)
+        WHERE h.num_children > 0
+        GROUP BY h.state_name
+        ORDER BY count DESC
+        LIMIT 10
+        """
+        
+        result = manager.apply_to_sql(sql)
+        
+        # Should prepend to existing WHERE
+        assert "(state_name = 'Connecticut' AND fiscal_year = 2023) AND" in result
+        assert "num_children > 0" in result
+        assert "GROUP BY" in result
+        assert "ORDER BY" in result
+        assert "LIMIT" in result
+    
+    def test_case_insensitive_keywords(self):
+        """Test handling of case-insensitive SQL keywords."""
+        manager = FilterManager()
+        manager.set_state("Connecticut")
+        
+        # Test lowercase
+        sql = "select * from households where status = 1"
+        result = manager.apply_to_sql(sql)
+        assert "WHERE (state_name = 'Connecticut') AND" in result or "where (state_name = 'Connecticut') AND" in result
+        
+        # Test mixed case
+        sql = "SELECT * FROM households Order By case_id"
+        result = manager.apply_to_sql(sql)
+        assert "WHERE state_name = 'Connecticut'" in result
+
+
+class TestThreadSafety:
+    """Test thread safety of FilterManager."""
+    
+    def test_concurrent_reads(self):
+        """Test concurrent read operations."""
+        import threading
+        
+        manager = FilterManager()
+        manager.set_filter(state="Connecticut", fiscal_year=2023)
+        
+        results = []
+        
+        def read_filter():
+            for _ in range(100):
+                f = manager.get_filter()
+                results.append((f.state, f.fiscal_year))
+        
+        threads = [threading.Thread(target=read_filter) for _ in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        
+        # All reads should be consistent
+        for state, year in results:
+            assert state == "Connecticut"
+            assert year == 2023
+    
+    def test_concurrent_writes(self):
+        """Test concurrent write operations."""
+        import threading
+        import time
+        
+        manager = FilterManager()
+        
+        def set_state(state):
+            manager.set_state(state)
+            time.sleep(0.001)
+        
+        states = ["Connecticut", "Massachusetts", "New York", "California", "Texas"]
+        threads = [threading.Thread(target=set_state, args=(s,)) for s in states]
+        
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        
+        # Should end with one of the states (no corruption)
+        f = manager.get_filter()
+        assert f.state in states
+
+
+class TestEdgeCases:
+    """Test edge cases and error handling."""
+    
+    def test_empty_sql(self):
+        """Test applying filter to empty SQL."""
+        manager = FilterManager()
+        manager.set_state("Connecticut")
+        
+        sql = ""
+        result = manager.apply_to_sql(sql)
+        # Should handle gracefully (add WHERE at end)
+        assert "WHERE state_name = 'Connecticut'" in result
+    
+    def test_sql_with_semicolon(self):
+        """Test SQL ending with semicolon."""
+        manager = FilterManager()
+        manager.set_state("Connecticut")
+        
+        sql = "SELECT * FROM households;"
+        result = manager.apply_to_sql(sql)
+        assert "WHERE state_name = 'Connecticut'" in result
+    
+    def test_invalid_state_name(self):
+        """Test setting invalid state name (with quotes)."""
+        manager = FilterManager()
+        # Should handle state names with quotes/special chars
+        manager.set_state("O'Brien County")  # Hypothetical state with apostrophe
+        f = manager.get_filter()
+        assert f.state == "O'Brien County"
+    
+    def test_zero_year(self):
+        """Test setting year to 0."""
+        manager = FilterManager()
+        manager.set_fiscal_year(0)
+        f = manager.get_filter()
+        # 0 is falsy, should not set filter
+        assert f.fiscal_year is None
+    
+    def test_negative_year(self):
+        """Test setting negative year."""
+        manager = FilterManager()
+        manager.set_fiscal_year(-1)
+        f = manager.get_filter()
+        # Should set even if unusual
+        assert f.fiscal_year == -1
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

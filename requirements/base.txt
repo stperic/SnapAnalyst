@@ -1,0 +1,48 @@
+# SnapAnalyst Base Dependencies
+
+# FastAPI & Web Server
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+
+# Database
+sqlalchemy==2.0.25
+alembic==1.13.1
+psycopg2-binary==2.9.9
+
+# Data Processing
+polars==0.20.3
+pyarrow==15.0.0  # Required by Polars
+
+# Task Queue
+celery==5.3.6
+redis==5.0.1
+
+# Configuration & Validation
+pydantic==2.10.0  # Locked for Chainlit compatibility
+pydantic-core==2.27.0  # Required by pydantic 2.10.0
+pydantic-settings==2.1.0
+python-dotenv==1.0.0
+
+# Security & Authentication
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# HTTP Client
+httpx==0.26.0
+
+# Export & Reporting
+reportlab==4.0.9  # PDF generation
+pandas==2.2.0  # CSV export (lighter than polars for simple exports)
+openpyxl==3.1.2  # Excel export
+
+# AI/LLM Integration
+vanna[postgres]==0.5.5  # SQL generation from natural language
+openai==1.12.0  # OpenAI API
+anthropic==0.18.1  # Claude API
+ollama==0.1.6  # Ollama local LLM
+chromadb==0.4.24  # Vector database for Vanna
+numpy<2.0.0  # Required for ChromaDB compatibility
+
+# Chatbot UI
+chainlit==1.0.500  # AI chatbot UI framework
