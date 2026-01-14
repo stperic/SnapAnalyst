@@ -15,6 +15,141 @@ API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
 API_PREFIX = "/api/v1"
 
 
+async def generate_ai_summary(question: str, sql: str, results: List[Dict], row_count: int, filters: str = "") -> str:
+    """
+    Generate AI summary of query results using hybrid approach.
+    
+    Args:
+        question: User's original question
+        sql: SQL query executed
+        results: Query results
+        row_count: Number of rows returned
+        filters: Active filters description
+    
+    Returns:
+        AI-generated summary text
+    """
+    try:
+        # Determine approach based on result size
+        if row_count == 0:
+            return "No results found for your query."
+        
+        # Special case: single row with single column (like COUNT queries)
+        if row_count == 1 and results and len(results[0]) == 1:
+            column_name = list(results[0].keys())[0]
+            value = list(results[0].values())[0]
+            filter_text = f" (filtered by {filters})" if filters else ""
+            return f"**{value:,}** {column_name.replace('_', ' ')}{filter_text}."
+        
+        # Prepare data context based on row count
+        if row_count <= 10:
+            # Full context - send all results
+            data_context = f"All {row_count} results:\n{json.dumps(results, indent=2)}"
+            approach = "detailed"
+        elif row_count <= 100:
+            # Statistical summary + sample
+            sample = results[:5]
+            
+            # Calculate basic statistics for numeric columns
+            stats = {}
+            if results:
+                for key in results[0].keys():
+                    values = [r.get(key) for r in results if r.get(key) is not None]
+                    if values and isinstance(values[0], (int, float)):
+                        try:
+                            stats[key] = {
+                                "min": min(values),
+                                "max": max(values),
+                                "avg": sum(values) / len(values) if values else 0
+                            }
+                        except:
+                            pass
+            
+            data_context = f"Results: {row_count} rows\nSample (first 5):\n{json.dumps(sample, indent=2)}"
+            if stats:
+                data_context += f"\n\nStatistics:\n{json.dumps(stats, indent=2)}"
+            approach = "statistical"
+        else:
+            # Simple summary - just counts and sample
+            sample = results[:3]
+            data_context = f"Results: {row_count} rows (large dataset)\nSample (first 3):\n{json.dumps(sample, indent=2)}"
+            approach = "simple"
+        
+        # Build system prompt
+        system_prompt = f"""You are a helpful data analyst. Summarize these database query results in 2-3 clear, conversational sentences.
+
+GUIDELINES:
+- Start with the main finding and key numbers
+- Be specific - mention actual values, not just "results were found"
+- If there are interesting patterns, mention them briefly
+- Keep it natural and easy to understand
+- Don't mention the SQL or technical details
+- If filters are active, incorporate that context naturally
+
+USER QUESTION: {question}
+
+ACTIVE FILTERS: {filters if filters else "None"}
+
+DATA SUMMARY:
+{data_context}
+
+SQL EXECUTED: {sql}
+
+Provide a brief, insightful summary for a non-technical user:"""
+
+        # Truncate prompt if too long (API max is 2000 chars)
+        if len(system_prompt) > 1900:
+            # Reduce data_context
+            data_context_short = data_context[:500] + "... (truncated)"
+            system_prompt = f"""You are a helpful data analyst. Summarize these database query results in 2-3 clear, conversational sentences.
+
+USER QUESTION: {question}
+ACTIVE FILTERS: {filters if filters else "None"}
+DATA SUMMARY: {data_context_short}
+SQL EXECUTED: {sql}
+
+Provide a brief, insightful summary:"""
+
+        # Call LLM service
+        try:
+            summary_response = await call_api(
+                "/chat/generate-text",
+                method="POST",
+                data={"prompt": system_prompt, "max_tokens": 150}
+            )
+            
+            if summary_response and "text" in summary_response:
+                return summary_response["text"].strip()
+            else:
+                # Fallback: generate simple summary
+                return generate_simple_summary(question, row_count, results, filters)
+        except Exception as api_error:
+            print(f"LLM API call failed: {api_error}")
+            return generate_simple_summary(question, row_count, results, filters)
+            
+    except Exception as e:
+        # Fallback on error
+        return generate_simple_summary(question, row_count, results, filters)
+
+
+def generate_simple_summary(question: str, row_count: int, results: List[Dict], filters: str = "") -> str:
+    """Generate a simple fallback summary without LLM"""
+    filter_text = f" (filtered by {filters})" if filters else ""
+    
+    if row_count == 1:
+        # Single result - try to extract the value
+        if results and len(results[0]) == 1:
+            value = list(results[0].values())[0]
+            return f"The answer is **{value}**{filter_text}."
+        return f"Found 1 result{filter_text}."
+    elif row_count <= 10:
+        return f"Found {row_count} results{filter_text}. See the data table below for details."
+    elif row_count <= 100:
+        return f"Query returned {row_count} results{filter_text}. Showing key findings in the data table below."
+    else:
+        return f"Query returned a large dataset with {row_count} rows{filter_text}. Showing the first 50 results."
+
+
 async def call_api(endpoint: str, method: str = "GET", data: Optional[Dict] = None) -> Dict:
     """Make API call to SnapAnalyst backend"""
     url = f"{API_BASE_URL}{API_PREFIX}{endpoint}"
@@ -31,36 +166,64 @@ async def call_api(endpoint: str, method: str = "GET", data: Optional[Dict] = No
         return response.json()
 
 
+def get_filter_indicator() -> str:
+    """Get the active filter indicator HTML if a filter is active"""
+    state_filter = cl.user_session.get("current_state_filter", "All States")
+    year_filter = cl.user_session.get("current_year_filter", "All Years")
+    
+    # Build filter parts
+    filter_parts = []
+    if state_filter and state_filter != "All States":
+        filter_parts.append(state_filter)
+    if year_filter and year_filter != "All Years":
+        filter_parts.append(f"FY{year_filter}")
+    
+    # Return indicator HTML only if filter is active
+    if filter_parts:
+        return f'<div style="text-align: center; font-size: 11px; color: #666; padding: 8px; margin-top: 16px; border-top: 1px solid #eee;">🔍 Active Filter: {" | ".join(filter_parts)}</div>'
+    return ""
+
+
 def format_sql_results(results: List[Dict], row_count: int) -> str:
-    """Format SQL results as HTML table"""
+    """
+    Format SQL results as modern HTML table.
+    CSV is created on-demand when user clicks the download button.
+    
+    Returns:
+        HTML table string
+    """
     if not results or len(results) == 0:
         return "<p>No results returned.</p>"
     
     # Results is a list of dictionaries
     headers = list(results[0].keys())
     
-    html = f'<div class="success-box">✅ Query returned {row_count} rows</div>'
-    html += '<table class="data-table">'
+    # Modern table with compact styling
     
-    # Headers
-    html += "<thead><tr>"
-    for header in headers:
-        html += f"<th>{header}</th>"
-    html += "</tr></thead>"
+    html = '''
+<div style="overflow-x: auto; margin: 10px 0;">
+    <table class="sortable-table" style="width: 100%; border-collapse: collapse; font-size: 11px; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+        <thead>
+            <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0;">'''
     
-    # Rows (limit to first 50 for display)
-    html += "<tbody>"
-    for row_dict in results[:50]:
-        html += "<tr>"
+    # Headers - simpler without onclick since Chainlit might sanitize it
+    for idx, header in enumerate(headers):
+        html += f'<th data-column="{idx}" style="padding: 2px 6px; text-align: left; font-weight: 600; color: #475569; white-space: nowrap; cursor: pointer; user-select: none;" class="sortable-header">{header} <span style="color: #94a3b8; font-size: 9px;">⇅</span></th>'
+    html += "</tr></thead><tbody>"
+    
+    # Ultra-compact rows
+    for idx, row_dict in enumerate(results[:50]):
+        bg = "#ffffff" if idx % 2 == 0 else "#f8fafc"
+        html += f'<tr style="background: {bg}; border-bottom: 1px solid #e2e8f0;">'
         for header in headers:
             cell = row_dict.get(header)
-            html += f"<td>{cell if cell is not None else 'NULL'}</td>"
+            cell_value = cell if cell is not None else '<span style="color: #94a3b8; font-style: italic;">NULL</span>'
+            html += f'<td style="padding: 2px 6px; color: #1e293b; line-height: 1.2;">{cell_value}</td>'
         html += "</tr>"
-    html += "</tbody>"
-    html += "</table>"
+    html += "</tbody></table></div>"
     
     if row_count > 50:
-        html += f'<div class="info-box">📊 Showing first 50 of {row_count} rows</div>'
+        html += f'<div style="margin: 10px 0; padding: 8px 12px; background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 4px; font-size: 13px;">📊 Showing first <strong>50</strong> of <strong>{row_count:,}</strong> rows in table. CSV download includes all {row_count:,} rows.</div>'
     
     return html
 
@@ -124,7 +287,7 @@ I'm your AI assistant for analyzing **SNAP Quality Control data**. I can help yo
 
 ### 🔍 Data Filters
 
-Use the **filters in the settings** (⚙️ icon) to:
+Use the **filters in the settings** (click the settings icon in the sidebar) to:
 - Filter by **State** (default: All States)
 - Filter by **Fiscal Year** (default: All Years)
 
@@ -162,27 +325,8 @@ Once set, all queries and exports will automatically use your selected filters!
             author="system"
         ).send()
         
-        # Check if database has data
-        try:
-            stats_response = await call_api("/data/stats")
-            total_households = stats_response.get("summary", {}).get("total_households", 0)
-            
-            if total_households == 0:
-                await cl.Message(
-                    content="""<div class="warning-box">
-⚠️ **Database is Empty**
-
-No data loaded yet! To get started:
-1. Use **`/load`** to see available CSV files
-2. Or use **`/load <filename>`** to load data directly (e.g., `/load qc_pub_fy2023.csv`)
-
-You can also check available files with **`/files`**
-</div>""",
-                    author="system"
-                ).send()
-        except Exception as e:
-            # If we can't check stats, just log it but don't show error to user
-            print(f"Could not check database stats: {e}")
+        # Skip stats check on startup - too slow and blocks the API
+        # Users can run /status command to check database statistics
             
     except Exception as e:
         await cl.Message(
@@ -221,15 +365,9 @@ async def on_settings_update(settings: Dict):
             data={"state": state_val, "fiscal_year": year_val}
         )
         
-        # Show confirmation
-        filter_desc = []
-        if state_val:
-            filter_desc.append(f"State: **{state_val}**")
-        if year_val:
-            filter_desc.append(f"Year: **FY{year_val}**")
-        
-        if filter_desc:
-            message = f"🔍 **Filter Applied:** {' | '.join(filter_desc)}\n\nAll queries and exports will now use this filter."
+        # Show confirmation message
+        if state_val or year_val:
+            message = f"🔍 **Filter Applied:** State: **{state_val or 'All'}** | Year: **FY{year_val or 'All'}**\n\nAll queries and exports will now use this filter."
         else:
             message = "🔍 **Filter Cleared:** Showing all data"
         
@@ -240,6 +378,48 @@ async def on_settings_update(settings: Dict):
             content=f'<div class="warning-box">❌ Error updating filter: {str(e)}</div>',
             author="system"
         ).send()
+
+
+@cl.action_callback("download_csv")
+async def on_download_csv(action: cl.Action):
+    """Handle CSV download action - create CSV file on-demand"""
+    try:
+        # Get stored results from session
+        results = cl.user_session.get("last_query_results")
+        
+        if not results or len(results) == 0:
+            await cl.Message(content="⚠️ No query results available to download.").send()
+            return
+        
+        # Create CSV file
+        import csv
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        csv_filename = f"query_results_{timestamp}.csv"
+        csv_file_path = f"/tmp/{csv_filename}"
+        
+        headers = list(results[0].keys())
+        with open(csv_file_path, 'w', newline='', encoding='utf-8') as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=headers)
+            writer.writeheader()
+            writer.writerows(results)
+        
+        # Send file to user
+        elements = [
+            cl.File(
+                name=csv_filename,
+                path=csv_file_path,
+                display="inline"
+            )
+        ]
+        
+        await cl.Message(
+            content=f"✅ CSV ready ({len(results)} rows)",
+            elements=elements
+        ).send()
+        
+    except Exception as e:
+        await cl.Message(content=f"❌ Error creating CSV: {str(e)}").send()
 
 
 @cl.on_message
@@ -853,13 +1033,7 @@ This is a complete, self-documenting data package! 🎉
 async def handle_chat_query(question: str):
     """Handle natural language chat query"""
     
-    # Show loading message
-    await cl.Message(content="🤔 Thinking...").send()
-    
     try:
-        # Generate SQL and execute immediately
-        await cl.Message(content="🔍 Generating SQL query...").send()
-        
         query_response = await call_api(
             "/chat/query",
             method="POST",
@@ -881,16 +1055,54 @@ async def handle_chat_query(question: str):
                 query_response.get("row_count", 0)
             )
             
+            # Store results in session for CSV download (all results, no limit)
+            results_data = query_response["results"]
+            cl.user_session.set("last_query_results", results_data)
+            
+            # Get active filters description
+            state_filter = cl.user_session.get("current_state_filter", "All States")
+            year_filter = cl.user_session.get("current_year_filter", "All Years")
+            filter_parts = []
+            if state_filter and state_filter != "All States":
+                filter_parts.append(f"State: {state_filter}")
+            if year_filter and year_filter != "All Years":
+                filter_parts.append(f"Year: {year_filter}")
+            filters_desc = ", ".join(filter_parts) if filter_parts else ""
+            
+            # Generate AI summary using hybrid approach
+            ai_summary = await generate_ai_summary(
+                question=question,
+                sql=sql,
+                results=query_response["results"],
+                row_count=query_response.get("row_count", 0),
+                filters=filters_desc
+            )
+            
+            # Get filter indicator for bottom of response
+            filter_indicator = get_filter_indicator()
+            
+            # Send everything in ONE message for clean output
             await cl.Message(content=f"""
-### ✅ Query Results
+{ai_summary}
+
+---
+
+### 📊 Data
 
 {results_html}
 
-**SQL Executed:**
-<div class="sql-code">{sql}</div>
+---
 
-**Explanation:** {explanation}
-            """).send()
+### 🔍 Technical Details
+```sql
+{sql}
+```
+
+{f"**Note:** {explanation}" if explanation else ""}
+{filter_indicator}
+            """, actions=[
+                cl.Action(name="download_csv", value="download", label="📥 CSV")
+            ]).send()
             
             # Update query count
             query_count = cl.user_session.get("query_count", 0)
@@ -938,6 +1150,10 @@ async def on_execute(action: cl.Action):
                 result.get("row_count", 0)
             )
             
+            # Store results in session for CSV download (all results, no limit)
+            results_data = result["results"]
+            cl.user_session.set("last_query_results", results_data)
+            
             await cl.Message(content=f"""
 ### ✅ Query Results
 
@@ -945,7 +1161,9 @@ async def on_execute(action: cl.Action):
 
 **SQL Executed:**
 <div class="sql-code">{result.get('sql', 'N/A')}</div>
-            """).send()
+            """, actions=[
+                cl.Action(name="download_csv", value="download", label="📥 CSV")
+            ]).send()
             
             # Update query count
             query_count = cl.user_session.get("query_count", 0)
