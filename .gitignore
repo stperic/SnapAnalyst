@@ -106,3 +106,7 @@ Thumbs.db
 tmp/
 temp/
 *.tmp
+
+# ChromaDB vector store (Vanna.AI embeddings)
+chromadb/
+*-*-*-*-*/

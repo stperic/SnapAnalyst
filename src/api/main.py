@@ -97,7 +97,7 @@ async def health_check():
 
 
 # Import and include routers
-from src.api.routers import data_loading, management, files, query, chatbot, schema, data_export, filter as filter_router
+from src.api.routers import data_loading, management, files, query, chatbot, schema, data_export, filter as filter_router, llm
 
 app.include_router(data_loading.router, prefix="/api/v1/data", tags=["Data Loading"])
 app.include_router(management.router, prefix="/api/v1/data", tags=["Management"])
@@ -107,6 +107,7 @@ app.include_router(chatbot.router, prefix="/api/v1/chat", tags=["Chatbot 🤖"])
 app.include_router(schema.router, prefix="/api/v1/schema", tags=["Schema 📋"])
 app.include_router(data_export.router, prefix="/api/v1/data", tags=["Data Export 📥"])
 app.include_router(filter_router.router, prefix="/api/v1/filter", tags=["Filter 🔍"])
+app.include_router(llm.router, prefix="/api/v1/llm", tags=["LLM Training 🧠"])
 
 
 if __name__ == "__main__":

@@ -80,9 +80,10 @@ class QueryValidator:
             if re.search(r'\b' + keyword + r'\b', sql_upper):
                 return False, f"Query contains forbidden keyword: {keyword}"
         
-        # Must start with SELECT
-        if not sql_upper.strip().startswith('SELECT'):
-            return False, "Only SELECT queries are allowed"
+        # Must start with SELECT or WITH (for CTEs)
+        sql_stripped = sql_upper.strip()
+        if not (sql_stripped.startswith('SELECT') or sql_stripped.startswith('WITH')):
+            return False, "Only SELECT and WITH queries are allowed"
         
         # Check for semicolons (multiple statements)
         if sql.count(';') > 1 or (sql.count(';') == 1 and not sql.strip().endswith(';')):

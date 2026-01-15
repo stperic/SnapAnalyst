@@ -49,7 +49,7 @@ class TextGenerationRequest(BaseModel):
     prompt: str = Field(
         ...,
         min_length=10,
-        max_length=2000,
+        max_length=50000,  # Increased to support full dataset summaries
         description="Text prompt for the LLM"
     )
     max_tokens: int = Field(

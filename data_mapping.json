@@ -714,14 +714,6 @@
                     "source_field": "Derived from data file",
                     "notes": "Part of composite primary key and foreign key to households"
                 },
-                "state_name": {
-                    "type": "VARCHAR(50)",
-                    "description": "State or territory name (from parent household)",
-                    "nullable": true,
-                    "example": "Connecticut",
-                    "source_field": "STATE (via household relationship)",
-                    "notes": "Denormalized from households table for convenience in exports"
-                },
                 "member_number": {
                     "type": "INTEGER",
                     "description": "Member position in household (1-17, part of composite primary key)",
@@ -920,14 +912,6 @@
                     "nullable": false,
                     "source_field": "Derived from data file",
                     "notes": "Part of composite primary key and foreign key to households"
-                },
-                "state_name": {
-                    "type": "VARCHAR(50)",
-                    "description": "State or territory name (from parent household)",
-                    "nullable": true,
-                    "example": "Maryland",
-                    "source_field": "STATE (via household relationship)",
-                    "notes": "Denormalized from households table for convenience in exports"
                 },
                 "error_number": {
                     "type": "INTEGER",

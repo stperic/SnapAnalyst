@@ -58,8 +58,8 @@ hide_cot = false
 # github = "https://github.com/yourusername/snapanalyst"
 
 # Custom logo configuration
-logo_dark = "/public/logo_dark.png"
-logo_light = "/public/logo_light.png"
+logo_dark = "/public/logo_dark.png?v=6"
+logo_light = "/public/logo_light.png?v=6"
 # Specify a CSS file that can be used to customize the user interface.
 # The CSS file can be served from the public directory or via an external link.
 custom_css = "/public/custom.css"

@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Chainlit Logo Inspection Guide</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            max-width: 900px;
+            margin: 50px auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .code {
+            background: #f4f4f4;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .warning {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .info {
+            background: #d1ecf1;
+            border-left: 4px solid #0c5460;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        h1 { color: #2c3e50; }
+        h2 { color: #34495e; margin-top: 30px; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Chainlit Logo Size Investigation</h1>
+    
+    <div class="warning">
+        <strong>⚠️ Critical Finding:</strong> Chainlit has HARDCODED logo size constraints in its React frontend.
+        The logo size is controlled by the frontend build, NOT just CSS!
+    </div>
+
+    <h2>Step 1: Open Browser Developer Tools</h2>
+    <p>While viewing your Chainlit application:</p>
+    <ol>
+        <li>Press <code>F12</code> (or Cmd+Option+I on Mac)</li>
+        <li>Click the "Inspector" or "Elements" tab</li>
+        <li>Click the element picker (top-left icon)</li>
+        <li>Click on your logo</li>
+    </ol>
+
+    <h2>Step 2: Find the Actual CSS Classes</h2>
+    <p>Look for something like:</p>
+    <div class="code">&lt;img src="/public/logo_dark.png" class="..." style="..."&gt;</div>
+    
+    <p>Common patterns in Chainlit (MUI-based):</p>
+    <div class="code">/* Possible selectors */
+.MuiToolbar-root img
+.MuiBox-root img  
+header img
+[class*="logo"]
+[class*="Logo"]</div>
+
+    <h2>Step 3: Check Computed Styles</h2>
+    <p>In DevTools, look at the "Computed" tab to see:</p>
+    <ul>
+        <li><strong>width</strong> - What is it set to?</li>
+        <li><strong>height</strong> - What is it set to?</li>
+        <li><strong>max-width</strong> - Is this constraining it?</li>
+        <li><strong>max-height</strong> - Is this constraining it?</li>
+    </ul>
+
+    <h2>Step 4: CSS Override Strategy</h2>
+    <p>Once you find the actual class, try these in your custom.css:</p>
+    
+    <div class="code">/* Strategy 1: Direct size override */
+header img[src*="logo"] {
+    width: 241px !important;
+    height: 270px !important;
+    max-width: none !important;
+    max-height: none !important;
+}
+
+/* Strategy 2: Transform scale */
+header img[src*="logo"] {
+    transform: scale(1.5) !important;
+    transform-origin: left center !important;
+}
+
+/* Strategy 3: Parent container */
+header .MuiToolbar-root {
+    height: auto !important;
+    min-height: 80px !important;
+}
+
+header .MuiToolbar-root img {
+    width: auto !important;
+    height: 60px !important;
+}</div>
+
+    <div class="info">
+        <strong>💡 Alternative Solution:</strong> If CSS doesn't work, Chainlit's logo size might be hardcoded
+        in the React frontend. You may need to:
+        <ul>
+            <li>Use a larger source image (we already did: 241×270px)</li>
+            <li>Accept the frontend's max size constraints</li>
+            <li>Or build a custom frontend (advanced)</li>
+        </ul>
+    </div>
+
+    <h2>Step 5: Test in Browser Console</h2>
+    <p>Try running this in the browser console while on your Chainlit page:</p>
+    <div class="code">// Find all images in header
+const headerImgs = document.querySelectorAll('header img');
+headerImgs.forEach((img, index) => {
+    console.log(`Image ${index}:`, {
+        src: img.src,
+        width: img.width,
+        height: img.height,
+        computedWidth: getComputedStyle(img).width,
+        computedHeight: getComputedStyle(img).height,
+        classes: img.className
+    });
+});
+
+// Try to force size change
+headerImgs.forEach(img => {
+    if (img.src.includes('logo')) {
+        img.style.width = '241px';
+        img.style.height = '270px';
+        img.style.maxWidth = 'none';
+        img.style.maxHeight = 'none';
+        console.log('Applied size to', img.src);
+    }
+});</div>
+
+    <h2>Report Back</h2>
+    <p>After running these tests, report:</p>
+    <ol>
+        <li>What CSS class names did you find on the logo img tag?</li>
+        <li>What are the computed width/height values?</li>
+        <li>Did the console commands change the size?</li>
+        <li>If size changed via console, which CSS selector should we use?</li>
+    </ol>
+
+</body>
+</html>

@@ -2,6 +2,56 @@
 /* Reference: https://docs.chainlit.io/customisation/custom-css */
 
 /* ============================================
+   LOGO SIZING - Override Chainlit defaults
+   ============================================ */
+
+/* Increase header height to accommodate larger logo */
+#app-header,
+header[class*="MuiAppBar"],
+header {
+    height: auto !important;
+    min-height: 80px !important;
+}
+
+/* Increase toolbar height */
+.MuiToolbar-root,
+[class*="MuiToolbar"] {
+    height: auto !important;
+    min-height: 80px !important;
+    padding-top: 8px !important;
+    padding-bottom: 8px !important;
+}
+
+/* Target logo images with multiple approaches */
+header img,
+#app-header img,
+.MuiToolbar-root img,
+img[src*="logo_dark"],
+img[src*="logo_light"],
+img[src*="/public/logo"] {
+    width: auto !important;
+    height: 48px !important; /* Reduced from 64px (25% decrease) */
+    max-width: none !important;
+    max-height: none !important;
+    object-fit: contain !important;
+}
+
+/* Alternative: If above doesn't work, use transform on parent */
+header a,
+#app-header a,
+.MuiToolbar-root > a {
+    display: inline-block !important;
+}
+
+header a img,
+#app-header a img,
+.MuiToolbar-root > a img {
+    transform: scale(1.5) !important; /* 1.5x scale (reduced by 25% from 2.0) */
+    transform-origin: left center !important;
+    margin-right: 20px !important; /* Add spacing after scaled logo */
+}
+
+/* ============================================
    FILTER INDICATOR STYLING
    ============================================ */
 

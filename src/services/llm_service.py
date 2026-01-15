@@ -75,29 +75,47 @@ class LLMService:
             "model": model or self.sql_model,
             "temperature": settings.llm_temperature,
             "max_tokens": settings.llm_max_tokens,
+            "path": settings.vanna_chromadb_path,  # Use configured path for ChromaDB storage
         }
+        
+        vanna_instance = None
         
         if self.provider == "openai":
             if not settings.openai_api_key:
                 raise ValueError("OpenAI API key not configured. Set OPENAI_API_KEY in .env")
             config["api_key"] = settings.openai_api_key
             logger.info(f"Initializing Vanna with OpenAI ({config['model']}) and ChromaDB")
-            return VannaOpenAI(config=config)
+            vanna_instance = VannaOpenAI(config=config)
         
         elif self.provider == "anthropic":
             if not settings.anthropic_api_key:
                 raise ValueError("Anthropic API key not configured. Set ANTHROPIC_API_KEY in .env")
             config["api_key"] = settings.anthropic_api_key
             logger.info(f"Initializing Vanna with Anthropic Claude ({config['model']}) and ChromaDB")
-            return VannaAnthropic(config=config)
+            vanna_instance = VannaAnthropic(config=config)
         
         elif self.provider == "ollama":
             config["host"] = settings.ollama_base_url
             logger.info(f"Initializing Vanna with Ollama ({config['model']} at {settings.ollama_base_url}) and ChromaDB")
-            return VannaOllama(config=config)
+            vanna_instance = VannaOllama(config=config)
         
         else:
             raise ValueError(f"Unsupported LLM provider: {self.provider}")
+        
+        # Connect Vanna to PostgreSQL database
+        try:
+            vanna_instance.connect_to_postgres(
+                host="localhost",
+                dbname="snapanalyst_db",
+                user="snapanalyst",
+                password="snapanalyst_dev_password",
+                port=5432
+            )
+            logger.info("Connected Vanna to PostgreSQL database")
+        except Exception as e:
+            logger.warning(f"Could not connect Vanna to database: {e}")
+        
+        return vanna_instance
     
     def _load_schema(self) -> Dict:
         """Load database schema documentation"""
@@ -110,6 +128,257 @@ class LLMService:
         
         logger.info(f"Loaded schema from {schema_path}")
         return schema
+    
+    def _train_basic_schema(self) -> None:
+        """Train Vanna on DDL with embedded business context from code lookups"""
+        logger.info("Training Vanna on enhanced schema with business context...")
+        
+        # Load code lookups from data_mapping.json
+        try:
+            schema_path = Path(settings.vanna_schema_path)
+            with open(schema_path, 'r') as f:
+                mapping = json.load(f)
+            code_lookups = mapping.get('code_lookups', {})
+            logger.info(f"Loaded {len(code_lookups)} code lookup sets from data_mapping.json")
+        except Exception as e:
+            logger.warning(f"Could not load code lookups: {e}. Using DDL without context.")
+            code_lookups = {}
+        
+        # Build enhanced DDL with inline comments for code lookups
+        ddl_statements = [
+            # ==================== HOUSEHOLDS TABLE ====================
+            """
+            CREATE TABLE households (
+                -- Primary identifiers
+                case_id VARCHAR(50) PRIMARY KEY,
+                fiscal_year INTEGER,
+                state_name VARCHAR(50),  -- State name for geographic queries (NOT in household_members or qc_errors)
+                
+                -- Income fields (household aggregated totals)
+                gross_income DECIMAL(12,2),        -- Total household income before deductions
+                net_income DECIMAL(12,2),          -- Income after deductions
+                earned_income DECIMAL(12,2),       -- Income from wages/employment
+                unearned_income DECIMAL(12,2),     -- Income from benefits/assistance (RSDI, SSI, TANF, etc.)
+                
+                -- Benefits
+                snap_benefit DECIMAL(10,2),        -- Final calculated SNAP benefit amount
+                raw_benefit DECIMAL(10,2),         -- Reported SNAP benefit (before QC corrections)
+                amount_error DECIMAL(10,2),        -- Dollar amount of benefit in error
+                maximum_benefit DECIMAL(10,2),     -- Max benefit for household size
+                minimum_benefit DECIMAL(10,2),     -- Min benefit amount
+                
+                -- Household composition
+                certified_household_size INTEGER,   -- Number of people in household
+                num_elderly INTEGER,                -- Number of members age 60+
+                num_children INTEGER,               -- Number of members under 18
+                num_disabled INTEGER,               -- Number of disabled members
+                
+                -- Status and classification codes
+                status INTEGER,
+                -- STATUS CODES: 1=Amount correct, 2=Overissuance, 3=Underissuance
+                -- Common query: WHERE status = 2 to find overissuance cases
+                
+                case_classification INTEGER,
+                -- CASE CLASSIFICATION: 1=Included in error rate, 2=Excluded (SSA worker), 3=Excluded (FNS designation)
+                
+                categorical_eligibility INTEGER,
+                -- CATEGORICAL ELIGIBILITY: 0=Not eligible, 1=Categorically eligible (exempt from income/asset tests), 2=Recoded as eligible
+                
+                expedited_service INTEGER,
+                -- EXPEDITED SERVICE: 1=Entitled and received on time, 2=Entitled but NOT received on time, 3=Not entitled
+                
+                -- Other fields
+                review_month INTEGER,
+                review_year INTEGER
+            );
+            -- IMPORTANT: Use households table for state_name and household-level income queries
+            -- Example queries:
+            --   SELECT state_name, AVG(gross_income) FROM households GROUP BY state_name
+            --   SELECT * FROM households WHERE status = 2 AND fiscal_year = 2023
+            """,
+            
+            # ==================== HOUSEHOLD_MEMBERS TABLE ====================
+            """
+            CREATE TABLE household_members (
+                -- Primary identifiers
+                case_id VARCHAR(50),
+                fiscal_year INTEGER,
+                member_number INTEGER,
+                
+                -- Demographics
+                age INTEGER,                        -- Age in years (0=under 1 year, 98=98 or older)
+                sex INTEGER,
+                -- SEX CODES: 1=Male, 2=Female, 3=Prefer not to answer
+                
+                -- Member status
+                snap_affiliation_code INTEGER,
+                -- SNAP AFFILIATION (eligibility status):
+                --   1=Eligible and entitled to benefits
+                --   2=Eligible participant in another unit
+                --   4=Ineligible noncitizen (not state-funded)
+                --   7=Ineligible student
+                --   8=Disqualified for program violation
+                --   9=Ineligible due to work requirements
+                --   10=ABAWD time limit exhausted
+                --   17=Foster care
+                --   18=Ineligible noncitizen (state-funded)
+                --   19=In home but not part of SNAP household
+                --   99=Unknown
+                -- Common query: WHERE snap_affiliation_code = 1 for eligible members
+                
+                -- Individual income sources (member-level detail)
+                wages DECIMAL(10,2),                -- Wages and salaries
+                self_employment_income DECIMAL(10,2),
+                social_security DECIMAL(10,2),      -- RSDI benefits
+                ssi DECIMAL(10,2),                  -- Supplemental Security Income
+                unemployment DECIMAL(10,2),
+                tanf DECIMAL(10,2),                 -- Temporary Assistance for Needy Families
+                veterans_benefits DECIMAL(10,2),
+                workers_compensation DECIMAL(10,2),
+                child_support DECIMAL(10,2),
+                other_income DECIMAL(10,2),
+                total_income DECIMAL(10,2),         -- Sum of all member income
+                
+                PRIMARY KEY (case_id, fiscal_year, member_number)
+            );
+            -- IMPORTANT: This table does NOT have state_name
+            -- For state-based queries, JOIN with households table on case_id
+            -- Example: 
+            --   SELECT h.state_name, AVG(m.wages) 
+            --   FROM household_members m 
+            --   JOIN households h ON m.case_id = h.case_id 
+            --   GROUP BY h.state_name
+            """,
+            
+            # ==================== QC_ERRORS TABLE ====================
+            """
+            CREATE TABLE qc_errors (
+                -- Primary identifiers
+                case_id VARCHAR(50),
+                fiscal_year INTEGER,
+                error_number INTEGER,               -- Sequential error number for this case
+                
+                -- Error classification
+                element_code INTEGER,
+                -- ELEMENT CODES (what area had the problem):
+                --   INCOME ERRORS:
+                --     311=Wages and salaries
+                --     312=Self-employment
+                --     331=RSDI benefits (Social Security)
+                --     332=Veterans benefits
+                --     333=SSI/State SSI supplement
+                --     334=Unemployment compensation
+                --     335=Workers compensation
+                --     344=TANF/PA/GA (public assistance)
+                --     346=Other unearned income
+                --   ASSET ERRORS:
+                --     211=Bank accounts or cash on hand
+                --     212=Nonrecurring lump-sum payment
+                --     221=Real property
+                --     222=Vehicles
+                --   DEDUCTION ERRORS:
+                --     323=Dependent care deduction
+                --     361=Standard deduction
+                --     363=Shelter deduction
+                --     365=Medical expense deductions
+                --   HOUSEHOLD COMPOSITION:
+                --     150=Unit composition
+                --     151=Recipient disqualification
+                --   ELIGIBILITY:
+                --     111=Student status
+                --     130=Citizenship/noncitizen status
+                --     170=Social Security number
+                --   COMPUTATION:
+                --     520=Arithmetic computation
+                -- Common queries:
+                --   WHERE element_code = 311 for wage errors
+                --   WHERE element_code BETWEEN 311 AND 346 for income errors
+                --   WHERE element_code IN (311, 331, 333, 334) for major income errors
+                
+                nature_code INTEGER,
+                -- NATURE CODES (what went wrong):
+                --   35=Unreported source of income
+                --   37=All income from source known but not included
+                --   38=More income received than budgeted
+                --   44=Less income received than budgeted
+                --   52=Deduction that should have been included was not
+                --   53=Deduction included that should not have been
+                --   75=Benefit/allotment/eligibility incorrectly computed
+                --   98=Transcription or computation errors
+                --   99=Other
+                -- Common query: WHERE nature_code IN (35, 37, 38) for income reporting issues
+                
+                error_amount DECIMAL(10,2),         -- Dollar amount of this specific error
+                
+                error_finding INTEGER,
+                -- ERROR FINDING: 2=Overissuance, 3=Underissuance, 4=Ineligible
+                
+                agency_responsibility INTEGER,
+                -- AGENCY RESPONSIBILITY:
+                --   1-4, 7-8=Client responsibility (client error)
+                --   10-21=Agency responsibility (agency error)
+                --   Common: 1=Info not reported (client), 10=Policy incorrectly applied (agency)
+                
+                PRIMARY KEY (case_id, fiscal_year, error_number)
+            );
+            -- IMPORTANT: This table does NOT have state_name
+            -- For state-based error analysis, JOIN with households table
+            -- Example:
+            --   SELECT h.state_name, COUNT(*) as wage_errors
+            --   FROM qc_errors e
+            --   JOIN households h ON e.case_id = h.case_id
+            --   WHERE e.element_code = 311
+            --   GROUP BY h.state_name
+            """
+        ]
+        
+        # Train on each DDL statement
+        for ddl in ddl_statements:
+            self.vanna.train(ddl=ddl)
+        
+        # Add business terminology documentation
+        business_context = """
+        SNAP QC Database - Business Context and Common Terms:
+        
+        PROGRAM TERMS:
+        - SNAP = Supplemental Nutrition Assistance Program (formerly "food stamps")
+        - QC = Quality Control review process to ensure benefit accuracy
+        - Overissuance = Household received more benefits than entitled
+        - Underissuance = Household received less benefits than entitled
+        - RSDI = Retirement, Survivors, and Disability Insurance (Social Security)
+        - SSI = Supplemental Security Income
+        - TANF = Temporary Assistance for Needy Families (welfare/cash assistance)
+        - ABAWD = Able-Bodied Adults Without Dependents (work requirement rules)
+        - PA/GA = Public Assistance / General Assistance
+        - Categorical Eligibility = Exempt from SNAP income/asset tests due to other program participation
+        
+        COMMON QUERY PATTERNS:
+        1. Overissuance analysis: WHERE status = 2
+        2. Income errors: WHERE element_code IN (311, 331, 333, 334)
+        3. Wage errors specifically: WHERE element_code = 311
+        4. Asset errors: WHERE element_code IN (211, 221, 222)
+        5. Elderly households: WHERE num_elderly > 0
+        6. Households with children: WHERE num_children > 0
+        7. State comparisons: GROUP BY state_name (must use households table)
+        8. Error amounts: SUM(error_amount) or AVG(error_amount)
+        
+        TABLE RELATIONSHIPS:
+        - All tables join on case_id (and fiscal_year for multi-year queries)
+        - state_name is ONLY in households table
+        - Individual member income is in household_members table
+        - Aggregated household income is in households table
+        - Error details are in qc_errors table
+        
+        IMPORTANT NOTES:
+        - Always use households table when query mentions state, state_name, or geographic analysis
+        - Join household_members or qc_errors to households when needing state context
+        - For income analysis: use households.gross_income for household totals, household_members.wages for individual wages
+        - Status and error_finding both indicate over/under issuance but in different contexts
+        """
+        
+        self.vanna.train(documentation=business_context)
+        
+        logger.info(f"Trained on {len(ddl_statements)} tables with embedded code lookups and business context")
     
     def _load_training_examples(self) -> List[Dict]:
         """Load SQL query examples for training"""
@@ -195,22 +464,18 @@ class LLMService:
             return
         
         try:
-            # Initialize Vanna with configured provider
+            # ALWAYS initialize Vanna (connects to DB)
             self.vanna = self._initialize_vanna()
             
-            if settings.vanna_training_enabled or force_retrain:
-                # Load and train on schema
-                schema = self._load_schema()
-                self._train_on_schema(schema)
-                
-                # Load and train on examples
-                examples = self._load_training_examples()
-                if examples:
-                    self._train_on_examples(examples)
-                
-                logger.info("✅ LLM Service training completed successfully")
-            else:
-                logger.info("Training disabled, using pre-trained model")
+            # Simple training approach: Always train on basic DDL
+            # This is fast (< 1 second) and ensures correct schema understanding
+            self._train_basic_schema()
+            
+            # Optionally load examples
+            examples = self._load_training_examples()
+            if examples:
+                self._train_on_examples(examples)
+                logger.info(f"Loaded {len(examples)} query examples")
             
             self._initialized = True
             

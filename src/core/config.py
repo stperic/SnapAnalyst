@@ -89,6 +89,7 @@ class Settings(BaseSettings):
     llm_model_summary: Optional[str] = None  # Model for summary generation (output)
     llm_temperature: float = Field(default=0.1, ge=0.0, le=2.0)
     llm_max_tokens: int = Field(default=2000, ge=100, le=8000)
+    llm_summary_max_prompt_size: int = Field(default=8000, ge=1000, le=50000, description="Max prompt size (chars) for summary generation before fallback")
     
     # API Keys (Optional - required based on provider)
     openai_api_key: Optional[str] = None
@@ -99,6 +100,7 @@ class Settings(BaseSettings):
     vanna_training_enabled: bool = False  # DISABLED: Was causing 10+ second API startup hangs
     vanna_training_data_path: str = "./query_examples.json"
     vanna_schema_path: str = "./data_mapping.json"
+    vanna_chromadb_path: str = "./chromadb"  # ChromaDB vector store location
 
     @property
     def is_development(self) -> bool:
