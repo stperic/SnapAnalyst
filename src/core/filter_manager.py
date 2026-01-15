@@ -191,18 +191,63 @@ class FilterManager:
         """
         Apply filter to SQL query by injecting WHERE conditions.
         
+        Handles table-specific filtering:
+        - state_name only exists in 'households' table
+        - For qc_errors or household_members, uses case_id subquery for state filter
+        - fiscal_year exists in all tables
+        
         Args:
             sql: Original SQL query
             
         Returns:
             Modified SQL with filter conditions
         """
+        import re
+        
         filter_obj = self.get_filter()
         
         if filter_obj.is_empty:
             return sql  # No filter, return original SQL
         
-        conditions = filter_obj.get_sql_conditions()
+        # Normalize whitespace to handle newlines
+        sql_normalized = ' '.join(sql.split())
+        sql_upper = sql_normalized.upper()
+        
+        # Determine which tables are in the query (case-insensitive)
+        has_households = bool(re.search(r'\bhouseholds\b', sql_normalized, re.IGNORECASE))
+        has_qc_errors = bool(re.search(r'\bqc_errors\b', sql_normalized, re.IGNORECASE))
+        has_members = bool(re.search(r'\bhousehold_members\b', sql_normalized, re.IGNORECASE))
+        
+        # Build conditions based on table context
+        conditions = []
+        
+        # State filter - state_name only exists in households table
+        if filter_obj.states:
+            state_val = filter_obj.states[0] if len(filter_obj.states) == 1 else filter_obj.states
+            
+            if has_households:
+                # Direct filter on households table
+                if isinstance(state_val, str):
+                    conditions.append(f"state_name = '{state_val}'")
+                else:
+                    states_str = "', '".join(state_val)
+                    conditions.append(f"state_name IN ('{states_str}')")
+            elif has_qc_errors or has_members:
+                # Need subquery to filter by state via case_id
+                if isinstance(state_val, str):
+                    subquery = f"case_id IN (SELECT case_id FROM households WHERE state_name = '{state_val}')"
+                else:
+                    states_str = "', '".join(state_val)
+                    subquery = f"case_id IN (SELECT case_id FROM households WHERE state_name IN ('{states_str}'))"
+                conditions.append(subquery)
+        
+        # Fiscal year filter - exists in all tables
+        if filter_obj.fiscal_years:
+            if len(filter_obj.fiscal_years) == 1:
+                conditions.append(f"fiscal_year = {filter_obj.fiscal_years[0]}")
+            else:
+                years_str = ", ".join(map(str, filter_obj.fiscal_years))
+                conditions.append(f"fiscal_year IN ({years_str})")
         
         if not conditions:
             return sql
@@ -211,14 +256,9 @@ class FilterManager:
         filter_clause = " AND ".join(conditions)
         
         # Inject into SQL
-        # Normalize whitespace to handle newlines
-        sql_normalized = ' '.join(sql.split())
-        sql_upper = sql_normalized.upper()
-        
         # Case 1: SQL already has WHERE clause
         if " WHERE " in sql_upper:
             # Add to existing WHERE with AND (case-insensitive single replacement)
-            import re
             return re.sub(r'\s+WHERE\s+', f' WHERE ({filter_clause}) AND ', sql_normalized, count=1, flags=re.IGNORECASE)
         
         # Case 2: SQL has GROUP BY, ORDER BY, LIMIT, etc. but no WHERE
@@ -226,7 +266,6 @@ class FilterManager:
         for keyword in [" GROUP BY ", " ORDER BY ", " LIMIT ", " OFFSET ", " HAVING "]:
             if keyword in sql_upper:
                 # Find position (case-insensitive)
-                import re
                 match = re.search(keyword, sql_normalized, re.IGNORECASE)
                 if match:
                     pos = match.start()

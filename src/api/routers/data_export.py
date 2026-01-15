@@ -20,9 +20,9 @@ from src.api.utils.data_export import DataExporter
 logger = get_logger(__name__)
 router = APIRouter()
 
-# Path to data mapping
+# Path to data mapping (now in datasets/snap/)
 WORKSPACE_ROOT = Path(__file__).parent.parent.parent.parent
-DATA_MAPPING_PATH = WORKSPACE_ROOT / "data_mapping.json"
+DATA_MAPPING_PATH = WORKSPACE_ROOT / "datasets" / "snap" / "data_mapping.json"
 
 
 @router.get("/export/excel", summary="Export all data to Excel with README")

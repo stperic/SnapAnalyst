@@ -42,6 +42,9 @@ auto_tag_thread = true
 # Name of the assistant.
 name = "SnapAnalyst AI"
 
+# Start on Chat page instead of Readme
+show_readme_as_default = false
+
 # Description of the assistant. This is used for HTML tags.
 description = "AI-powered SNAP Quality Control data analysis chatbot"
 

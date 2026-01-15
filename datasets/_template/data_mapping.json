@@ -1,0 +1,50 @@
+{
+    "database": {
+        "name": "Your Dataset Name",
+        "description": "Description of your dataset and its purpose.",
+        "version": "1.0",
+        "data_source": "Source of the data"
+    },
+    "code_lookups": {
+        "example_status_codes": {
+            "description": "Example status codes",
+            "source_field": "STATUS",
+            "1": "Active",
+            "2": "Inactive",
+            "3": "Pending"
+        },
+        "example_category_codes": {
+            "description": "Example category codes",
+            "source_field": "CATEGORY",
+            "A": "Category A",
+            "B": "Category B",
+            "C": "Category C"
+        }
+    },
+    "tables": {
+        "your_main_table": {
+            "description": "Main data table description",
+            "primary_key": "id",
+            "columns": {
+                "id": {
+                    "type": "INTEGER",
+                    "description": "Primary key",
+                    "nullable": false
+                },
+                "status": {
+                    "type": "INTEGER",
+                    "description": "Status code (see code_lookups.example_status_codes)",
+                    "nullable": true,
+                    "source_field": "STATUS"
+                }
+            }
+        }
+    },
+    "relationships": {
+        "main_to_related": {
+            "type": "ONE_TO_MANY",
+            "description": "Relationship description",
+            "join": "your_main_table.id = related_table.main_id"
+        }
+    }
+}

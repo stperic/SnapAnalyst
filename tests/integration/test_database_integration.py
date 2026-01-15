@@ -12,7 +12,9 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
 from src.database.models import Base, Household, HouseholdMember, QCError
-from src.database.engine import Base, SessionLocal
+from src.database.engine import SessionLocal
+# Import reference models to ensure they're registered with Base.metadata
+from src.database import reference_models  # noqa: F401
 from src.etl.reader import CSVReader
 from src.etl.transformer import DataTransformer
 from src.etl.validator import DataValidator
@@ -29,16 +31,35 @@ def test_database_url():
 
 @pytest.fixture(scope="module")
 def test_engine(test_database_url):
-    """Create test database engine"""
+    """
+    Create test database engine.
+    
+    Note: Uses the pre-existing database with reference tables already populated.
+    Run `python -c "from src.database.init_database import initialize_database; initialize_database()"` 
+    to set up the database with reference tables before running tests.
+    """
     engine = create_engine(str(test_database_url))
     
-    # Create all tables
+    # Ensure tables exist (won't recreate if they already exist)
     Base.metadata.create_all(engine)
+    
+    # Clean up any leftover test data from previous runs
+    with Session(engine) as session:
+        # Delete test data with known prefixes
+        session.execute(text("DELETE FROM qc_errors WHERE case_id LIKE 'CASE%' OR case_id LIKE 'API%'"))
+        session.execute(text("DELETE FROM household_members WHERE case_id LIKE 'CASE%' OR case_id LIKE 'API%'"))
+        session.execute(text("DELETE FROM households WHERE case_id LIKE 'CASE%' OR case_id LIKE 'API%'"))
+        session.commit()
     
     yield engine
     
-    # Cleanup - drop all tables after tests
-    Base.metadata.drop_all(engine)
+    # Clean up test data after tests complete
+    with Session(engine) as session:
+        session.execute(text("DELETE FROM qc_errors WHERE case_id LIKE 'CASE%' OR case_id LIKE 'API%'"))
+        session.execute(text("DELETE FROM household_members WHERE case_id LIKE 'CASE%' OR case_id LIKE 'API%'"))
+        session.execute(text("DELETE FROM households WHERE case_id LIKE 'CASE%' OR case_id LIKE 'API%'"))
+        session.commit()
+    
     engine.dispose()
 
 
@@ -91,12 +112,12 @@ def sample_members_df():
 
 @pytest.fixture
 def sample_errors_df():
-    """Create sample QC error data"""
+    """Create sample QC error data with valid codes from data_mapping.json"""
     return pl.DataFrame({
         "case_id": ["CASE002", "CASE003"],
         "error_number": [1, 1],
-        "element_code": [100, 200],
-        "nature_code": [1, 2],
+        "element_code": [111, 130],  # Valid: Student status, Citizenship status
+        "nature_code": [6, 7],  # Valid: Eligible person excluded, Ineligible person included
         "error_amount": [50.00, 100.00],
         "responsible_agency": [1, 1],
     })
@@ -108,8 +129,8 @@ def test_csv_path():
     # Use the test data file provided in tests/data
     csv_path = Path(__file__).parent.parent / "data" / "test.csv"
     if not csv_path.exists():
-        # Fallback to snapdata directory
-        csv_path = Path(__file__).parent.parent.parent / "snapdata" / "qc_pub_fy2023.csv"
+        # Fallback to datasets/snap/data directory (new location)
+        csv_path = Path(__file__).parent.parent.parent / "datasets" / "snap" / "data" / "qc_pub_fy2023.csv"
     return csv_path
 
 
@@ -131,8 +152,10 @@ class TestDatabaseWriter:
         assert len(case_ids) == 3
         assert "CASE001" in case_ids
         
-        # Query database
-        households = test_session.query(Household).all()
+        # Query database - filter by test case_ids to avoid counting data from other tests
+        households = test_session.query(Household).filter(
+            Household.case_id.in_(["CASE001", "CASE002", "CASE003"])
+        ).all()
         assert len(households) == 3
         
         # Check specific household
@@ -160,8 +183,10 @@ class TestDatabaseWriter:
         # Verify
         assert members_written == 6
         
-        # Query database
-        members = test_session.query(HouseholdMember).all()
+        # Query database - filter by test case_ids
+        members = test_session.query(HouseholdMember).filter(
+            HouseholdMember.case_id.in_(["CASE001", "CASE002", "CASE003"])
+        ).all()
         assert len(members) == 6
         
         # Check specific member
@@ -190,8 +215,10 @@ class TestDatabaseWriter:
         # Verify
         assert errors_written == 2
         
-        # Query database
-        errors = test_session.query(QCError).all()
+        # Query database - filter by test case_ids
+        errors = test_session.query(QCError).filter(
+            QCError.case_id.in_(["CASE002", "CASE003"])
+        ).all()
         assert len(errors) == 2
         
         # Check specific error
@@ -200,7 +227,7 @@ class TestDatabaseWriter:
             QCError.fiscal_year == 2023
         ).first()
         assert error is not None
-        assert error.element_code == 100
+        assert error.element_code == 111  # Updated to match sample_errors_df fixture
         assert error.error_amount == Decimal("50.00")
     
     def test_write_all(self, test_session, sample_households_df, sample_members_df, sample_errors_df):
@@ -221,10 +248,11 @@ class TestDatabaseWriter:
         assert stats["errors_written"] == 2
         assert stats["total_records"] == 11
         
-        # Verify in database
-        assert test_session.query(Household).count() == 3
-        assert test_session.query(HouseholdMember).count() == 6
-        assert test_session.query(QCError).count() == 2
+        # Verify in database - filter by test case_ids
+        test_case_ids = ["CASE001", "CASE002", "CASE003"]
+        assert test_session.query(Household).filter(Household.case_id.in_(test_case_ids)).count() == 3
+        assert test_session.query(HouseholdMember).filter(HouseholdMember.case_id.in_(test_case_ids)).count() == 6
+        assert test_session.query(QCError).filter(QCError.case_id.in_(test_case_ids)).count() == 2
     
     def test_foreign_key_relationships(self, test_session, sample_households_df, sample_members_df):
         """Test that foreign key relationships work correctly"""
@@ -260,9 +288,11 @@ class TestDatabaseWriter:
             fiscal_year=2023
         )
         
-        # Verify data exists
-        assert test_session.query(Household).count() == 3
-        assert test_session.query(HouseholdMember).count() == 6
+        test_case_ids = ["CASE001", "CASE002", "CASE003"]
+        
+        # Verify data exists (filter by test case_ids)
+        assert test_session.query(Household).filter(Household.case_id.in_(test_case_ids)).count() == 3
+        assert test_session.query(HouseholdMember).filter(HouseholdMember.case_id.in_(test_case_ids)).count() == 6
         
         # Delete one household
         household = test_session.query(Household).filter(
@@ -271,9 +301,9 @@ class TestDatabaseWriter:
         test_session.delete(household)
         test_session.commit()
         
-        # Verify cascade delete worked
-        assert test_session.query(Household).count() == 2
-        assert test_session.query(HouseholdMember).count() == 4  # 2 members deleted
+        # Verify cascade delete worked (filter by test case_ids)
+        assert test_session.query(Household).filter(Household.case_id.in_(test_case_ids)).count() == 2
+        assert test_session.query(HouseholdMember).filter(HouseholdMember.case_id.in_(test_case_ids)).count() == 4  # 2 members deleted
 
 
 class TestETLLoader:

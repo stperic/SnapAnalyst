@@ -58,10 +58,14 @@ An AI-powered platform that enables analysts, researchers, and policy makers to 
 ┌─────────────────────────────────────────────────────────┐
 │              PostgreSQL Database (:5432)                │
 │  ┌────────────────────────────────────────────────┐    │
-│  │  Normalized Schema (3 tables)                  │    │
+│  │  Gold Standard Schema                          │    │
+│  │  Main Tables:                                  │    │
 │  │  - households (~50K rows)                      │    │
 │  │  - household_members (~120K rows)              │    │
 │  │  - qc_errors (~20K rows)                       │    │
+│  │  Reference Tables (12 lookup tables):          │    │
+│  │  - ref_status, ref_element, ref_nature...      │    │
+│  │  - FK constraints for auto-JOIN generation     │    │
 │  └────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────┘
                           ↑
@@ -77,28 +81,51 @@ An AI-powered platform that enables analysts, researchers, and policy makers to 
 
 ### Database Schema
 
-**Normalized from 1,200+ columns → 3 tables with 88 validated fields**
+**Normalized from 1,200+ columns → 3 main tables + 12 reference tables**
 
-#### 1. **households** table (~20 columns)
-Core household case information:
+Uses the "Gold Standard" architecture recommended by Vanna.ai for optimal natural language to SQL generation:
+- **Main Tables**: Store the actual SNAP QC data with FK constraints
+- **Reference Tables**: Lookup tables that map codes → human-readable descriptions
+- **Foreign Keys**: Enable automatic JOINs for descriptive query results
+
+#### Main Data Tables
+
+**1. households** (~20 columns)
 - Identifiers: `case_id`, `state_name`, `fiscal_year`
-- SNAP benefits: `snap_benefit_amount`, `prior_snap_benefit`
+- SNAP benefits: `snap_benefit`, `amount_error`
 - Income: `gross_income`, `net_income`, `earned_income`
-- Demographics: `household_size`, `num_children`, `num_elderly`
-- QC information: `status`, `reviewer_id`, `sample_number`
+- Demographics: `certified_household_size`, `num_children`, `num_elderly`
+- FK to: `ref_status`, `ref_categorical_eligibility`, `ref_expedited_service`
 
-#### 2. **household_members** table (~15 columns)  
-Individual member records (unpivoted from 17 repeated columns):
-- Links: `case_id`, `member_num` (1-17)
-- Demographics: `age`, `gender`, `relationship`, `citizenship`
-- Income: `wages`, `self_employment_income`, `unearned_income`
-- Work: `work_hours`, `employment_status`
+**2. household_members** (~15 columns)  
+- Links: `case_id`, `member_number` (1-17)
+- Demographics: `age`, `sex`, `citizenship_status`
+- Income: `wages`, `social_security`, `ssi`, `tanf`
+- FK to: `ref_sex`, `ref_snap_affiliation`
 
-#### 3. **qc_errors** table (~12 columns)
-Quality control error records (unpivoted from 9 repeated columns):
-- Links: `case_id`, `error_num` (1-9)
-- Error details: `element` (what), `nature` (why), `amount`
-- Responsibility: `agency_responsibility`, `discovery_method`
+**3. qc_errors** (~12 columns)
+- Links: `case_id`, `error_number` (1-9)
+- Error details: `element_code`, `nature_code`, `error_amount`
+- FK to: `ref_element`, `ref_nature`, `ref_agency_responsibility`, `ref_error_finding`
+
+#### Reference/Lookup Tables (12 tables)
+
+| Table | Purpose |
+|-------|---------|
+| `ref_status` | Case error status (correct, overissuance, underissuance) |
+| `ref_element` | Error type with category (income, assets, deductions) |
+| `ref_nature` | What went wrong (unreported income, computation error) |
+| `ref_agency_responsibility` | Who caused error (client vs agency, with type) |
+| `ref_error_finding` | Error impact classification |
+| `ref_sex` | Member gender codes |
+| `ref_snap_affiliation` | Member eligibility status |
+| `ref_categorical_eligibility` | Household eligibility category |
+| `ref_expedited_service` | Expedited service status |
+| `ref_discovery` | How error was discovered |
+| `ref_state` | FIPS code → state name/abbreviation |
+| `ref_case_classification` | Case classification for error rate |
+
+**Initialize database:** `python -m src.database.init_database`
 
 **Complete documentation available at:** http://localhost:8000/api/v1/schema/tables
 

@@ -86,7 +86,11 @@ class ProviderInfoResponse(BaseModel):
     
     provider: str = Field(..., description="Current LLM provider")
     sql_model: str = Field(..., description="Model used for SQL generation")
+    sql_max_tokens: int = Field(..., description="Maximum tokens for SQL response")
+    sql_temperature: float = Field(..., description="Temperature for SQL generation")
     summary_model: str = Field(..., description="Model used for text summaries")
+    summary_max_tokens: int = Field(..., description="Maximum tokens for summary response")
+    summary_max_prompt_size: int = Field(..., description="Maximum prompt size (chars) for summary")
     temperature: float = Field(..., description="LLM temperature setting")
     max_tokens: int = Field(..., description="Maximum tokens for LLM response")
     initialized: bool = Field(..., description="Whether service is initialized")
@@ -147,6 +151,7 @@ async def chat_query(request: ChatQueryRequest) -> ChatQueryResponse:
             initialize_llm_service()
         
         # Generate SQL from question
+        # This will raise ValueError if LLM returns non-SQL response
         sql, explanation = llm_service.generate_sql(request.question)
         
         if not sql:
@@ -155,6 +160,7 @@ async def chat_query(request: ChatQueryRequest) -> ChatQueryResponse:
                 detail="Could not generate SQL from the question. Please rephrase."
             )
         
+        # At this point, sql is validated to be actual SQL
         # Debug: Log SQL before filter
         logger.info(f"SQL before filter: {sql}")
         

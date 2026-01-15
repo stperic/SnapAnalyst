@@ -92,6 +92,9 @@ echo ""
 # 5. Start Frontend (Chainlit)
 echo -e "${YELLOW}🚀 Starting Chainlit UI (port 8001)...${NC}"
 export API_BASE_URL=http://localhost:8000
+# Suppress verbose websocket/uvicorn DEBUG logs - unset debug flags
+unset CHAINLIT_DEBUG
+unset DEBUG
 nohup chainlit run chainlit_app.py --port 8001 > logs/chainlit.log 2>&1 &
 FRONTEND_PID=$!
 

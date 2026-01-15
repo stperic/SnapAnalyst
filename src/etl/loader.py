@@ -19,6 +19,24 @@ from src.etl.writer import DatabaseWriter
 logger = get_logger(__name__)
 
 
+def check_references_ready() -> tuple[bool, list[str]]:
+    """
+    Check if reference tables are populated.
+    
+    CRITICAL: Main tables have FK constraints to reference tables.
+    Loading data will fail if reference tables are empty.
+    
+    Returns:
+        Tuple of (ready: bool, empty_tables: list[str])
+    """
+    try:
+        from src.database.init_database import check_references_populated
+        return check_references_populated()
+    except Exception as e:
+        logger.warning(f"Could not check reference tables: {e}")
+        return True, []  # Assume OK if check fails
+
+
 class ETLStatus:
     """Track ETL job status"""
     
@@ -131,6 +149,15 @@ class ETLLoader:
         status.status = "in_progress"
         status.started_at = datetime.now()
         
+        # Check reference tables are populated (FK constraints require this)
+        refs_ready, empty_tables = check_references_ready()
+        if not refs_ready:
+            logger.warning(
+                f"Reference tables not populated: {', '.join(empty_tables)}. "
+                "Some inserts may fail due to FK constraints. "
+                "Run: python -m src.database.init_database"
+            )
+        
         try:
             logger.info(f"Starting ETL job {job_id} for file: {file_path}")
             
@@ -149,6 +176,12 @@ class ETLLoader:
             else:
                 # Large file - process in chunks
                 result = self._process_in_chunks(status)
+            
+            # Check if _process_batch returned early due to critical error
+            if isinstance(result, ETLStatus):
+                # Critical error occurred (e.g., FK violation) - status already set
+                logger.error(f"ETL job {job_id} failed: {result.error_message}")
+                return result
             
             # Update final status
             status.households_created = result["households_written"]
@@ -300,8 +333,31 @@ class ETLLoader:
                     batch_errors = []
                     
                 except Exception as e:
+                    error_str = str(e)
                     logger.error(f"Failed to write batch at row {row_idx}: {e}")
-                    # Don't fail entire load, just log and continue
+                    
+                    # Check if this is a critical error that should stop the load
+                    is_fk_violation = "ForeignKeyViolation" in error_str or "violates foreign key constraint" in error_str
+                    is_integrity_error = "IntegrityError" in error_str or "UniqueViolation" in error_str
+                    
+                    if is_fk_violation:
+                        # FK violation = missing reference data = cannot continue
+                        status.status = "failed"
+                        status.error_message = f"Foreign key constraint error - missing reference data: {error_str[:500]}"
+                        status.completed_at = datetime.now()
+                        logger.error(f"CRITICAL: Stopping load due to foreign key violation. Check reference tables.")
+                        return status
+                    
+                    # For other errors, count the failed rows and clear the batch
+                    batch_row_count = len(batch_households)
+                    failed_rows += batch_row_count
+                    status.rows_skipped = failed_rows
+                    logger.warning(f"Batch of {batch_row_count} rows failed, continuing with next batch")
+                    
+                    # Clear failed batch to prevent cascading errors
+                    batch_households = []
+                    batch_members = []
+                    batch_errors = []
             
             # Log progress every 1000 rows
             if (row_idx + 1) % 1000 == 0:

@@ -1,0 +1,3474 @@
+Table V.3. Quick-reference codebook
+Variable
+Origin*
+Description
+Unit QC review administrative data
+ACTNTYPE
+R
+Type of action
+ALLADJ
+R
+Allotment adjustment
+AMTADJ
+R
+Amount of allotment adjustment
+AUTHREP
+R
+Authorized representative
+BENFIX
+C
+Benefit allotment (SNAP benefit) adjusted for errors
+CASE
+R
+Case classification
+CAT_ELIG
+C
+Indicator of categorical eligibility status
+CERTMTH
+R
+Months in certification period
+EXPEDSER
+R
+Received expedited service
+HHLDNO
+C
+SNAP household identification number
+LASTCERT
+C
+Months since last SNAP certification
+LOCALCOD
+R
+Local agency code (not retained on public-use file)
+MED_DED_DEMO
+C
+Indicator of standard medical deduction demonstration eligibility
+MN_FIP
+C
+Indicator of MFIP participation
+PURE_PA
+C
+Indicator of pure cash public assistance status
+RCNTACTN
+R
+Most recent action on case
+REP_SYS
+R
+Reporting requirement
+REVNUM
+R
+State QC review number (not retained on public-use file)
+SSI_CAP
+C
+Indicator of SSI-CAP participation
+STATUS
+R
+Status of case error findings
+YRMONTH
+R
+Sample year and month
+Unit demographics and sample weights
+AK_AREA
+C
+Alaska region (not retained on public-use file)
+CERTHHSZ
+R
+Certified unit size
+COMPOSITION
+C
+Unit composition
+COUNTYCD
+C
+FIPS code for county (not retained on public-use file)
+CTPRHH
+C
+Number of people in household
+FSDIS
+C
+Indicator of non-elderly individuals with disabilities in unit
+FSELDER
+C
+Indicator of elderly individuals in unit
+FSKID
+C
+Indicator of children in unit
+FSNDIS
+C
+Number of non-elderly individuals with disabilities in unit
+FSNDISCA
+C
+Number of adults without disabilities who are in childless units and within the age range subject to time limits
+FSNELDER
+C
+Number of elderly individuals in unit
+FSNGMOM
+C
+Indicator of single-female-headed unit
+FSNK0T4
+C
+Number of preschool-age children in unit
+FSNK5T17
+C
+Number of school-age children in unit
+FSNKID
+C
+Number of children in unit
+FSNONCIT
+C
+Number of noncitizens in unit
+FSUSIZE
+C
+Constructed certified unit size
+Chapter V Codebook for the FY 2023 SNAP QC Database – Detailed Codebook
+Mathematica® Inc. 57
+Variable Origin* Description
+FYWGT
+C
+Weight used for full-year calculations
+HWGT
+C
+Monthly sample weight
+NONCIT_HEAD
+C
+Unit head citizenship indicator
+RAWHSIZE
+R
+Reported number of people in household
+REGION
+C
+Constructed census region code
+REGIONCD
+R
+FNS region code
+STATE
+R
+FIPS code for State or territory
+STATENAME
+C
+State or territory
+STRATUM
+R
+Stratum identification
+TANF_IND
+C
+Indicator of TANF receipt for unit
+TPOV
+C
+Gross income/poverty level ratio
+URBRUR
+C
+Urban/rural indicator (not retained on public-use file)
+WRK_POOR
+C
+Indicator of working poor unit
+Unit countable income (monthly dollar amounts)
+FSCONT
+C
+Countable unit income from contributions
+FSCSUPRT
+C
+Countable unit child support payment income
+FSDEEM
+C
+Countable unit deemed income
+FSDIVER
+C
+Countable unit State diversion payments
+FSEARN
+C
+Countable unit earned income
+FSEDLOAN
+C
+Countable unit income from educational grants and loans
+FSEITC
+C
+Countable unit income from earned income tax credit
+FSENERGY
+C
+Countable unit energy assistance income
+FSFOSTER
+C
+Countable unit foster care income
+FSGA
+C
+Countable unit General Assistance benefits
+FSGRINC
+C
+Final gross countable unit income
+FSNETINC
+C
+Final net countable unit income
+FSOTHERN
+C
+Countable unit other earned income
+FSOTHGOV
+C
+Countable unit income from other government benefits
+FSOTHUN
+C
+Countable unit other unearned income
+FSSLFEMP
+C
+Countable unit self-employment income
+FSSOCSEC
+C
+Countable unit Social Security income
+FSSSI
+C
+Countable unit SSI benefits
+FSTANF
+C
+Countable unit TANF payments
+FSUNEARN
+C
+Countable unit unearned income
+FSUNEMP
+C
+Countable unit unemployment compensation benefits
+FSVET
+C
+Countable unit veterans’ benefits
+FSWAGES
+C
+Countable unit wages and salaries
+FSWCOMP
+C
+Countable unit workers’ compensation benefits
+FSWGESUP
+C
+Countable unit wage supplementation income
+RAWGROSS
+R
+Reported gross countable unit income
+RAWNET
+R
+Reported net countable unit income
+Chapter V Codebook for the FY 2023 SNAP QC Database – Detailed Codebook
+Mathematica® Inc. 58
+Variable Origin* Description
+Unit countable and reported assets
+FSASSET
+C
+Total countable assets under State rules
+FSVEHAST
+C
+Countable non-excluded vehicles’ value under State rules
+LIQRESOR
+C
+Countable liquid assets under State rules
+OTHNLRES
+C
+Countable other nonliquid assets under State rules
+RAWLQRES
+R
+Reported liquid assets
+RAWOTRES
+R
+Reported other nonliquid assets
+RAWRPROP
+R
+Reported real property
+RAWVHAST
+R
+Reported non-excluded vehicles’ value
+REALPROP
+C
+Countable real property under State rules
+VEHICLEA
+R
+Reported category for first vehicle
+VEHICLEB
+R
+Reported category for second vehicle
+Unit expenses and deductions
+ERN_INC_DED_PCT
+C
+Percentage used to calculate earned income deduction
+EXCL_FSCSDED
+C
+Child support excluded from gross income
+FSCSDED
+C
+Child support payment deduction
+FSCSEXP
+R
+Reported child support payment deduction
+FSDEPDED
+R
+Reported dependent care deduction
+FSDEPDE2
+C
+Marginal effectiveness of dependent care deduction
+FSERNDED
+C
+Calculated earned income deduction
+FSERNDE2
+C
+Marginal effectiveness of earned income deduction
+FSMEDDED
+C
+Calculated medical expense deduction
+FSMEDDE2
+C
+Marginal effectiveness of medical expense deduction
+FSMEDEXP
+R
+Reported medical expenses
+FSSLTDED
+C
+Calculated excess shelter expense deduction
+FSSLTDE2
+C
+Marginal effectiveness of excess shelter expense deduction
+FSSLTEXP
+C
+Calculated shelter expenses
+FSSTDDED
+C
+Standard deduction
+FSSTDDE2
+C
+Marginal effectiveness of standard deduction
+FSTOTDED
+C
+Total deductions
+FSTOTDE2
+C
+Marginal effectiveness of total deduction
+HOMEDED
+R
+Indicator of homelessness
+HOMELESS_DED
+C
+Amount of homeless household shelter deduction
+RAWERND
+R
+Reported earned income deduction
+RENT
+R
+Rent/mortgage amount
+SHELCAP
+C
+Maximum allowable shelter expense deduction
+SHELDED
+R
+Reported shelter deduction
+SUA1
+R
+Standard utility allowance—usage and entitlement
+SUA2
+R
+Standard utility allowance—prorated
+UTIL
+R
+Utility amount
+Chapter V Codebook for the FY 2023 SNAP QC Database – Detailed Codebook
+Mathematica® Inc. 59
+Variable Origin* Description
+Unit benefits
+AMTERR
+R
+Amount of benefit in error
+ASSLIM
+C
+Asset limit
+BENMAX
+C
+Maximum benefit amount
+FSASTEST
+C
+Indicator of passing asset test
+FSBEN
+C
+Final calculated benefit
+FSBENSUPP
+C
+Eligible amount of emergency allotment
+FSGRTEST
+C
+Indicator of passing gross income test
+FSMINBEN
+C
+Received minimum benefit
+FSNETEST
+C
+Indicator of passing net income test
+GROSSCRN
+C
+Gross income screen
+MINIMUM_BEN
+C
+Minimum benefit amount
+NETSCRN
+C
+Net income screen
+RAWBEN
+R
+Reported SNAP benefit received
+SUPP_BEN
+C
+Indicator of eligibility for emergency allotment
+Person-level characteristics: i = 1 to 17
+ABWDSTi
+R
+ABAWD status
+AGEi
+R
+Age
+CTZNi
+R
+Citizenship status
+DISi
+C
+Person-level disability indicator
+DPCOSTi
+R
+Reported dependent care cost
+EMPRGi
+R
+SNAP Employment and Training program status
+EMPSTAi
+R
+Employment status—type
+EMPSTBi
+R
+Employment status—amount
+FSAFILi
+R
+SNAP case affiliation
+FSUNi
+C
+Position of head of SNAP unit
+NDISCAi
+C
+Adult without a disability who is in a childless unit and within the age range subject to time limits status
+RACETHi
+R
+Race/ethnicity
+RELi
+R
+Relationship to head of household
+SEXi
+R
+Sex
+WORKi
+C
+Person-level working indicator
+WRKREGi
+R
+Work registration status
+YRSEDi
+R
+Highest educational level completed
+Person-level countable income (monthly dollar amounts): i = 1 to 17
+CONTi
+R
+Countable income from contributions
+CSUPRTi
+R
+Countable child support payment income
+DEEMi
+R
+Countable deemed income
+DIVERi
+R
+Countable State diversion payments
+EDLOANi
+R
+Countable income from educational grants and loans
+EITCi
+R
+Countable income from earned income tax credit
+ENERGYi
+R
+Countable energy assistance income
+Chapter V Codebook for the FY 2023 SNAP QC Database – Detailed Codebook
+Mathematica® Inc. 60
+Variable Origin* Description
+FOSTERi
+R
+Countable foster care income
+GAi
+R
+Countable General Assistance benefits
+OTHERNi
+R
+Countable other earned income
+OTHGOVi
+R
+Countable income from other government benefits
+OTHUNi
+R
+Countable other unearned income
+SLFEMPi
+R
+Countable self-employment income
+SOCSECi
+R
+Countable Social Security income
+SSIi
+R
+Countable SSI benefits
+TANFi
+R
+Countable TANF payments
+UNEMPi
+R
+Countable unemployment compensation benefits
+VETi
+R
+Countable veterans’ benefits
+WAGESi
+R
+Countable wages and salaries
+WCOMPi
+R
+Countable workers’ compensation benefits
+WGESUPi
+R
+Countable wage supplementation income
+Detailed error findings: i = 1 to 9
+AGENCYi
+R
+Agency or client responsibility
+AMOUNTi
+R
+Variance dollar amount
+DISCOVi
+R
+Variance discovery
+E_FINDGi
+R
+Error finding
+ELEMENTi
+R
+Variance element
+NATUREi
+R
+Nature of variance
+OCCDATEi
+R
+Variance occurrence date
+TIMEPERi
+R
+Variance time period
+VERIFi
+R
+Variance verification
+* R indicates the variable is from the raw data; C indicates the variable was constructed.
+Chapter V Codebook for the FY 2023 SNAP QC Database – Detailed Codebook
+Mathematica® Inc. 61
+Unit QC review Administrative Data
+Variable
+Origin
+Description
+ACTNTYPE
+R
+TYPE OF ACTION
+ACTNTYPE
+R
+Range = (1, 2)
+ACTNTYPE
+R
+1 = Certification
+ACTNTYPE
+R
+2 = Recertification
+ALLADJ
+R
+ALLOTMENT ADJUSTMENT
+ALLADJ
+R
+Range = (1, 3)
+ALLADJ
+R
+1 = No adjustment
+ALLADJ
+R
+2 = Prorated benefit
+ALLADJ
+R
+3 = Other adjustment
+AMTADJ
+R
+AMOUNT OF ALLOTMENT ADJUSTMENT
+AMTADJ
+R
+Range = (0, 1152)
+AUTHREP
+R
+AUTHORIZED REPRESENTATIVE
+AUTHREP
+R
+Range = (1, 2)
+AUTHREP
+R
+1 = Used to make application
+AUTHREP
+R
+2 = Not used to make application
+BENFIX
+C
+BENEFIT ALLOTMENT ADJUSTED FOR ERRORS
+BENFIX
+C
+Range = (0, 10001)
+CASE
+R
+CASE CLASSIFICATION
+CASE
+R
+Range = (1, 3)
+CASE
+R
+1 = Included in error rate calculation
+CASE
+R
+2 = Excluded from error rate calculation—processed by SSA worker
+CASE
+R
+3 = Excluded from error rate calculation, as designated by FNS (for example, demonstration project, simplified SNAP)
+CAT_ELIG
+C
+INDICATOR OF CATEGORICAL ELIGIBILITY STATUS
+CAT_ELIG
+C
+Range = (0, 2)
+CAT_ELIG
+C
+0 = Unit not categorically eligible for benefits
+CAT_ELIG
+C
+1 = Unit reported as categorically eligible for benefits and therefore not subject to SNAP income or asset tests (unit subject to State-determined income and/or asset limit on cash Public Assistance [PA] or noncash TANF-funded benefit used to confer categorical eligibility)
+CAT_ELIG
+C
+2 = Unit recoded as categorically eligible after being identified as pure cash PA or as meeting State-specified criteria for BBCE and therefore not subject to SNAP income or asset tests
+CERTMTH
+R
+MONTHS IN CERTIFICATION PERIOD
+CERTMTH
+R
+Range = (0, 95)
+CERTMTH
+R
+Number of months SNAP unit was certified to participate during current certification or recertification period
+EXPEDSER
+R
+RECEIVED EXPEDITED SERVICE
+EXPEDSER
+R
+Range = (1, 3)
+EXPEDSER
+R
+1 = Entitled to expedited service and received benefits within Federal time frame
+EXPEDSER
+R
+2 = Entitled to expedited service but did not receive benefits within Federal time frame
+EXPEDSER
+R
+3 = Not entitled to expedited service
+HHLDNO
+C
+SNAP HOUSEHOLD IDENTIFICATION NUMBER
+HHLDNO
+C
+Range = (1, 55115)
+HHLDNO
+C
+Position of unit in unedited SNAP QC file (unique unit identifier)
+LASTCERT
+C
+MONTHS SINCE LAST SNAP CERTIFICATION
+LASTCERT
+C
+Range = (0, 65)
+Chapter V Codebook for the FY 2023 SNAP QC Database – Detailed Codebook
+Mathematica® Inc. 62
+Variable Origin Description
+LOCALCOD
+R
+LOCAL AGENCY CODE (not retained on public-use file)
+LOCALCOD
+R
+Range = (0, 999)
+LOCALCOD
+R
+Designates local agency and allows grouping of data by county or county equivalent (may be FIPS code or alternative classification)
+MED_DED_DEMO
+C
+INDICATOR OF STANDARD MEDICAL DEDUCTION DEMONSTRATION ELIGIBILITY
+MED_DED_DEMO
+C
+Range = (0, 1)
+MED_DED_DEMO
+C
+0 = No
+MED_DED_DEMO
+C
+1 = Yes
+MN_FIP
+C
+INDICATOR OF MFIP PARTICIPATION
+MN_FIP
+C
+Please note that MN_FIP may underestimate the number of MFIP units. We recommend against using MFIP units’ TANF income because it is not included as gross income and is most likely recorded incorrectly, if at all. See Appendix A for details.
+MN_FIP
+C
+Range = (0, 1)
+MN_FIP
+C
+0 = No
+MN_FIP
+C
+1 = Yes
+PURE_PA
+C
+INDICATOR OF PURE CASH PUBLIC ASSISTANCE STATUS
+PURE_PA
+C
+Range = (0, 1)
+PURE_PA
+C
+0 = No
+PURE_PA
+C
+1 = Yes
+PURE_PA
+C
+A unit is pure cash public assistance (pure PA) when everyone in the unit receives TANF, GA, or SSI or the unit has TANF income and every adult receives TANF, GA, or SSI.
+RCNTACTN
+R
+MOST RECENT ACTION ON CASE
+RCNTACTN
+R
+Range = (20130213, 20230930)
+RCNTACTN
+R
+Date the case was certified or recertified for participation in sample month under review (in yyyymmdd format)
+REP_SYS
+R
+REPORTING REQUIREMENT
+REP_SYS
+R
+Range = (1, 10)
+REP_SYS
+R
+1 = Change reporting with $125 change in earned income
+REP_SYS
+R
+2 = Change reporting with change of wage rate, salary, or change in employment status
+REP_SYS
+R
+3 = 5-hour change in hours worked and expected to continue over a month
+REP_SYS
+R
+4 = Simplified reporting (exceeding 130% of income poverty guidelines)
+REP_SYS
+R
+5 = Quarterly reporting
+REP_SYS
+R
+6 = Simplified monthly reporting
+REP_SYS
+R
+7 = Transitional benefits (no reporting requirement)
+REP_SYS
+R
+8 = Transitional benefits (reporting requirement)
+REP_SYS
+R
+9 = Other
+REP_SYS
+R
+10 = Reserved
+REVNUM
+R
+STATE QC REVIEW NUMBER (not retained on public-use file)
+REVNUM
+R
+Range = (1, 979875)
+SSI_CAP
+C
+INDICATOR OF SSI-CAP PARTICIPATION
+SSI_CAP
+C
+We recommend caution when using SSI_CAP, with the understanding that it likely underestimates the actual number of SSI-CAP units. See Appendix A for details.
+SSI_CAP
+C
+Range = (0, 4)
+SSI_CAP
+C
+0 = Not in SSI-CAP
+SSI_CAP
+C
+1 = SSI-CAP case with standard shelter expenses
+SSI_CAP
+C
+2 = SSI-CAP case with standard benefit, consistent with program rules
+SSI_CAP
+C
+3 = SSI-CAP case with standard benefit, inconsistent with program rules
+SSI_CAP
+C
+4 = NYSCAP case
+Chapter V Codebook for the FY 2023 SNAP QC Database – Detailed Codebook
+Mathematica® Inc. 63
+Variable Origin Description
+STATUS
+R
+STATUS OF CASE ERROR FINDINGS
+STATUS
+R
+Range = (1, 3)
+STATUS
+R
+1 = Amount correct
+STATUS
+R
+2 = Overissuance
+STATUS
+R
+3 = Underissuance
+YRMONTH
+R
+SAMPLE YEAR AND MONTH
+YRMONTH
+R
+Range = (202210, 202309)
+YRMONTH
+R
+Allows user to select one or more sample months from the full-year file for analyses. The YRMONTH variable is a six-digit code; the first four digits indicate the sample year and the last two indicate the month. To select observations from January 2023, for example, YRMONTH should equal 202301.
+Chapter V Codebook for the FY 2023 SNAP QC Database – Detailed Codebook
+Mathematica® Inc. 64
+Unit demographics and sample weights
+Variable
+Origin
+Description
+AK_AREA
+C
+ALASKA REGION (not retained on public-use file)
+AK_AREA
+C
+Range = (1, 3)
+AK_AREA
+C
+1 = Alaska Rural I
+AK_AREA
+C
+2 = Alaska Rural II
+AK_AREA
+C
+3 = Alaska Urban
+CERTHHSZ
+R
+CERTIFIED UNIT SIZE
+CERTHHSZ
+R
+Range = (1, 17)
+COMPOSITION
+C
+UNIT COMPOSITION
+COMPOSITION
+C
+Range = (0, 5)
+COMPOSITION
+C
+0 = No children
+COMPOSITION
+C
+1 = Child(ren) only
+COMPOSITION
+C
+2 = Child(ren) and one male adult
+COMPOSITION
+C
+3 = Child(ren) and one female adult
+COMPOSITION
+C
+4 = Child(ren) and married unit head (spouse may be nonparticipating; includes married teens)
+COMPOSITION
+C
+5 = Child(ren) with other multiple adults
+COUNTYCD
+C
+FIPS CODE FOR COUNTY (not retained on public-use file)
+COUNTYCD
+C
+Range = (1, 840)
+CTPRHH
+C
+NUMBER OF PEOPLE IN HOUSEHOLD
+CTPRHH
+C
+Range = (1, 17)
+CTPRHH
+C
+Number of people in household with nonmissing person-level information
+FSDIS
+C
+INDICATOR OF NON-ELDERLY INDIVIDUALS WITH DISABILITIES IN UNIT
+FSDIS
+C
+Range = (0, 1)
+FSDIS
+C
+0 = No
+FSDIS
+C
+1 = Yes
+FSDIS
+C
+A SNAP unit with one or more participating individuals with a disability (DISi = 1)
+FSELDER
+C
+INDICATOR OF ELDERLY INDIVIDUALS IN UNIT
+FSELDER
+C
+Range = (0, 1)
+FSELDER
+C
+0 = No
+FSELDER
+C
+1 = Yes
+FSELDER
+C
+A SNAP unit with one or more elderly individuals
+FSKID
+C
+INDICATOR OF CHILDREN IN UNIT
+FSKID
+C
+Range = (0, 1)
+FSKID
+C
+0 = No
+FSKID
+C
+1 = Yes
+FSKID
+C
+A SNAP unit with one or more children under age 18
+FSNDIS
+C
+NUMBER OF NON-ELDERLY INDIVIDUALS WITH DISABILITIES IN UNIT
+FSNDIS
+C
+Range = (0, 7)
+FSNDIS
+C
+Number of individuals in the unit that are defined as disabled (DISi = 1)
+FSNDISCA
+C
+NUMBER OF ADULTS WITHOUT DISABILITIES IN CHILDLESS UNITS WHO ARE WITHIN THE AGE RANGE SUBJECT TO TIME LIMITS
+FSNDISCA
+C
+Range = (0, 5)
+FSNDISCA
+C
+Number of adults without disabilities in childless SNAP units who are within the age range subject to time limits (age 18-49 for October 2022 through August 2023 and age 18-50 for September 2023).
+FSNELDER
+C
+NUMBER OF ELDERLY INDIVIDUALS IN UNIT
+FSNELDER
+C
+Range = (0, 2)
+FSNELDER
+C
+Number of adults age 60 or older in SNAP unit
+Chapter V Codebook for the FY 2023 SNAP QC Database – Detailed Codebook
+Mathematica® Inc. 65
+Variable Origin Description
+FSNGMOM
+C
+INDICATOR OF SINGLE-FEMALE-HEADED UNIT
+FSNGMOM
+C
+Range = (0, 1)
+FSNGMOM
+C
+0 = No
+FSNGMOM
+C
+1 = Yes
+FSNGMOM
+C
+A SNAP unit with one adult and one or more children; the adult is female
+FSNK0T4
+C
+NUMBER OF PRESCHOOL-AGE CHILDREN IN UNIT
+FSNK0T4
+C
+Range = (0, 5)
+FSNK0T4
+C
+Number of children under age 5 in SNAP unit
+FSNK5T17
+C
+NUMBER OF SCHOOL-AGE CHILDREN IN UNIT
+FSNK5T17
+C
+Range = (0, 14)
+FSNK5T17
+C
+Number of children age 5–17 in SNAP unit
+FSNKID
+C
+NUMBER OF CHILDREN IN UNIT
+FSNKID
+C
+Range = (0, 15)
+FSNKID
+C
+Number of children under age 18 in SNAP unit
+FSNONCIT
+C
+NUMBER OF NONCITIZENS IN UNIT
+FSNONCIT
+C
+Range = (0, 10)
+FSNONCIT
+C
+Number of people with FSAFILi = 1 and CTZNi >= 3
+FSUSIZE
+C
+CONSTRUCTED CERTIFIED UNIT SIZE
+FSUSIZE
+C
+Range = (1, 17)
+FSUSIZE
+C
+Number of people with FSAFILi = 1
+FYWGT
+C
+WEIGHT USED FOR FULL-YEAR CALCULATIONS
+FYWGT
+C
+Range = (3.83, 6527.96)
+FYWGT
+C
+Calculated as HWGT/12, except for Delaware, where it is HWGT/9.
+HWGT
+C
+MONTHLY SAMPLE WEIGHT
+HWGT
+C
+Range = (45.99, 78335.51)
+HWGT
+C
+Allows user to replicate total monthly caseloads as reflected in SNAP Program Operations data. If the reference period for the analysis is longer than one calendar month, the weight field must be divided by the number of months being analyzed to calculate an average monthly value for that reference period.
+NONCIT_HEAD
+C
+UNIT HEAD CITIZENSHIP INDICATOR
+NONCIT_HEAD
+C
+Range = (0, 2)
+NONCIT_HEAD
+C
+0 = Head of unit is a citizen
+NONCIT_HEAD
+C
+1 = Head of unit is a participating noncitizen
+NONCIT_HEAD
+C
+2 = Head of unit is a nonparticipating noncitizen
+RAWHSIZE
+R
+REPORTED NUMBER OF PEOPLE IN HOUSEHOLD
+RAWHSIZE
+R
+Range = (1, 16)
+REGION
+C
+CONSTRUCTED CENSUS REGION CODE
+REGION
+C
+Range = (1, 4)
+REGION
+C
+1 = Northeast
+REGION
+C
+2 = Midwest
+REGION
+C
+3 = South
+REGION
+C
+4 = West
+REGION
+C
+See Appendix E (Table E.3) for a list of States in each region.
+REGIONCD
+R
+FNS REGION CODE
+REGIONCD
+R
+Range = (1, 7)
+REGIONCD
+R
+1 = Northeast
+REGIONCD
+R
+2 = Mid-Atlantic
+REGIONCD
+R
+3 = Southeast
+REGIONCD
+R
+4 = Midwest
+Chapter V Codebook for the FY 2023 SNAP QC Database – Detailed Codebook
+Mathematica® Inc. 66
+Variable Origin Description
+REGIONCD
+R
+5 = Southwest
+REGIONCD
+R
+6 = Mountain Plains
+REGIONCD
+R
+7 = West
+REGIONCD
+R
+See Appendix E (Table E.2) for a list of States in each region.
+STATE
+R
+FIPS CODE FOR STATE OR TERRITORY
+STATE
+R
+Range = (1, 78)
+STATE
+R
+See Appendix E (Table E.1) for FIPS code list.
+STATENAME
+C
+STATE OR TERRITORY
+STATENAME
+C
+State or territory name. See Appendix E (Table E.1) for list.
+STRATUM
+R
+STRATUM IDENTIFICATION
+STRATUM
+R
+Range = (0, 0)
+STRATUM
+R
+Codes for distinct parts of States with stratified samples; codes in States that are not stratified are recoded to 0.
+TANF_IND
+C
+INDICATOR OF TANF RECEIPT FOR UNIT
+TANF_IND
+C
+Range = (0, 1)
+TANF_IND
+C
+0 = No
+TANF_IND
+C
+1 = Yes
+TANF_IND
+C
+TANF_IND = 1 if FSTANF > 0 or MN_FIP = 1
+TPOV
+C
+GROSS INCOME/POVERTY LEVEL RATIO
+TPOV
+C
+Range = (0, 621)
+TPOV
+C
+TPOV = FSGRINC/NETSCRN*100, rounded to nearest integer. If FSGRINC = 0, then TPOV = 0. Otherwise if TPOV rounds to 0, TPOV is set to 1.
+URBRUR
+C
+URBAN/RURAL INDICATOR (not retained on public-use file)
+URBRUR
+C
+We recommend caution when using URBRUR for any State-level tabulations because of concerns about the representativeness of the sample at the substate level. We recommend against the use of URBRUR for State-level tabulations in Alabama, Arizona, Guam, Kansas, Kentucky, Nebraska, Nevada, Tennessee, Utah, the Virgin Islands, and Washington because of the large number of cases with unknown locality. See Appendix A for details.
+URBRUR
+C
+Range = (1, 3)
+URBRUR
+C
+Location of agency at which unit’s SNAP application was processed.
+URBRUR
+C
+1 = Metropolitan (at least one urbanized area of 50,000 or more population and adjacent territory with a high degree of social and economic integration with the core as measured by commuting ties)
+URBRUR
+C
+2 = Micropolitan (at least one urban cluster of at least 10,000 but fewer than 50,000 people and adjacent territory with a high degree of social and economic integration with the core as measured by commuting ties)
+URBRUR
+C
+3 = Rural (not metropolitan or micropolitan)
+WRK_POOR
+C
+INDICATOR OF WORKING POOR UNIT
+WRK_POOR
+C
+Range = (0, 1)
+WRK_POOR
+C
+0 = No
+WRK_POOR
+C
+1 = Yes
+WRK_POOR
+C
+All SNAP units with countable earnings (FSEARN) or multiple indicators of earnings in the unedited SNAP QC file
+Chapter V Codebook for the FY 2023 SNAP QC Database – Detailed Codebook
+Mathematica® Inc. 67
+Unit countable income (monthly dollar amounts)
+Variable
+Origin
+Description
+FSCONT
+C
+COUNTABLE UNIT INCOME FROM CONTRIBUTIONS
+FSCONT
+C
+Range = (0, 3000)
+FSCONT
+C
+Sum of CONT1 through CONT16
+FSCSUPRT
+C
+COUNTABLE UNIT CHILD SUPPORT PAYMENT INCOME
+FSCSUPRT
+C
+Range = (0, 2561)
+FSCSUPRT
+C
+Sum of CSUPRT1 through CSUPRT16
+FSDEEM
+C
+COUNTABLE UNIT DEEMED INCOME
+FSDEEM
+C
+Range = (0, 2350)
+FSDEEM
+C
+Sum of DEEM1 through DEEM16
+FSDIVER
+C
+COUNTABLE UNIT STATE DIVERSION PAYMENTS
+FSDIVER
+C
+Range = (0, 1048)
+FSDIVER
+C
+Sum of DIVER1 through DIVER16
+FSEARN
+C
+COUNTABLE UNIT EARNED INCOME
+FSEARN
+C
+Range = (0, 8365)
+FSEARN
+C
+Sum of FSWAGES, FSSLFEMP, and FSOTHERN
+FSEDLOAN
+C
+COUNTABLE UNIT INCOME FROM EDUCATIONAL GRANTS AND LOANS
+FSEDLOAN
+C
+Range = (0, 2319)
+FSEDLOAN
+C
+Sum of EDLOAN1 through EDLOAN16
+FSEITC
+C
+COUNTABLE UNIT INCOME FROM EARNED INCOME TAX CREDIT
+FSEITC
+C
+Range = (0, 934)
+FSEITC
+C
+Sum of EITC1 through EITC16
+FSENERGY
+C
+COUNTABLE UNIT ENERGY ASSISTANCE INCOME
+FSENERGY
+C
+Range = (0, 1452)
+FSENERGY
+C
+Sum of ENERGY1 through ENERGY16
+FSFOSTER
+C
+COUNTABLE UNIT FOSTER CARE INCOME
+FSFOSTER
+C
+Range = (0, 2383)
+FSFOSTER
+C
+Sum of FOSTER1 through FOSTER16
+FSGA
+C
+COUNTABLE UNIT GENERAL ASSISTANCE BENEFITS
+FSGA
+C
+Range = (0, 4580)
+FSGA
+C
+Sum of GA1 through GA16
+FSGRINC
+C
+FINAL GROSS COUNTABLE UNIT INCOME
+FSGRINC
+C
+Range = (0, 9488)
+FSGRINC
+C
+Total monthly gross income of unit (sum of FSEARN and FSUNEARN)
+FSNETINC
+C
+FINAL NET COUNTABLE UNIT INCOME
+FSNETINC
+C
+Range = (0, 8499)
+FSNETINC
+C
+Total monthly income of unit after applying deductions. Calculated as FSGRINC-FSTOTDED but not less than 0.
+Coded as missing for MFIP units and for SSI-CAP units receiving a standard SSI-CAP benefit
+FSOTHERN
+C
+COUNTABLE UNIT OTHER EARNED INCOME
+FSOTHERN
+C
+Range = (0, 3135)
+FSOTHERN
+C
+Sum of OTHERN1 through OTHERN16
+FSOTHGOV
+C
+COUNTABLE UNIT INCOME FROM OTHER GOVERNMENT BENEFITS
+FSOTHGOV
+C
+Range = (0, 4049)
+FSOTHGOV
+C
+Sum of OTHGOV1 through OTHGOV16
+Chapter V Codebook for the FY 2023 SNAP QC Database – Detailed Codebook
+Mathematica® Inc. 68
+Variable Origin Description
+FSOTHUN
+C
+COUNTABLE UNIT OTHER UNEARNED INCOME
+FSOTHUN
+C
+Range = (0, 4800)
+FSOTHUN
+C
+Sum of OTHUN1 through OTHUN16
+FSSLFEMP
+C
+COUNTABLE UNIT SELF-EMPLOYMENT INCOME
+FSSLFEMP
+C
+Range = (0, 5210)
+FSSLFEMP
+C
+Sum of SLFEMP1 through SLFEMP16
+FSSOCSEC
+C
+COUNTABLE UNIT SOCIAL SECURITY INCOME
+FSSOCSEC
+C
+Range = (0, 6800)
+FSSOCSEC
+C
+Sum of SOCSEC1 through SOCSEC16
+FSSSI
+C
+COUNTABLE UNIT SSI BENEFITS
+FSSSI
+C
+Range = (0, 4570)
+FSSSI
+C
+Sum of SSI1 through SSI16
+FSTANF
+C
+COUNTABLE UNIT TANF PAYMENTS
+FSTANF
+C
+We recommend against using FSTANF in Minnesota because it is not included as gross income in that State. See Appendix A for details.
+FSTANF
+C
+Range = (0, 2185)
+FSTANF
+C
+Sum of TANF1 through TANF16
+FSUNEARN
+C
+COUNTABLE UNIT UNEARNED INCOME
+FSUNEARN
+C
+Range = (0, 6863)
+FSUNEARN
+C
+Sum of FSCONT, FSCSUPRT, FSDEEM, FSDIVER, FSEDLOAN, FSEITC, FSENERGY, FSFOSTER, FSGA, FSOTHGOV, FSOTHUN, FSSOCSEC, FSSSI, FSTANF, FSUNEMP, FSVET, FSWCOMP, and FSWGESUP
+FSUNEMP
+C
+COUNTABLE UNIT UNEMPLOYMENT COMPENSATION BENEFITS
+FSUNEMP
+C
+Range = (0, 3254)
+FSUNEMP
+C
+Sum of UNEMP1 through UNEMP16
+FSVET
+C
+COUNTABLE UNIT VETERANS’ BENEFITS
+FSVET
+C
+Range = (0, 4273)
+FSVET
+C
+Sum of VET1 through VET16
+FSWAGES
+C
+COUNTABLE UNIT WAGES AND SALARIES
+FSWAGES
+C
+Range = (0, 8365)
+FSWAGES
+C
+Sum of WAGES1 through WAGES16
+FSWCOMP
+C
+COUNTABLE UNIT WORKERS’ COMPENSATION BENEFITS
+FSWCOMP
+C
+Range = (0, 4441)
+FSWCOMP
+C
+Sum of WCOMP1 through WCOMP16
+FSWGESUP
+C
+COUNTABLE UNIT WAGE SUPPLEMENTATION INCOME
+FSWGESUP
+C
+Range = (0, 3433)
+FSWGESUP
+C
+Sum of WGESUP1 through WGESUP16
+RAWGROSS
+R
+REPORTED GROSS COUNTABLE UNIT INCOME
+RAWGROSS
+R
+Range = (0, 16667)
+RAWGROSS
+R
+Reported total monthly countable income of unit before applying deductions (see FSGRINC for final value)
+RAWNET
+R
+REPORTED NET COUNTABLE UNIT INCOME
+RAWNET
+R
+Range = (0, 9082)
+RAWNET
+R
+Reported total monthly countable income of unit after applying deductions (see FSNETINC for final value)
+Chapter V Codebook for the FY 2023 SNAP QC Database – Detailed Codebook
+Mathematica® Inc. 69
+Unit countable assets
+Variable
+Origin
+Description
+FSASSET
+C
+TOTAL COUNTABLE ASSETS UNDER STATE RULES
+FSASSET
+Please note that only 5 percent of SNAP units have countable assets. See Appendix A for details.
+FSASSET
+C
+Range = (0, 8402)
+FSASSET
+C
+Sum of LIQRESOR, FSVEHAST, OTHNLRES, and REALPROP
+FSVEHAST
+C
+COUNTABLE NON-EXCLUDED VEHICLES’ VALUE UNDER STATE RULES
+FSVEHAST
+C
+Please note that less than 1 percent of SNAP units have non-excluded vehicles. See Appendix A for details.
+FSVEHAST
+C
+Range = (0, 2825)
+LIQRESOR
+C
+COUNTABLE LIQUID ASSETS UNDER STATE RULES
+LIQRESOR
+C
+Range = (0, 8402)
+OTHNLRES
+C
+COUNTABLE OTHER NONLIQUID ASSETS UNDER STATE RULES
+OTHNLRES
+C
+Range = (0, 3250)
+RAWLQRES
+R
+REPORTED LIQUID ASSETS
+RAWLQRES
+R
+Range = (0, 99435)
+RAWOTRES
+R
+REPORTED OTHER NONLIQUID ASSETS
+RAWOTRES
+R
+Range = (0, 30411)
+RAWRPROP
+R
+REPORTED REAL PROPERTY
+RAWRPROP
+R
+Range = (0, 86300)
+RAWRPROP
+R
+Does not include home
+RAWVHAST
+R
+REPORTED NON-EXCLUDED VEHICLES’ VALUE
+RAWVHAST
+R
+Range = (0, 5219)
+REALPROP
+C
+COUNTABLE REAL PROPERTY UNDER STATE RULES
+REALPROP
+C
+Range = (0, 2500)
+REALPROP
+C
+Does not include home
+VEHICLEA
+R
+REPORTED CATEGORY FOR FIRST VEHICLE
+VEHICLEA
+R
+We recommend against using VEHICLEA because of a history of coding inconsistencies. See Appendix A for details.
+VEHICLEA
+R
+Range = (1, 8)
+VEHICLEA
+R
+1 = No vehicle
+VEHICLEA
+R
+2 = Vehicle exempt because used for producing income, as a home, to transport a physically disabled member, for long-distance travel (other than commuting), or to carry fuel or water
+VEHICLEA
+R
+3 = Vehicle exempt because inaccessible resource (equity value $1,500 or less)
+VEHICLEA
+R
+4 = Vehicle exempt due to categorical eligibility
+VEHICLEA
+R
+5 = Vehicle excluded under State TANF standard (vehicle of non-categorically eligible unit members only)
+VEHICLEA
+R
+6 = Vehicle registered and attributable to an adult unit member or used by a person under age 18 for employment or education (subject to fair market value only)
+VEHICLEA
+R
+7 = Vehicle not registered (equity test only)
+VEHICLEA
+R
+8 = Vehicle not excluded and not included in code 6 (subject to fair market value or equity test, whichever is greater)
+VEHICLEB
+R
+REPORTED CATEGORY FOR SECOND VEHICLE
+VEHICLEB
+R
+We recommend against using VEHICLEB because of a history of coding inconsistencies. See Appendix A for details.
+VEHICLEB
+R
+Range = (1, 8)
+VEHICLEB
+R
+1 = No vehicle
+VEHICLEB
+R
+2 = Vehicle exempt because used for producing income, as a home, to transport a physically disabled member, for long-distance travel (other than commuting), or to carry fuel or water
+VEHICLEB
+R
+3 = Vehicle exempt because inaccessible resource (equity value $1,500 or less)
+Chapter V Codebook for the FY 2023 SNAP QC Database – Detailed Codebook
+Mathematica® Inc. 70
+Variable Origin Description
+VEHICLEB
+R
+4 = Vehicle exempt due to categorical eligibility
+VEHICLEB
+R
+5 = Vehicle excluded under State TANF standard (vehicle of non-categorically eligible unit members only)
+VEHICLEB
+R
+6 = Vehicle registered and attributable to an adult unit member or used by a person under age 18 for employment or education (subject to fair market value only)
+VEHICLEB
+R
+7 = Vehicle not registered (equity test only)
+VEHICLEB
+R
+8 = Vehicle not excluded and not included in code 6 (subject to fair market value or equity test, whichever is greater)
+Chapter V Codebook for the FY 2023 SNAP QC Database – Detailed Codebook
+Mathematica® Inc. 71
+Unit expenses and deductions
+Variable
+Origin
+Description
+ERN_INC_DED_PCT
+C
+PERCENTAGE USED TO CALCULATE EARNINGS DEDUCTION
+ERN_INC_DED_PCT
+C
+Range = (0.20, 0.50)
+ERN_INC_DED_PCT
+C
+0.50 for MFIP participants; 0.20 for all other SNAP participants
+EXCL_FSCSDED
+C
+CHILD SUPPORT EXCLUDED FROM GROSS INCOME
+EXCL_FSCSDED
+C
+Range = (0, 545)
+EXCL_FSCSDED
+C
+Child support expenses excluded before gross income test rather than before net income test for eligibility
+FSCSDED
+C
+CHILD SUPPORT PAYMENT DEDUCTION
+FSCSDED
+C
+Range = (0, 6418)
+FSCSDED
+C
+Coded as missing for MFIP units and for SSI-CAP units receiving a standard SSI-CAP benefit
+FSCSEXP
+R
+REPORTED CHILD SUPPORT PAYMENT DEDUCTION
+FSCSEXP
+R
+Range = (0, 6418)
+FSCSEXP
+R
+Some States treat child support payments to non-unit members as an income exclusion rather than a deduction. See EXCL_FSCSDED and FSCSDED for final values.
+FSDEPDED
+R
+REPORTED DEPENDENT CARE DEDUCTION
+FSDEPDED
+R
+We recommend against using FSDEPDED for State-level tabulations because of small sample sizes and inconsistencies between DPCOSTi and FSDEPDED. See Appendix A for details.
+FSDEPDED
+R
+Range = (0, 3844)
+FSDEPDED
+R
+Some values have been edited to obtain consistency with DPCOST1 to DPCOST16 and to improve the final benefit calculation. See Appendix B for details.
+Coded as missing for all MFIP and SSI-CAP units except for NYSCAP units.
+FSDEPDE2
+C
+MARGINAL EFFECTIVENESS OF DEPENDENT CARE DEDUCTION44
+FSDEPDE2
+C
+Range = (0, 2987)
+FSDEPDE2
+C
+Calculated as FSDEPDE2 = NEWNET-FSNETINC, where NEWNET = MAX (0, FSGRINC-FSSLT3-FSERNDED-FSMEDDED-FSSTDDED-FSCSDED-HOMELESS_DED) and where FSSLT3 is the shelter deduction calculated without FSDEPDED
+Coded as missing for all MFIP and SSI-CAP units except for NYSCAP units.
+FSERNDED
+C
+CALCULATED EARNED INCOME DEDUCTION
+FSERNDED
+C
+Range = (0, 1673)
+FSERNDED
+C
+Calculated as FSERNDED = ERN_INC_DED_PCT*FSEARN, rounded to nearest integer. The deduction equals 50 percent of total earned income for MFIP participants and 20 percent of total earned income for all others.
+Coded as missing for all SSI-CAP units except for NYSCAP units.
+FSERNDE2
+C
+MARGINAL EFFECTIVENESS OF EARNED INCOME DEDUCTION
+FSERNDE2
+C
+Range = (0, 1783)
+FSERNDE2
+C
+Calculated as FSERNDE2 = NEWNET-FSNETINC, where NEWNET = MAX (0, FSGRINC-FSSLT2-FSDEPDED-FSMEDDED-FSSTDDED-FSCSDED-HOMELESS_DED) and where FSSLT2 is the shelter deduction calculated without FSERNDED
+Coded as missing for all MFIP and SSI-CAP units except for NYSCAP units.
+FSMEDDED
+C
+CALCULATED MEDICAL EXPENSE DEDUCTION
+FSMEDDED
+C
+Range = (0, 1978)
+FSMEDDED
+C
+The deduction is for units with elderly members or individuals with disabilities only; the entry for medical expenses should include only expenses in excess of $35. Calculated as FSMEDDED = MAX(0, FSMEDEXP).
+Coded as missing for all MFIP and SSI-CAP units except for NYSCAP units.
+44 The marginal effectiveness variables are calculated as the difference between the actual calculated net income and what the net income would have been without the deduction. Because the combined value of deductions a unit is entitled to sometimes exceeds the gross income received by the unit, the marginal effectiveness variables give a more accurate picture of the impact of the deductions.
+Chapter V Codebook for the FY 2023 SNAP QC Database – Detailed Codebook
+Mathematica® Inc. 72
+Variable Origin Description
+FSMEDDE2
+C
+MARGINAL EFFECTIVENESS OF MEDICAL EXPENSE DEDUCTION
+FSMEDDE2
+C
+Range = (0, 1767)
+FSMEDDE2
+C
+Calculated as FSMEDDE2 = NEWNET-FSNETINC, where NEWNET = MAX (0, FSGRINC-FSSLT4-FSDEPDED-FSERNDED-FSSTDDED-FSCSDED-HOMELESS_DED) and where FSSLT4 is the shelter deduction calculated without FSM EDDED
+Coded as missing for all MFIP and SSI-CAP units except for NYSCAP units.
+FSMEDEXP
+R
+REPORTED MEDICAL EXPENSES
+FSMEDEXP
+R
+Range = (0, 1978)
+FSMEDEXP
+R
+Allowable medical expenses in excess of $35 for elderly adults or individuals with disabilities
+FSSLTDED
+C
+CALCULATED EXCESS SHELTER EXPENSE DEDUCTION
+FSSLTDED
+C
+Range = (0, 4675)
+FSSLTDED
+C
+Set to 0 if HOMEDED = 3; otherwise set to XCOST for units with elderly members or individuals with disabilities and equal to the minimum of XCOST and SHELCAP for units without elderly members or individuals with disabilities, where XCOST = MAX(0, FSSLTEXP-HALFNET) and HALFNET = MAX (0,ROUND(FSGRINC-FSSTDDED-FSERNDED-FSDEPDED-FSMEDDED-FSCSDED)/2). The final value of FSSLTDED is rounded to nearest integer.
+Coded as missing for MFIP units and for SSI-CAP units receiving a standard SSI-CAP benefit
+FSSLTDE2
+C
+MARGINAL EFFECTIVENESS OF EXCESS SHELTER EXPENSE DEDUCTION
+FSSLTDE2
+C
+Range = (0, 2203)
+FSSLTDE2
+C
+Calculated as FSSLTDE2 = NEWNET-FSNETINC, where NEWNET = MAX (0,FSGRINC-FSDEPDED-FSERNDED-FSMEDDED-FSSTDDED-FSCSDED-HOMELESS_DED).
+Coded as missing for MFIP units and for SSI-CAP units receiving a standard SSI-CAP benefit
+FSSLTEXP
+C
+CALCULATED SHELTER EXPENSES
+FSSLTEXP
+C
+Range = (0, 5360)
+FSSLTEXP
+C
+Sum of RENT and UTIL
+FSSTDDED
+C
+STANDARD DEDUCTION
+FSSTDDED
+C
+Range = (170, 515)
+FSSTDDED
+C
+Varies by region. See Appendix F for values.
+Coded as missing for MFIP units and for SSI-CAP units receiving a standard SSI-CAP benefit.
+FSSTDDE2
+C
+MARGINAL EFFECTIVENESS OF STANDARD DEDUCTION
+FSSTDDE2
+C
+Range = (0, 772)
+FSSTDDE2
+C
+Calculated as FSSTDDE2 = NEWNET – FSNETINC, where NEWNET = MAX (0, FSGRINC – FSSLT1 – FSDEPDED – FSERNDED – FSMEDDED – FSCSDED – HOMELESS_DED) and where FSSLT1 is the shelter deduction calculated without FSSTDDED
+Coded as missing for MFIP units and for SSI-CAP units receiving a standard SSI-CAP benefit.
+FSTOTDED
+C
+TOTAL DEDUCTIONS
+FSTOTDED
+C
+Range = (0, 7056)
+FSTOTDED
+C
+Sum of FSSTDDED, FSERNDED, FSDEPDED, FSSLTDED, FSMEDDED, HOMELESS_DED, and FSCSDED
+Coded as missing for MFIP units and for SSI-CAP units receiving a standard SSI-CAP benefit.
+FSTOTDE2
+C
+MARGINAL EFFECTIVENESS OF TOTAL DEDUCTION
+FSTOTDE2
+C
+Range = (0, 4129)
+FSTOTDE2
+C
+Calculated as FSGRINC-FSNETINC
+Coded as missing for MFIP units and for SSI-CAP units receiving a standard SSI-CAP benefit.
+HOMEDED
+R
+INDICATOR OF HOMELESSNESS
+HOMEDED
+R
+Range = (1, 3)
+HOMEDED
+R
+1 = Not homeless
+HOMEDED
+R
+2 = Homeless, not receiving homeless shelter allowance
+HOMEDED
+R
+3 = Homeless, receiving homeless shelter allowance
+Chapter V Codebook for the FY 2023 SNAP QC Database – Detailed Codebook
+Mathematica® Inc. 73
+Variable Origin Description
+HOMELESS_DED
+C
+AMOUNT OF HOMELESS HOUSEHOLD SHELTER DEDUCTION
+HOMELESS_DED
+C
+Range = (0, 167)
+HOMELESS_DED
+C
+Positive value only for those with HOMEDED = 3
+HOMELESS_DED
+C
+Coded as missing for all MFIP and SSI-CAP units except for NYSCAP units.
+RAWERND
+R
+REPORTED EARNED INCOME DEDUCTION
+RAWERND
+R
+Range = (0, 999)
+RAWERND
+R
+See FSERNDED for final earned income deduction value.
+RENT
+R
+RENT/MORTGAGE AMOUNT
+RENT
+R
+Range = (0, 4721)
+RENT
+R
+Some values for SSI-CAP units have been edited to apply standard shelter allowances.
+SHELCAP
+C
+MAXIMUM ALLOWABLE SHELTER EXPENSE DEDUCTION
+SHELCAP
+C
+Range = (492, 996)
+SHELCAP
+C
+SHELCAP varies by region. See Appendix F for values.
+SHELDED
+R
+REPORTED SHELTER DEDUCTION
+SHELDED
+R
+Range = (0, 61300)
+SHELDED
+R
+See FSSLTDED for the final value.
+SUA1
+R
+STANDARD UTILITY ALLOWANCE–USAGE AND ENTITLEMENT
+SUA1
+R
+Range = (1, 9)
+SUA1
+R
+1 = No utilities and no LIHEAA assistance
+SUA1
+R
+2 = Uses actual expenses
+SUA1
+R
+3 = Uses higher standard based on LIHEAA assistance
+SUA1
+R
+4 = Uses higher standard and does not receive LIHEAA assistance
+SUA1
+R
+5 = Uses lower, or limited, standard
+SUA1
+R
+6 = Uses telephone-only standard
+SUA1
+R
+7 = Uses individual standards
+SUA1
+R
+8 = Uses higher standard, LIHEAA assistance status unknown
+SUA1
+R
+9 = Other
+SUA1
+R
+Some values have been edited to obtain consistency with UTIL. See Appendix B for details.
+Coded as missing for MFIP units and for units participating in an SSI-CAP program in States that use standard SSI-CAP benefits.
+SUA1
+R
+LIHEAA is the Low Income Home Energy Assistance Act of 1981. Some State programs may have another name, such as Home Energy Assistance Program (HEAP).
+SUA1
+R
+Higher standard is an SUA based upon payment of heating or cooling and includes all utilities.
+SUA1
+R
+Lower, or limited, standard is an SUA based upon all utilities but is for households that do not incur heating or cooling or receive LIHEAA.
+SUA2
+R
+STANDARD UTILITY ALLOWANCE–PRORATED
+SUA2
+R
+Range = (1, 2)
+SUA2
+R
+1 = Not prorated
+SUA2
+R
+2 = Prorated
+SUA2
+R
+Some values have been edited to obtain consistency with UTIL. See Appendix B for details. Coded as missing for MFIP units and for SSI-CAP units receiving a standard SSI-CAP benefit.
+UTIL
+R
+UTILITY AMOUNT
+UTIL
+R
+Range = (0, 1075)
+UTIL
+R
+Some values have been edited to improve the final benefit calculation. See Appendix B for details.
+Chapter V Codebook for the FY 2023 SNAP QC Database – Detailed Codebook
+Mathematica® Inc. 74
+Unit benefits
+Variable
+Origin
+Description
+AMTERR
+R
+AMOUNT OF BENEFIT IN ERROR
+AMTERR
+R
+Range = (0, 1265)
+AMTERR
+R
+Dollar amount of any identified error, or the difference between the benefits the State authorized and the benefits the State should have authorized.
+ASSLIM
+C
+ASSET LIMIT
+ASSLIM
+C
+Range = (2750, 4250)
+ASSLIM
+C
+SNAP asset eligibility limit. Categorically eligible units are not subject to an asset limit. See Appendix F.
+BENMAX
+C
+MAXIMUM BENEFIT AMOUNT
+BENMAX
+C
+Range = (281, 4092)
+BENMAX
+C
+The maximum possible benefit for a unit, which varies by unit size and region. See Appendix F for schedule.
+FSASTEST
+C
+INDICATOR OF PASSING ASSET TEST
+FSASTEST
+C
+Range = (0, 1)
+FSASTEST
+C
+0 = No
+FSASTEST
+C
+1 = Yes
+FSBEN
+C
+FINAL CALCULATED BENEFIT
+FSBEN
+C
+Range = (4, 3690)
+FSBEN
+C
+Calculated as FSBEN = MAX(minimum benefit, BENMAX-ROUND (.3*FSNETINC)) if FSUSIZE is 2 or less. Otherwise, FSBEN = MAX (0, BENMAX-ROUND (.3*FSNETINC)) for all units, except for MFIP units and for units participating in an SSI-CAP program in States that use standard SSI-CAP benefits where the benefit is calculated by using a State-specific formula.
+FSBENSUPP
+C
+CALCULATED AMOUNT OF EMERGENCY ALLOTMENT
+FSBENSUPP
+C
+Please note that FSBENSUPP measures the emergency allotment amount a household was estimated to have been entitled to, not necessarily the amount received.
+FSBENSUPP
+C
+Range = (95, 1756)
+FSBENSUPP
+C
+Calculated as the larger of $95 or BENMAX – FSBEN, if in a State that administered emergency allotments in the sample month. Coded as missing in States that had returned to normal benefit amounts by the sample month. Emergency allotments ended after February 2023. See Chapter I and Appendix C for details.
+FSGRTEST
+C
+INDICATOR OF PASSING GROSS INCOME TEST
+FSGRTEST
+C
+Range = (0, 1)
+FSGRTEST
+C
+0 = No
+FSGRTEST
+C
+1 = Yes
+FSMINBEN
+C
+RECEIVED MINIMUM BENEFIT
+FSMINBEN
+C
+Range = (0, 1)
+FSMINBEN
+C
+0 = No
+FSMINBEN
+C
+1 = Yes
+FSMINBEN
+C
+FSMINBEN = 1 when FSBEN = 8 percent of the maximum one-person benefit for the unit’s geographic region and FSUSIZE = 1 or 2. FSMINBEN is always set to 0 for units participating in an SSI-CAP program that uses standard SSI-CAP benefits.
+FSNETEST
+C
+INDICATOR OF PASSING NET INCOME TEST
+FSNETEST
+C
+Range = (0, 1)
+FSNETEST
+C
+0 = No
+FSNETEST
+C
+1 = Yes
+FSNETEST
+C
+Coded as missing for MFIP units and for units participating in an SSI-CAP program that uses standard SSI-CAP benefits.
+Chapter V Codebook for the FY 2023 SNAP QC Database – Detailed Codebook
+Mathematica® Inc. 75
+Variable Origin Description
+GROSSCRN
+C
+GROSS INCOME SCREEN
+GROSSCRN
+C
+Range = (1473, 9660)
+GROSSCRN
+C
+SNAP eligibility limit determined by unit size. Categorically eligible units and those with elderly members or individuals with disabilities are not subject to the gross income screen. See Appendix F for values.
+MINIMUM_BEN
+C
+MINIMUM BENEFIT AMOUNT
+MINIMUM_BEN
+C
+Range = (23, 44)
+MINIMUM_BEN
+C
+See Appendix Table F.6 for minimum monthly SNAP benefit amounts.
+NETSCRN
+C
+NET INCOME SCREEN
+NETSCRN
+C
+Range = (1133, 7432)
+NETSCRN
+C
+SNAP eligibility limit determined by unit size. Categorically eligible units are not subject to the net income screen. See Appendix F for values.
+RAWBEN
+R
+REPORTED SNAP BENEFIT RECEIVED
+RAWBEN
+R
+Range = (0, 9998)
+RAWBEN
+R
+Reported amount of SNAP benefits that the unit was certified to receive during the sample month (see FSBEN for the final edited benefit amount).
+SUPP_BEN
+C
+INDICATOR OF ELIGIBILITY FOR EMERGENCY ALLOTMENT
+SUPP_BEN
+C
+Please note that SUPP_BEN is an indicator of eligibility for, not receipt of, the emergency allotment.
+SUPP_BEN
+C
+Range = (0, 1)
+SUPP_BEN
+C
+0 = No
+SUPP_BEN
+C
+1 = Yes
+SUPP_BEN
+C
+SUPP_BEN = 1 when FSBENSUPP > 0.
+Chapter V Codebook for the FY 2023 SNAP QC Database – Detailed Codebook
+Mathematica® Inc. 76
+Person-level characteristics: i = 1 to 17
+Variable
+Origin
+Description
+ABWDST1 to ABWDST17
+R
+ABAWD STATUS
+ABWDST1 to ABWDST17
+R
+We recommend against using ABWDSTi for State-level tabulations in Guam, Nevada, and Utah due to small ABAWD sample sizes and recommend caution when using ABWDSTi for State-level tabulations in Delaware, Florida, and Wyoming due to somewhat small ABAWD sample sizes. See Appendix A for details.
+ABWDST1 to ABWDST17
+R
+Range = (1, 8)
+ABWDST1 to ABWDST17
+R
+Person 1 through Person 17
+ABWDST1 to ABWDST17
+R
+1 = Not an able-bodied adult without dependents (ABAWD)
+ABWDST1 to ABWDST17
+R
+2 = Ineligible householder
+ABWDST1 to ABWDST17
+R
+3 = ABAWD meeting work requirements at 7 CFR 273.24(a)(1)
+ABWDST1 to ABWDST17
+R
+4 = ABAWD meeting work requirements (in 3 months of eligibility)
+ABWDST1 to ABWDST17
+R
+5 = ABAWD in a waived area
+ABWDST1 to ABWDST17
+R
+6 = Exempt based on discretionary exemption
+ABWDST1 to ABWDST17
+R
+8 = Ineligible householder also coded as an eligible member of the SNAP unit (FSAFILi = 1)
+AGE1 to AGE17
+R
+AGE
+AGE1 to AGE17
+R
+Range = (0, 98)
+AGE1 to AGE17
+R
+Person 1 through Person 17
+AGE1 to AGE17
+R
+0 = Age less than 1 year
+AGE1 to AGE17
+R
+1 to 97 = Age in years
+AGE1 to AGE17
+R
+98 = Age 98 years or older
+CTZN1 to CTZN17
+R
+CITIZENSHIP STATUS
+CTZN1 to CTZN17
+R
+Range = (1, 10)
+CTZN1 to CTZN17
+R
+Person 1 through Person 17
+CTZN1 to CTZN17
+R
+1 = US–born citizen
+CTZN1 to CTZN17
+R
+2 = Naturalized citizen
+CTZN1 to CTZN17
+R
+3 = Legal permanent resident with 40 quarters of work, military service, five years legal U.S. residency, disability, or under age 18
+CTZN1 to CTZN17
+R
+5 = Person admitted as refugee, granted asylum, or given stay of deportation
+CTZN1 to CTZN17
+R
+6 = Other eligible noncitizen
+CTZN1 to CTZN17
+R
+7 = Noncitizen legally in U.S. who does not meet one of the above codes and is not receiving SNAP benefits but whose income and resources must be considered in determining benefits
+CTZN1 to CTZN17
+R
+8 = Other ineligible legal noncitizen (for example, visitor, tourist, student, diplomat)
+CTZN1 to CTZN17
+R
+9 = Undocumented noncitizen
+CTZN1 to CTZN17
+R
+10 = Noncitizen, status unknown
+DIS1 to DIS17
+C
+PERSON-LEVEL DISABILITY INDICATOR
+DIS1 to DIS17
+C
+Range = (0, 1)
+DIS1 to DIS17
+C
+Person 1 through Person 17
+DIS1 to DIS17
+C
+0 = Not disabled
+DIS1 to DIS17
+C
+1 = Disabled
+DIS1 to DIS17
+C
+Non-elderly individuals identified as having a disability using receipt of SSI or a combination of hours worked, work registration status, receipt of Social Security, veterans’ benefits, or workers’ compensation, and/or unit medical expense deduction. See Appendix B for details.
+Chapter V Codebook for the FY 2023 SNAP QC Database – Detailed Codebook
+Mathematica® Inc. 77
+Variable Origin Description
+DPCOST1 to DPCOST17
+R
+REPORTED DEPENDENT CARE COST
+DPCOST1 to DPCOST17
+R
+We recommend against using DPCOSTi for State-level tabulations because of small sample sizes and inconsistencies between DPCOSTi and FSDEPDED. See Appendix A for details.
+DPCOST1 to DPCOST17
+R
+Range = (0, 1620)
+DPCOST1 to DPCOST17
+R
+Person 1 through Person 16
+DPCOST1 to DPCOST17
+R
+Some values have been edited to obtain consistency with FSDEPDED. See Appendix B for details.
+EMPRG1 to EMPRG17
+R
+SNAP EMPLOYMENT AND TRAINING PROGRAM STATUS
+EMPRG1 to EMPRG17
+R
+Range = (0, 9)
+EMPRG1 to EMPRG17
+R
+Person 1 through Person 17
+EMPRG1 to EMPRG17
+R
+0 = Not participating in E&T
+EMPRG1 to EMPRG17
+R
+1 = Participating in non-SNAP E&T (such as TANF)
+EMPRG1 to EMPRG17
+R
+2 = Participating in SNAP job search/job search training as a mandatory participant
+EMPRG1 to EMPRG17
+R
+3 = Participating in SNAP job search/job search training as a voluntary participant
+EMPRG1 to EMPRG17
+R
+4 = Participating in a SNAP E&T workfare/work experience as a mandatory participant
+EMPRG1 to EMPRG17
+R
+5 = Participating in a SNAP E&T workfare/work experience as a voluntary participant
+EMPRG1 to EMPRG17
+R
+6 = Participating in a SNAP E&T education/training (basic education, remedial education, career/technical education, or other post-secondary) as a mandatory participant
+EMPRG1 to EMPRG17
+R
+7 = Participating in a SNAP E&T education/training (basic education, remedial education, career/technical education, or other post-secondary) as a voluntary participant
+EMPRG1 to EMPRG17
+R
+8 = Participating in other SNAP E&T component as a mandatory participant
+EMPRG1 to EMPRG17
+R
+9 = Participating in other SNAP E&T component as a voluntary participant
+EMPSTA1 to EMPSTA17
+R
+EMPLOYMENT STATUS—TYPE
+EMPSTA1 to EMPSTA17
+R
+Please note that this variable is best used in conjunction with other work-related variables, such as WORKi, to determine participants’ employment status. See Appendix A for details.
+EMPSTA1 to EMPSTA17
+R
+Range = (1, 8)
+EMPSTA1 to EMPSTA17
+R
+Person 1 through Person 17
+EMPSTA1 to EMPSTA17
+R
+1 = Not in labor force and not looking for work
+EMPSTA1 to EMPSTA17
+R
+2 = Unemployed and looking for work
+EMPSTA1 to EMPSTA17
+R
+3 = Active-duty military
+EMPSTA1 to EMPSTA17
+R
+4 = Migrant farm laborer
+EMPSTA1 to EMPSTA17
+R
+5 = Nonmigrant farm laborer
+EMPSTA1 to EMPSTA17
+R
+6 = Self-employed, farming
+EMPSTA1 to EMPSTA17
+R
+7 = Self-employed, nonfarming
+EMPSTA1 to EMPSTA17
+R
+8 = Employed by other
+EMPSTB1 to EMPSTB17
+R
+EMPLOYMENT STATUS—AMOUNT
+EMPSTB1 to EMPSTB17
+R
+Please note that this variable is best used in conjunction with other work-related variables, such as WORKi, to determine participants’ employment status. See Appendix A for details.
+EMPSTB1 to EMPSTB17
+R
+Range = (1, 5)
+EMPSTB1 to EMPSTB17
+R
+Person 1 through Person 17
+EMPSTB1 to EMPSTB17
+R
+1 = Not employed
+EMPSTB1 to EMPSTB17
+R
+2 = 1–19 hours/week
+EMPSTB1 to EMPSTB17
+R
+3 = 20–29 hours/week
+EMPSTB1 to EMPSTB17
+R
+4 = 30–39 hours/week
+EMPSTB1 to EMPSTB17
+R
+5 = Full-time (40 hours or more)
+Chapter V Codebook for the FY 2023 SNAP QC Database – Detailed Codebook
+Mathematica® Inc. 78
+Variable Origin Description
+FSAFIL1 to FSAFIL17
+R
+SNAP CASE AFFILIATION
+FSAFIL1 to FSAFIL17
+R
+We recommend against using FSAFILi for State-level tabulations of nonparticipants in Alaska, Georgia, Louisiana, North Dakota, and West Virginia, and advise caution when using FSAFILi for State-level tabulations of nonparticipants in Arkansas, the District of Columbia, Minnesota, New York, and Ohio. See Appendix A for details.
+FSAFIL1 to FSAFIL17
+R
+Range = (1, 99)
+FSAFIL1 to FSAFIL17
+R
+Person 1 through Person 17
+FSAFIL1 to FSAFIL17
+R
+1 = Eligible member of SNAP case under review and entitled to receive benefits
+FSAFIL1 to FSAFIL17
+R
+2 = Eligible SNAP participant in another unit, not currently under review (code added by Mathematica for use in certain SNAP-CAP units)
+FSAFIL1 to FSAFIL17
+R
+4 = Member is ineligible noncitizen and not participating in State-funded SNAP
+FSAFIL1 to FSAFIL17
+R
+5 = Member not paying/cooperating with child support agency
+FSAFIL1 to FSAFIL17
+R
+6 = Member is ineligible striker
+FSAFIL1 to FSAFIL17
+R
+7 = Member is ineligible student
+FSAFIL1 to FSAFIL17
+R
+8 = Member disqualified for program violation
+FSAFIL1 to FSAFIL17
+R
+9 = Member ineligible to participate due to disqualification or failure to meet work requirements (work registration, E&T, acceptance of employment, employment status/job availability, voluntary quit/reducing work effort, workfare/comparable workfare)
+FSAFIL1 to FSAFIL17
+R
+10 = ABAWD time limit exhausted and ABAWD ineligible to participate due to failure to meet ABAWD work requirements, to work at least 20 hours per week, to participate in at least 20 hours per week in qualifying educational training activities, or to participate in workfare
+FSAFIL1 to FSAFIL17
+R
+11 = Fleeing felon or parole and probation violator
+FSAFIL1 to FSAFIL17
+R
+13 = Convicted drug felon
+FSAFIL1 to FSAFIL17
+R
+14 = Social Security Number disqualified
+FSAFIL1 to FSAFIL17
+R
+15 = SSI recipient in California
+FSAFIL1 to FSAFIL17
+R
+16 = Prisoner in detention center
+FSAFIL1 to FSAFIL17
+R
+17 = Foster care
+FSAFIL1 to FSAFIL17
+R
+18 = Member is ineligible noncitizen and participating in State-funded SNAP
+FSAFIL1 to FSAFIL17
+R
+19 = Individual in the home but not part of SNAP household
+FSAFIL1 to FSAFIL17
+R
+99 = Unknown
+FSUN1 to FSUN17
+C
+POSITION OF HEAD OF SNAP UNIT
+FSUN1 to FSUN17
+C
+Range = (0, 8)
+FSUN1 to FSUN17
+C
+Person 1 through Person 17
+FSUN1 to FSUN17
+C
+Identifies the index position of the head of the SNAP unit. The head is defined as the first person in unit with RELi = 1 or, if no one in unit has RELi = 1, as the first adult in unit. If there are no adults in unit, the oldest child is the head. FSUNi is the same for everyone in unit. For example, if unit head is the second person in the household, FSUNi = 2 for everyone in unit. FSUNi = 0 for any individuals in household who are not part of the SNAP unit.
+NDISCA1 to NDISCA17
+C
+ADULT WITHOUT A DISABILITY WHO IS IN A CHILDLESS UNIT AND WITHIN THE AGE RANGE SUBJECT TO TIME LIMITS STATUS
+NDISCA1 to NDISCA17
+C
+Range = (0, 2)
+NDISCA1 to NDISCA17
+C
+Person 1 through Person 17
+NDISCA1 to NDISCA17
+C
+0 = Not in universe (AGEi not within the age range subject to time limits)
+NDISCA1 to NDISCA17
+C
+1 = Adult without a disability in childless unit within the age range subject to time limits
+NDISCA1 to NDISCA17
+C
+2 = Age within the range subject to time limits, but not adult without a disability in childless unit
+Chapter V Codebook for the FY 2023 SNAP QC Database – Detailed Codebook
+Mathematica® Inc. 79
+Variable Origin Description
+RACETH1 to RACETH17
+R
+RACE/ETHNICITY
+RACETH1 to RACETH17
+R
+We recommend against using RACETHi for national tabulations, due to a high prevalence of unreported race/ethnicity data. In addition, we recommend against using RACETHi in 21 States where at least 10 percent of participants have unreported race/ethnicity and we recommend caution when using RACETHi in six States and the District of Columbia, where 5 to 10 percent of participants have unreported race/ethnicity. See Appendix A for details.
+RACETH1 to RACETH17
+R
+Range = (1, 22)
+RACETH1 to RACETH17
+R
+Person 1 through Person 17
+RACETH1 to RACETH17
+R
+1 = Racial/ethnic data not available because application was not found
+RACETH1 to RACETH17
+R
+2 = Not recorded on application
+RACETH1 to RACETH17
+R
+Not Hispanic or Latino
+RACETH1 to RACETH17
+R
+3 = American Indian or Alaska Native
+RACETH1 to RACETH17
+R
+4 = Asian
+RACETH1 to RACETH17
+R
+5 = Black or African American
+RACETH1 to RACETH17
+R
+6 = Native Hawaiian or other Pacific Islander
+RACETH1 to RACETH17
+R
+7 = White
+RACETH1 to RACETH17
+R
+Multiple races reported
+RACETH1 to RACETH17
+R
+8 = (American Indian or Alaska Native) and White
+RACETH1 to RACETH17
+R
+9 = Asian and White
+RACETH1 to RACETH17
+R
+10 = (Black or African American) and White
+RACETH1 to RACETH17
+R
+11 = (American Indian or Alaska Native) and (Black or African American)
+RACETH1 to RACETH17
+R
+12 = Respondent reported more than one race and does not fit into above categories (codes 8 through 11)
+RACETH1 to RACETH17
+R
+Hispanic or Latino
+RACETH1 to RACETH17
+R
+13 = (Hispanic or Latino) and (American Indian or Alaska Native)
+RACETH1 to RACETH17
+R
+14 = (Hispanic or Latino) and Asian
+RACETH1 to RACETH17
+R
+15 = (Hispanic or Latino) and (Black or African American)
+RACETH1 to RACETH17
+R
+16 = (Hispanic or Latino) and (Native Hawaiian or other Pacific Islander)
+RACETH1 to RACETH17
+R
+17 = (Hispanic or Latino) and White
+RACETH1 to RACETH17
+R
+Multiple races reported
+RACETH1 to RACETH17
+R
+18 = (Hispanic or Latino) and (American Indian or Alaska Native) and White
+RACETH1 to RACETH17
+R
+19 = (Hispanic or Latino) and Asian and White
+RACETH1 to RACETH17
+R
+20 = (Hispanic or Latino) and (Black or African American) and White
+RACETH1 to RACETH17
+R
+21 = (Hispanic or Latino) and (American Indian or Alaska Native) and (Black or African American)
+RACETH1 to RACETH17
+R
+22 = (Hispanic or Latino) and respondent reported more than one race and does not fit into above categories (codes 18 through 21)
+REL1 to REL17
+R
+RELATIONSHIP TO HEAD OF HOUSEHOLD
+REL1 to REL17
+R
+Range = (1, 7)
+REL1 to REL17
+R
+Person 1 through Person 17
+REL1 to REL17
+R
+1 = Head of household
+REL1 to REL17
+R
+2 = Spouse
+REL1 to REL17
+R
+3 = Parent
+REL1 to REL17
+R
+4 = Daughter, stepdaughter, son, or stepson
+REL1 to REL17
+R
+5 = Other related person (brother, sister, niece, nephew, grandchild, great-grandchild, cousin)
+REL1 to REL17
+R
+6 = Foster child
+REL1 to REL17
+R
+7 = Unrelated person
+Chapter V Codebook for the FY 2023 SNAP QC Database – Detailed Codebook
+Mathematica® Inc. 80
+Variable Origin Description
+SEX1 to SEX17
+R
+SEX
+Please note that the SEXi = 3 value was added to the FY 2023 SNAP QC database. See Appendix B and Appendix C for details.
+SEX1 to SEX17
+R
+Range = (1, 3)
+SEX1 to SEX17
+R
+Person 1 through Person 17
+SEX1 to SEX17
+R
+1 = Male
+SEX1 to SEX17
+R
+2 = Female
+3 = Prefer not to answer
+WORK1 to WORK17
+C
+PERSON-LEVEL WORKING INDICATOR
+WORK1 to WORK17
+C
+Range = (0, 1)
+WORK1 to WORK17
+C
+Person 1 through Person 17
+WORK1 to WORK17
+C
+0 = No
+WORK1 to WORK17
+C
+1 = Yes
+WORK1 to WORK17
+C
+Identifies individuals who are coded as being employed (EMPSTAi > 2), having positive earnings (WAGESi + OTHERNi + SLFEMPi > 0), and working one or more hours per week (EMPSTBi > 1).
+WRKREG1 to WRKREG17
+R
+WORK REGISTRATION STATUS
+WRKREG1 to WRKREG17
+R
+Please note that the variable is best used in conjunction with other work-related variables to identify reasons for exemption from work registration. See Appendix A for details.
+WRKREG1 to WRKREG17
+R
+Range = (1, 5)
+WRKREG1 to WRKREG17
+R
+Person 1 through Person 17
+WRKREG1 to WRKREG17
+R
+1 = Work registrant
+WRKREG1 to WRKREG17
+R
+2 = Federal exemption, physically or mentally unfit for employment
+WRKREG1 to WRKREG17
+R
+3 = Federal exemption, care of a child under 6 or an incapacitated person
+WRKREG1 to WRKREG17
+R
+4 = Federal exemption, working and/or earning the equivalent of 30 hours per week
+WRKREG1 to WRKREG17
+R
+5 = Federal exemption, other
+YRSED1 to YRSED17
+R
+HIGHEST EDUCATIONAL LEVEL COMPLETED
+YRSED1 to YRSED17
+R
+We recommend against using YRSEDi for national tabulations and State-level tabulations in 12 States where at least 10 percent of adults were coded with missing values. We recommend caution when using YRSEDi in 10 States and the District of Columbia, where between 5 and 10 percent of adults were coded with missing values. See Appendix A for details.
+YRSED1 to YRSED17
+R
+Range = (0, 14)
+YRSED1 to YRSED17
+R
+Person 1 through Person 17
+YRSED1 to YRSED17
+R
+0 = None
+YRSED1 to YRSED17
+R
+1 = Grade 1
+YRSED1 to YRSED17
+R
+2 = Grade 2
+YRSED1 to YRSED17
+R
+3 = Grade 3
+YRSED1 to YRSED17
+R
+4 = Grade 4
+YRSED1 to YRSED17
+R
+5 = Grade 5
+YRSED1 to YRSED17
+R
+6 = Grade 6
+YRSED1 to YRSED17
+R
+7 = Grade 7
+YRSED1 to YRSED17
+R
+8 = Grade 8
+YRSED1 to YRSED17
+R
+9 = Grade 9
+YRSED1 to YRSED17
+R
+10 = Grade 10
+YRSED1 to YRSED17
+R
+11 = Grade 11
+YRSED1 to YRSED17
+R
+12 = High school graduate or GED
+YRSED1 to YRSED17
+R
+13 = Postsecondary education (for example, technical education or some college)
+YRSED1 to YRSED17
+R
+14 = College graduate or postgraduate degree
+Chapter V Codebook for the FY 2023 SNAP QC Database – Detailed Codebook
+Mathematica® Inc. 81
+Person-level countable income (monthly dollar amounts): i = 1 to 17
+Variable
+Origin
+Description
+CONT1 to CONT17
+R
+COUNTABLE INCOME FROM CONTRIBUTIONS
+CONT1 to CONT17
+R
+Range = (0, 3000)
+CONT1 to CONT17
+R
+Person 1 through Person 17
+CONT1 to CONT17
+R
+Amount of contributions, charity, and in-kind income
+CSUPRT1 to CSUPRT17
+R
+COUNTABLE CHILD SUPPORT PAYMENT INCOME
+CSUPRT1 to CSUPRT17
+R
+Range = (0, 2561)
+CSUPRT1 to CSUPRT17
+R
+Person 1 through Person 17
+CSUPRT1 to CSUPRT17
+R
+Court-ordered child support payments received from absent parent or responsible person.
+DEEM1 to DEEM17
+R
+COUNTABLE DEEMED INCOME
+DEEM1 to DEEM17
+R
+Range = (0, 2350)
+DEEM1 to DEEM17
+R
+Person 1 through Person 17
+DEEM1 to DEEM17
+R
+Income deemed from sponsor of noncitizen member of unit.
+DIVER1 to DIVER17
+R
+COUNTABLE STATE DIVERSION PAYMENTS
+DIVER1 to DIVER17
+R
+Range = (0, 1048)
+DIVER1 to DIVER17
+R
+Person 1 through Person 17
+EDLOAN1 to EDLOAN17
+R
+COUNTABLE INCOME FROM EDUCATIONAL GRANTS AND LOANS
+EDLOAN1 to EDLOAN17
+R
+Range = (0, 2319)
+EDLOAN1 to EDLOAN17
+R
+Person 1 through Person 17
+EDLOAN1 to EDLOAN17
+R
+Educational grants, scholarships, and loans.
+EITC1 to EITC17
+R
+COUNTABLE INCOME FROM EARNED INCOME TAX CREDIT
+EITC1 to EITC17
+R
+Range = (0, 934)
+EITC1 to EITC17
+R
+Person 1 through Person 17
+ENERGY1 to ENERGY17
+R
+COUNTABLE ENERGY ASSISTANCE INCOME
+ENERGY1 to ENERGY17
+R
+Range = (0, 1452)
+ENERGY1 to ENERGY17
+R
+Person 1 through Person 17
+FOSTER1 to FOSTER17
+R
+COUNTABLE FOSTER CARE INCOME
+FOSTER1 to FOSTER17
+R
+Range = (0, 2383)
+FOSTER1 to FOSTER17
+R
+Person 1 through Person 17
+GA1 to GA17
+R
+COUNTABLE GENERAL ASSISTANCE BENEFITS
+GA1 to GA17
+R
+Range = (0, 4580)
+GA1 to GA17
+R
+Person 1 through Person 17
+OTHERN1 to OTHERN17
+R
+COUNTABLE OTHER EARNED INCOME
+OTHERN1 to OTHERN17
+R
+Range = (0, 3135)
+OTHERN1 to OTHERN17
+R
+Person 1 through Person 17
+OTHGOV1 to OTHGOV17
+R
+COUNTABLE INCOME FROM OTHER GOVERNMENT BENEFITS
+OTHGOV1 to OTHGOV17
+R
+Range = (0, 4049)
+OTHGOV1 to OTHGOV17
+R
+Person 1 through Person 17
+OTHGOV1 to OTHGOV17
+R
+Includes but not limited to Black Lung Benefits, Railroad Retirement payments, and payments to farmers by USDA. OTHGOVi amounts were recoded as SSI benefits in units with reported SSI income in cases for which OTHGOVi equaled an applicable State SSI supplement.
+Chapter V Codebook for the FY 2023 SNAP QC Database – Detailed Codebook
+Mathematica® Inc. 82
+Variable Origin Description
+OTHUN1 to OTHUN17
+R
+COUNTABLE OTHER UNEARNED INCOME
+OTHUN1 to OTHUN17
+R
+Range = (0, 4800)
+OTHUN1 to OTHUN17
+R
+Person 1 through Person 17
+OTHUN1 to OTHUN17
+R
+Includes alimony, dividends and interest, rental income, pensions, and union benefits. OTHUNi amounts were recoded as SSI benefits in units with reported SSI income in cases for which OTHUNi equaled an applicable State SSI supplement.
+SLFEMP1 to SLFEMP17
+R
+COUNTABLE SELF-EMPLOYMENT INCOME
+SLFEMP1 to SLFEMP17
+R
+Range = (0, 5210)
+SLFEMP1 to SLFEMP17
+R
+Person 1 through Person 17
+SLFEMP1 to SLFEMP17
+R
+Net income from any self-employment enterprise
+SOCSEC1 to SOCSEC17
+R
+COUNTABLE SOCIAL SECURITY INCOME
+SOCSEC1 to SOCSEC17
+R
+Range = (0, 6800)
+SOCSEC1 to SOCSEC17
+R
+Person 1 through Person 17
+SSI1 to SSI17
+R
+COUNTABLE SSI BENEFITS
+SSI1 to SSI17
+R
+Range = (0, 2406)
+SSI1 to SSI17
+R
+Person 1 through Person 17
+SSI1 to SSI17
+R
+Includes recoded countable income reported as OTHGOVi or OTHUNi in units with reported SSI income and where OTHGOVi or OTHUNi equaled an applicable State SSI supplement
+TANF1 to TANF17
+R
+COUNTABLE TANF PAYMENTS
+TANF1 to TANF17
+R
+Range = (0, 2185)
+TANF1 to TANF17
+R
+Person 1 through Person 17
+TANF1 to TANF17
+R
+Assigned to payee or principal person of assistance group
+UNEMP1 to UNEMP17
+R
+COUNTABLE UNEMPLOYMENT COMPENSATION
+UNEMP1 to UNEMP17
+R
+Range = (0, 3254)
+UNEMP1 to UNEMP17
+R
+Person 1 through Person 17
+VET1 to VET17
+R
+COUNTABLE VETERANS’ BENEFITS
+VET1 to VET17
+R
+Range = (0, 4273)
+VET1 to VET17
+R
+Person 1 through Person 17
+WAGES1 to WAGES17
+R
+COUNTABLE WAGES AND SALARIES
+WAGES1 to WAGES17
+R
+Range = (0, 7526)
+WAGES1 to WAGES17
+R
+Person 1 through Person 17
+WAGES1 to WAGES17
+R
+Amount of wages, salaries, tips, and commission
+WCOMP1 to WCOMP17
+R
+COUNTABLE WORKERS’ COMPENSATION BENEFITS
+WCOMP1 to WCOMP17
+R
+Range = (0, 4441)
+WCOMP1 to WCOMP17
+R
+Person 1 through Person 17
+WGESUP1 to WGESUP17
+R
+COUNTABLE WAGE SUPPLEMENTATION INCOME
+WGESUP1 to WGESUP17
+R
+Range = (0, 3433)
+WGESUP1 to WGESUP17
+R
+Person 1 through Person 17
+WGESUP1 to WGESUP17
+R
+Earnings above cash assistance and/or SNAP benefit amount
+Chapter V Codebook for the FY 2023 SNAP QC Database – Detailed Codebook
+Mathematica® Inc. 83
+Detailed error findings: i = 1 to 9
+Variable
+Origin
+Description
+AGENCY1 to AGENCY9
+R
+AGENCY OR CLIENT RESPONSIBILITY
+AGENCY1 to AGENCY9
+R
+Range = (1, 99)
+AGENCY1 to AGENCY9
+R
+Variance 1 through Variance 9
+AGENCY1 to AGENCY9
+R
+Primary cause of variance
+AGENCY1 to AGENCY9
+R
+1 = Information not reported
+AGENCY1 to AGENCY9
+R
+2 = Incomplete or incorrect information provided; agency not required to verify
+AGENCY1 to AGENCY9
+R
+3 = Information withheld by client (case referred for Intentional Program Violation [IPV] investigation)
+AGENCY1 to AGENCY9
+R
+4 = Incorrect information provided by client (case referred for IPV investigation)
+AGENCY1 to AGENCY9
+R
+7 = Inaccurate information reported by collateral contact
+AGENCY1 to AGENCY9
+R
+8 = Acted on incorrect Federal computer match information not requiring verification (such variance is excluded from error determination but must be recorded)
+AGENCY1 to AGENCY9
+R
+10 = Policy incorrectly applied
+AGENCY1 to AGENCY9
+R
+12 = Reported information disregarded or not applied
+AGENCY1 to AGENCY9
+R
+14 = Agency failed to follow up on inconsistent or incomplete information
+AGENCY1 to AGENCY9
+R
+15 = Agency failed to follow up on impending changes
+AGENCY1 to AGENCY9
+R
+16 = Agency failed to verify required information
+AGENCY1 to AGENCY9
+R
+17 = Computer programming error
+AGENCY1 to AGENCY9
+R
+18 = Data entry and/or coding error
+AGENCY1 to AGENCY9
+R
+19 = Mass change (error due to problem with computer- generated mass change)
+AGENCY1 to AGENCY9
+R
+20 = Arithmetic computation error
+AGENCY1 to AGENCY9
+R
+21 = Computer user error
+AGENCY1 to AGENCY9
+R
+99 = Other
+AMOUNT1 to AMOUNT9
+R
+VARIANCE DOLLAR AMOUNT
+AMOUNT1 to AMOUNT9
+R
+Range = (0, 1480)
+AMOUNT1 to AMOUNT9
+R
+Variance 1 through Variance 9
+AMOUNT1 to AMOUNT9
+R
+Dollar amount of variance
+DISCOV1 to DISCOV9
+R
+VARIANCE DISCOVERY
+DISCOV1 to DISCOV9
+R
+Range = (1, 9)
+DISCOV1 to DISCOV9
+R
+Variance 1 through Variance 9
+DISCOV1 to DISCOV9
+R
+How variance was discovered
+DISCOV1 to DISCOV9
+R
+1 = Variance clearly identified from case record (documentation not from an automated match)
+DISCOV1 to DISCOV9
+R
+2 = Variance clearly identified from case record (documentation from an automated match)
+DISCOV1 to DISCOV9
+R
+3 = Variance discovered from recipient interview
+DISCOV1 to DISCOV9
+R
+4 = Employer (present or former)
+DISCOV1 to DISCOV9
+R
+5 = Financial institution, insurance company, or other business
+DISCOV1 to DISCOV9
+R
+6 = Landlord
+DISCOV1 to DISCOV9
+R
+7 = Government agency or public records, not automated match
+DISCOV1 to DISCOV9
+R
+8 = Government agency or public records, automated match
+DISCOV1 to DISCOV9
+R
+9 = Other
+Chapter V Codebook for the FY 2023 SNAP QC Database – Detailed Codebook
+Mathematica® Inc. 84
+Variable Origin Description
+E_FINDG1 to E_FINDG9
+R
+ERROR FINDING
+E_FINDG1 to E_FINDG9
+R
+Range = (2, 4)
+E_FINDG1 to E_FINDG9
+R
+Variance 1 through Variance 9
+E_FINDG1 to E_FINDG9
+R
+Impact of variance
+E_FINDG1 to E_FINDG9
+R
+2 = Overissuance
+E_FINDG1 to E_FINDG9
+R
+3 = Underissuance
+E_FINDG1 to E_FINDG9
+R
+4 = Ineligible
+ELEMENT1 to ELEMENT9
+R
+VARIANCE ELEMENT
+ELEMENT1 to ELEMENT9
+R
+Range = (111, 820)
+ELEMENT1 to ELEMENT9
+R
+Variance 1 through Variance 9
+ELEMENT1 to ELEMENT9
+R
+Element of variance
+ELEMENT1 to ELEMENT9
+R
+111 = Student status
+ELEMENT1 to ELEMENT9
+R
+130 = Citizenship and noncitizen status
+ELEMENT1 to ELEMENT9
+R
+140 = Residency
+ELEMENT1 to ELEMENT9
+R
+150 = Unit composition
+ELEMENT1 to ELEMENT9
+R
+151 = Recipient disqualification
+ELEMENT1 to ELEMENT9
+R
+160 = Employment and training programs
+ELEMENT1 to ELEMENT9
+R
+161 = Time-limited participation
+ELEMENT1 to ELEMENT9
+R
+162 = Work registration requirements
+ELEMENT1 to ELEMENT9
+R
+163 = Voluntary quit/reduced work effort
+ELEMENT1 to ELEMENT9
+R
+164 = Workfare and comparable workfare
+ELEMENT1 to ELEMENT9
+R
+165 = Employment status/job availability
+ELEMENT1 to ELEMENT9
+R
+166 = Acceptance of employment
+ELEMENT1 to ELEMENT9
+R
+170 = Social Security number
+ELEMENT1 to ELEMENT9
+R
+211 = Bank accounts or cash on hand
+ELEMENT1 to ELEMENT9
+R
+212 = Nonrecurring lump-sum payment
+ELEMENT1 to ELEMENT9
+R
+213 = Other liquid assets
+ELEMENT1 to ELEMENT9
+R
+221 = Real property
+ELEMENT1 to ELEMENT9
+R
+222 = Vehicles
+ELEMENT1 to ELEMENT9
+R
+224 = Other nonliquid resources
+ELEMENT1 to ELEMENT9
+R
+225 = Combined resources
+ELEMENT1 to ELEMENT9
+R
+311 = Wages and salaries
+ELEMENT1 to ELEMENT9
+R
+312 = Self-employment
+ELEMENT1 to ELEMENT9
+R
+314 = Other earned income
+ELEMENT1 to ELEMENT9
+R
+321 = Earned income deductions
+ELEMENT1 to ELEMENT9
+R
+323 = Dependent care deduction
+ELEMENT1 to ELEMENT9
+R
+331 = RSDI benefits
+ELEMENT1 to ELEMENT9
+R
+332 = Veterans’ benefits
+ELEMENT1 to ELEMENT9
+R
+333 = SSI and/or State SSI supplement
+ELEMENT1 to ELEMENT9
+R
+334 = Unemployment compensation
+ELEMENT1 to ELEMENT9
+R
+335 = Workers’ compensation
+ELEMENT1 to ELEMENT9
+R
+336 = Other government benefits
+ELEMENT1 to ELEMENT9
+R
+342 = Contributions
+ELEMENT1 to ELEMENT9
+R
+343 = Deemed income
+ELEMENT1 to ELEMENT9
+R
+344 = TANF, PA, or GA
+ELEMENT1 to ELEMENT9
+R
+345 = Educational grants/scholarships/loans
+Chapter V Codebook for the FY 2023 SNAP QC Database – Detailed Codebook
+Mathematica® Inc. 85
+Variable Origin Description
+ELEMENT1 to ELEMENT9
+R
+346 = Other unearned income
+ELEMENT1 to ELEMENT9
+R
+350 = Child support payments received from absent parent
+ELEMENT1 to ELEMENT9
+R
+361 = Standard deduction
+ELEMENT1 to ELEMENT9
+R
+363 = Shelter deduction
+ELEMENT1 to ELEMENT9
+R
+364 = Standard utility allowance
+ELEMENT1 to ELEMENT9
+R
+365 = Medical expense deductions
+ELEMENT1 to ELEMENT9
+R
+366 = Child support payment deduction
+ELEMENT1 to ELEMENT9
+R
+371 = Combined gross income
+ELEMENT1 to ELEMENT9
+R
+372 = Combined net income
+ELEMENT1 to ELEMENT9
+R
+520 = Arithmetic computation
+ELEMENT1 to ELEMENT9
+R
+530 = Transitional benefits
+ELEMENT1 to ELEMENT9
+R
+560 = Reporting systems
+ELEMENT1 to ELEMENT9
+R
+810 = SNAP simplification project
+ELEMENT1 to ELEMENT9
+R
+820 = Demonstration projects
+NATURE1 to NATURE9
+R
+NATURE OF VARIANCE
+NATURE1 to NATURE9
+R
+Range = (6, 306)
+NATURE1 to NATURE9
+R
+Variance 1 through Variance 9
+NATURE1 to NATURE9
+R
+Nature of each variance
+NATURE1 to NATURE9
+R
+6 = Eligible person(s) excluded
+NATURE1 to NATURE9
+R
+7 = Ineligible person(s) included
+NATURE1 to NATURE9
+R
+12 = Eligible person(s) with no income, resources, or deductible expenses excluded
+NATURE1 to NATURE9
+R
+13 = Eligible person(s) with income excluded
+NATURE1 to NATURE9
+R
+14 = Eligible person(s) with resources excluded
+NATURE1 to NATURE9
+R
+15 = Eligible person(s) with deductible expenses excluded
+NATURE1 to NATURE9
+R
+16 = Newborn improperly excluded
+NATURE1 to NATURE9
+R
+20 = Incorrect resource limit applied
+NATURE1 to NATURE9
+R
+24 = Resource should have been excluded
+NATURE1 to NATURE9
+R
+28 = Incorrect income limit applied
+NATURE1 to NATURE9
+R
+29 = Exceeds prescribed limit
+NATURE1 to NATURE9
+R
+30 = Resource should have been included
+NATURE1 to NATURE9
+R
+32 = Failed to consider or incorrectly considered income of ineligible member
+NATURE1 to NATURE9
+R
+35 = Unreported source of income (do not use for change in employment status)
+NATURE1 to NATURE9
+R
+36 = Rounding used/not used or incorrectly applied
+NATURE1 to NATURE9
+R
+37 = All income from source known but not included
+NATURE1 to NATURE9
+R
+38 = More income received from this source than budgeted
+NATURE1 to NATURE9
+R
+39 = Employment status changed from unemployed to employed
+NATURE1 to NATURE9
+R
+40 = Employment status changed from employed to unemployed
+NATURE1 to NATURE9
+R
+41 = Change only in amount of earnings
+NATURE1 to NATURE9
+R
+42 = Conversion to monthly amount not used or incorrectly applied
+NATURE1 to NATURE9
+R
+43 = Averaging not used or incorrectly applied
+NATURE1 to NATURE9
+R
+44 = Less income received from this source than budgeted
+NATURE1 to NATURE9
+R
+45 = Cost of doing business not used or incorrectly applied
+NATURE1 to NATURE9
+R
+46 = Failed to consider/anticipate month with extra pay date
+NATURE1 to NATURE9
+R
+52 = Deduction that should have been included was not
+NATURE1 to NATURE9
+R
+53 = Deduction included that should not have been
+NATURE1 to NATURE9
+R
+54 = Incorrect standard used (not as a result of change in unit size or move)
+Chapter V Codebook for the FY 2023 SNAP QC Database – Detailed Codebook
+Mathematica® Inc. 86
+Variable Origin Description
+NATURE1 to NATURE9
+R
+64 = Incorrect amount used resulting from change in residence
+NATURE1 to NATURE9
+R
+65 = Incorrect standard used resulting from change in unit size
+NATURE1 to NATURE9
+R
+75 = Benefit/allotment/eligibility incorrectly computed
+NATURE1 to NATURE9
+R
+77 = Unit not entitled to transitional benefits
+NATURE1 to NATURE9
+R
+79 = Incorrect use of allotment tables
+NATURE1 to NATURE9
+R
+80 = Improper prorating of initial month’s benefits
+NATURE1 to NATURE9
+R
+97 = Not required to be reported or acted upon based on time frames and reporting requirements for allotment differences below the error threshold
+NATURE1 to NATURE9
+R
+98 = Transcription or computation errors
+NATURE1 to NATURE9
+R
+99 = Other
+NATURE1 to NATURE9
+R
+111 = Child support payment(s) not considered or incorrectly applied for initial month(s) of eligibility
+NATURE1 to NATURE9
+R
+112 = Retained child support payment(s) not considered or incorrectly applied
+NATURE1 to NATURE9
+R
+120 = Variance/errors resulting from noncompliance with this means-tested public assistance program
+NATURE1 to NATURE9
+R
+123 = Incorrectly prorated
+NATURE1 to NATURE9
+R
+124 = Variances resulting from use of automatic Federal information exchange system
+NATURE1 to NATURE9
+R
+127 = Pass-through not considered or incorrectly applied
+NATURE1 to NATURE9
+R
+200 = Eligible noncitizen excluded
+NATURE1 to NATURE9
+R
+201 = Ineligible noncitizen included
+NATURE1 to NATURE9
+R
+301 = Unit improperly participating under retrospective budgeting
+NATURE1 to NATURE9
+R
+302 = Unit improperly participating under prospective budgeting
+NATURE1 to NATURE9
+R
+303 = Unit improperly participating under monthly reporting
+NATURE1 to NATURE9
+R
+304 = Unit improperly participating under quarterly reporting
+NATURE1 to NATURE9
+R
+305 = Unit improperly participating under semiannual reporting
+NATURE1 to NATURE9
+R
+306 = Unit improperly participating under change reporting
+NATURE1 to NATURE9
+R
+307 = Unit improperly participating under status reporting
+NATURE1 to NATURE9
+R
+308 = Unit improperly participating under 5 hour reporting
+NATURE1 to NATURE9
+R
+309 = Unit improperly participating in transitional benefits
+OCCDATE1 to OCCDATE9
+R
+VARIANCE OCCURRENCE DATE
+OCCDATE1 to OCCDATE9
+R
+Range = (200112, 999999)
+OCCDATE1 to OCCDATE9
+R
+Variance 1 through Variance 9
+OCCDATE1 to OCCDATE9
+R
+Date each variance occurred (year and month)
+OCCDATE1 to OCCDATE9
+R
+999999 = Unknown
+TIMEPER1 to TIMEPER9
+R
+VARIANCE TIME PERIOD
+TIMEPER1 to TIMEPER9
+R
+Range = (1, 9)
+TIMEPER1 to TIMEPER9
+R
+Variance 1 through Variance 9
+TIMEPER1 to TIMEPER9
+R
+Time period during which variance occurred
+TIMEPER1 to TIMEPER9
+R
+1 = Before most recent action
+TIMEPER1 to TIMEPER9
+R
+2 = At time of most recent action by agency
+TIMEPER1 to TIMEPER9
+R
+3 = After most recent action by agency
+TIMEPER1 to TIMEPER9
+R
+9 = Time of occurrence cannot be determined
+Chapter V Codebook for the FY 2023 SNAP QC Database – Detailed Codebook
+Mathematica® Inc. 87
+Variable Origin Description
+VERIF1 to VERIF9
+R
+VARIANCE VERIFICATION
+VERIF1 to VERIF9
+R
+Range = (1, 9)
+VERIF1 to VERIF9
+R
+Variance 1 through Variance 9
+VERIF1 to VERIF9
+R
+Indicates how each variance was verified
+VERIF1 to VERIF9
+R
+1 = From case record (verification not from an automated match)
+VERIF1 to VERIF9
+R
+2 = From case record (verification from an automated match)
+VERIF1 to VERIF9
+R
+3 = From information provided by recipient
+VERIF1 to VERIF9
+R
+4 = Employer (present or former)
+VERIF1 to VERIF9
+R
+5 = Financial institution, insurance company, or other business
+VERIF1 to VERIF9
+R
+6 = Landlord
+VERIF1 to VERIF9
+R
+7 = Government agency or public records, not automated match
+VERIF1 to VERIF9
+R
+8 = Government agency or public records, automated match
+VERIF1 to VERIF9
+R
+9 = Other

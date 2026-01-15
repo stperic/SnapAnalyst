@@ -4,7 +4,7 @@ SnapAnalyst Configuration Management
 from functools import lru_cache
 from typing import List, Optional
 
-from pydantic import Field, PostgresDsn, RedisDsn, field_validator
+from pydantic import Field, PostgresDsn
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -38,24 +38,9 @@ class Settings(BaseSettings):
     database_pool_timeout: int = 30
     database_pool_recycle: int = 3600
 
-    # Redis Configuration
-    redis_url: RedisDsn
-    redis_password: Optional[str] = None
-
-    # Celery Configuration
-    celery_broker_url: Optional[str] = None
-    celery_result_backend: Optional[str] = None
-
-    @field_validator("celery_broker_url", "celery_result_backend", mode="before")
-    @classmethod
-    def default_to_redis(cls, v: Optional[str], info) -> str:
-        """Default Celery URLs to Redis URL if not provided"""
-        if v is None and info.data.get("redis_url"):
-            return str(info.data["redis_url"])
-        return v or ""
-
     # Data Configuration
-    snapdata_path: str = "./snapdata"
+    # Default data path (overridden by active dataset config)
+    snapdata_path: str = "./datasets/snap/data"
     backup_path: str = "./backups"
     max_upload_size_mb: int = 500
 
@@ -81,15 +66,27 @@ class Settings(BaseSettings):
     sentry_dsn: Optional[str] = None
     log_to_file: bool = True
     log_file_path: str = "./logs/snapanalyst.log"
+    log_max_bytes: int = Field(default=10_000_000, description="Max log file size in bytes (default 10MB)")
+    log_backup_count: int = Field(default=5, description="Number of backup log files to keep")
 
     # LLM Configuration
     llm_provider: str = Field(default="ollama", pattern="^(openai|anthropic|ollama)$")
     llm_model: Optional[str] = None  # Auto-selected based on provider if not set (legacy)
-    llm_model_sql: Optional[str] = None  # Model for SQL generation (input)
-    llm_model_summary: Optional[str] = None  # Model for summary generation (output)
+    
+    # Legacy/shared settings (used as defaults if specific settings not provided)
     llm_temperature: float = Field(default=0.1, ge=0.0, le=2.0)
     llm_max_tokens: int = Field(default=2000, ge=100, le=8000)
+    
+    # SQL Generation settings (LLM_SQL_*)
+    llm_sql_model: Optional[str] = None  # Model for SQL generation
+    llm_sql_max_tokens: Optional[int] = Field(default=None, ge=100, le=8000, description="Max tokens for SQL generation (defaults to llm_max_tokens)")
+    llm_sql_temperature: Optional[float] = Field(default=None, ge=0.0, le=2.0, description="Temperature for SQL generation (defaults to llm_temperature)")
+    
+    # Summary Generation settings (LLM_SUMMARY_*)
+    llm_summary_model: Optional[str] = None  # Model for summary generation
+    llm_summary_max_tokens: int = Field(default=200, ge=50, le=1000, description="Max tokens for summary generation")
     llm_summary_max_prompt_size: int = Field(default=8000, ge=1000, le=50000, description="Max prompt size (chars) for summary generation before fallback")
+    llm_summary_temperature: Optional[float] = Field(default=None, ge=0.0, le=2.0, description="Temperature for summary generation (defaults to llm_temperature)")
     
     # API Keys (Optional - required based on provider)
     openai_api_key: Optional[str] = None
@@ -98,9 +95,15 @@ class Settings(BaseSettings):
     
     # Vanna Configuration
     vanna_training_enabled: bool = False  # DISABLED: Was causing 10+ second API startup hangs
-    vanna_training_data_path: str = "./query_examples.json"
-    vanna_schema_path: str = "./data_mapping.json"
+    # Paths are now dataset-relative (see datasets/snap/)
+    vanna_training_data_path: str = "./datasets/snap/query_examples.json"
+    vanna_schema_path: str = "./datasets/snap/data_mapping.json"
     vanna_chromadb_path: str = "./chromadb"  # ChromaDB vector store location
+    
+    # Multi-Dataset Configuration
+    # Supports multiple datasets with different schemas (e.g., public SNAP + state private data)
+    active_dataset: str = "snap"  # Default dataset (backward compatible)
+    dataset_schema_isolation: bool = False  # If True, use PostgreSQL schemas for isolation
 
     @property
     def is_development(self) -> bool:
@@ -124,9 +127,9 @@ class Settings(BaseSettings):
     
     @property
     def sql_model(self) -> str:
-        """Get model for SQL generation (input processing)"""
-        if self.llm_model_sql:
-            return self.llm_model_sql
+        """Get model for SQL generation"""
+        if self.llm_sql_model:
+            return self.llm_sql_model
         # Default to more powerful models for SQL generation
         defaults = {
             "openai": "gpt-4-turbo-preview",
@@ -137,9 +140,9 @@ class Settings(BaseSettings):
     
     @property
     def summary_model(self) -> str:
-        """Get model for summary generation (output processing)"""
-        if self.llm_model_summary:
-            return self.llm_model_summary
+        """Get model for summary generation"""
+        if self.llm_summary_model:
+            return self.llm_summary_model
         # Default to faster/cheaper models for summaries
         defaults = {
             "openai": "gpt-3.5-turbo",
@@ -147,6 +150,21 @@ class Settings(BaseSettings):
             "ollama": "llama3.1:8b"
         }
         return defaults.get(self.llm_provider, "gpt-3.5-turbo")
+    
+    @property
+    def effective_sql_max_tokens(self) -> int:
+        """Get effective max tokens for SQL generation"""
+        return self.llm_sql_max_tokens if self.llm_sql_max_tokens is not None else self.llm_max_tokens
+    
+    @property
+    def effective_sql_temperature(self) -> float:
+        """Get effective temperature for SQL generation"""
+        return self.llm_sql_temperature if self.llm_sql_temperature is not None else self.llm_temperature
+    
+    @property
+    def effective_summary_temperature(self) -> float:
+        """Get effective temperature for summary generation"""
+        return self.llm_summary_temperature if self.llm_summary_temperature is not None else self.llm_temperature
 
 
 @lru_cache()

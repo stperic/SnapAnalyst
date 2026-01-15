@@ -13,16 +13,23 @@ from sqlalchemy.orm import Session
 
 from src.api.main import app
 from src.database.models import Base, Household, HouseholdMember, QCError
+# Import reference models to ensure they're registered with Base.metadata
+from src.database import reference_models  # noqa: F401
 from src.core.config import settings
 
 
 @pytest.fixture(scope="module")
 def test_engine():
-    """Create test database engine"""
+    """
+    Create test database engine.
+    
+    Uses pre-existing database with reference tables. Don't drop tables
+    as they have dependent views and are shared across test modules.
+    """
     engine = create_engine(str(settings.database_url))
     Base.metadata.create_all(engine)
     yield engine
-    Base.metadata.drop_all(engine)
+    # Don't drop tables - they have dependent views
     engine.dispose()
 
 
@@ -50,18 +57,19 @@ def client(test_engine):
 def sample_csv_file(tmp_path):
     """Create a sample CSV file for testing"""
     csv_content = """HHLDNO,STATE,STATENAME,YRMONTH,FSBEN,RAWGROSS,RAWNET,CERTHHSZ,FSUSIZE,HWGT,FYWGT,FSAFIL1,AGE1,SEX1,WAGES1,SOCSEC1,SSI1
-API001,CA,California,202310,500.00,2000.00,1500.00,2,2,1.5,1.0,1,35,2,1500.00,0.00,0.00
-API002,TX,Texas,202310,750.50,3000.00,2500.00,3,3,1.8,1.0,1,42,1,2000.00,0.00,0.00
-API003,NY,New York,202310,1200.00,1500.00,1200.00,4,4,2.1,1.0,1,28,2,1200.00,0.00,0.00"""
+API001,CA,California,202410,500.00,2000.00,1500.00,2,2,1.5,1.0,1,35,2,1500.00,0.00,0.00
+API002,TX,Texas,202410,750.50,3000.00,2500.00,3,3,1.8,1.0,1,42,1,2000.00,0.00,0.00
+API003,NY,New York,202410,1200.00,1500.00,1200.00,4,4,2.1,1.0,1,28,2,1200.00,0.00,0.00"""
     
     csv_file = tmp_path / "api_test_data.csv"
     csv_file.write_text(csv_content)
     
-    # Create snapdata directory and copy file
+    # Create snapdata directory (now in datasets/snap/data/) and copy file
     snapdata_path = Path(settings.snapdata_path)
     snapdata_path.mkdir(parents=True, exist_ok=True)
     
-    dest_file = snapdata_path / "test_fy2099.csv"
+    # Create test file that matches the fiscal year used in tests (2024)
+    dest_file = snapdata_path / "qc_pub_fy2024.csv"
     dest_file.write_text(csv_content)
     
     yield dest_file
@@ -96,6 +104,31 @@ class TestRootEndpoints:
 
 class TestFileEndpoints:
     """Test file discovery endpoints"""
+    
+    def test_snapdata_path_configuration(self, client):
+        """
+        Test that snapdata_path is correctly configured and accessible.
+        
+        This test verifies the configuration is correct WITHOUT relying on
+        fixtures that create files. It catches issues like:
+        - Missing data directory
+        - Broken symlinks
+        - Incorrect path configuration
+        """
+        from pathlib import Path
+        from src.core.config import settings
+        
+        snapdata_path = Path(settings.snapdata_path)
+        
+        # Path must exist (directory or symlink)
+        assert snapdata_path.exists(), f"snapdata_path does not exist: {snapdata_path}"
+        
+        # If symlink, target must exist
+        if snapdata_path.is_symlink():
+            assert snapdata_path.resolve().exists(), f"snapdata symlink target does not exist"
+        
+        # Should be a directory
+        assert snapdata_path.is_dir(), f"snapdata_path is not a directory: {snapdata_path}"
     
     def test_list_files(self, client, sample_csv_file):
         """Test GET /api/v1/data/files"""
@@ -179,7 +212,7 @@ class TestDataLoadingEndpoints:
     def test_load_data_file_not_found(self, client):
         """Test POST /api/v1/data/load with non-existent file"""
         response = client.post("/api/v1/data/load", json={
-            "fiscal_year": 9999,
+            "fiscal_year": 2029,  # Valid year but file doesn't exist
             "batch_size": 100
         })
         
@@ -189,7 +222,7 @@ class TestDataLoadingEndpoints:
     def test_load_data_success(self, client, sample_csv_file):
         """Test POST /api/v1/data/load with valid file"""
         response = client.post("/api/v1/data/load", json={
-            "fiscal_year": 2099,
+            "fiscal_year": 2024,  # Valid year within range
             "filename": sample_csv_file.name,
             "batch_size": 100,
             "skip_validation": False
@@ -224,7 +257,7 @@ class TestDataLoadingEndpoints:
     def test_load_multiple_years(self, client, sample_csv_file):
         """Test POST /api/v1/data/load-multiple"""
         response = client.post("/api/v1/data/load-multiple", json={
-            "fiscal_years": [2099],
+            "fiscal_years": [2024],  # Valid year within range
             "batch_size": 100
         })
         
@@ -256,7 +289,7 @@ class TestEndToEndAPI:
         
         # Step 4: Load data
         load_response = client.post("/api/v1/data/load", json={
-            "fiscal_year": 2099,
+            "fiscal_year": 2024,  # Valid year within range
             "filename": sample_csv_file.name,
             "batch_size": 100,
             "skip_validation": False
@@ -290,14 +323,14 @@ class TestEndToEndAPI:
         
         # Step 7: Verify data in database
         households = test_session.query(Household).filter(
-            Household.fiscal_year == 2099
+            Household.fiscal_year == 2024
         ).all()
         assert len(households) >= 3
         
         # Step 8: Clean up - reset the test data
         reset_response = client.post("/api/v1/data/reset", json={
             "confirm": True,
-            "fiscal_years": [2099]
+            "fiscal_years": [2024]
         })
         assert reset_response.status_code == 200
         

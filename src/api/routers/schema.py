@@ -7,24 +7,24 @@ Provides endpoints to access:
 - Table structures
 - Code lookups (element codes, nature codes, etc.)
 - Table relationships
-- Export to CSV, PDF, Markdown
+
+Note: Export endpoints (CSV, PDF, Markdown) are in schema_exports.py
 """
+
 import json
 from pathlib import Path
 from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import StreamingResponse, Response
 
 from src.core.logging import get_logger
-from src.api.utils.schema_export import SchemaExporter
 
 logger = get_logger(__name__)
 router = APIRouter()
 
-# Paths to schema files
+# Paths to schema files (now in datasets/snap/)
 WORKSPACE_ROOT = Path(__file__).parent.parent.parent.parent
-DATA_MAPPING_PATH = WORKSPACE_ROOT / "data_mapping.json"
+DATA_MAPPING_PATH = WORKSPACE_ROOT / "datasets" / "snap" / "data_mapping.json"
 SCHEMA_DOCS_PATH = WORKSPACE_ROOT / "schema_documentation.json"
 
 
@@ -45,6 +45,57 @@ def load_json_file(file_path: Path) -> Dict[str, Any]:
             status_code=500,
             detail=f"Invalid JSON in schema file: {file_path.name}"
         )
+
+
+# ============================================================================
+# SCHEMA QUERY ENDPOINTS
+# ============================================================================
+
+@router.get("/", summary="Schema API information")
+async def schema_root() -> Dict[str, Any]:
+    """
+    Get information about the Schema API.
+    
+    Returns a list of available endpoints and their purposes.
+    """
+    return {
+        "name": "SnapAnalyst Schema API",
+        "description": "Access database schema, data mappings, and code lookups",
+        "endpoints": {
+            "/data-mapping": "Complete data mapping schema with all tables, columns, and codes",
+            "/documentation": "Schema documentation",
+            "/tables": "All table structures",
+            "/tables/{table_name}": "Specific table structure (households, household_members, qc_errors)",
+            "/code-lookups": "All code lookup tables",
+            "/code-lookups/{lookup_name}": "Specific code lookup table",
+            "/relationships": "Table relationships and join conditions",
+            "/database-info": "High-level database metadata",
+            "/query-tips": "Tips for writing SQL queries",
+        },
+        "export_endpoints": {
+            "/export/tables/csv": "Export all tables to CSV",
+            "/export/tables/pdf": "Export all tables to PDF",
+            "/export/tables/markdown": "Export all tables to Markdown",
+            "/export/code-lookups/csv": "Export code lookups to CSV",
+            "/export/code-lookups/pdf": "Export code lookups to PDF",
+            "/export/code-lookups/markdown": "Export code lookups to Markdown",
+            "/export/database-info/pdf": "Export database info to PDF"
+        },
+        "available_tables": ["households", "household_members", "qc_errors"],
+        "available_code_lookups": [
+            "case_classification_codes",
+            "status_codes",
+            "expedited_service_codes",
+            "categorical_eligibility_codes",
+            "error_finding_codes",
+            "sex_codes",
+            "snap_affiliation_codes",
+            "element_codes",
+            "nature_codes",
+            "agency_responsibility_codes",
+            "discovery_method_codes"
+        ]
+    }
 
 
 @router.get("/data-mapping", summary="Get complete data mapping schema")
@@ -276,314 +327,3 @@ async def get_query_tips() -> Dict[str, Any]:
             "qc_errors": data_mapping.get("tables", {}).get("qc_errors", {}).get("common_queries", [])
         }
     }
-
-
-@router.get("/", summary="Schema API information")
-async def schema_root() -> Dict[str, Any]:
-    """
-    Get information about the Schema API.
-    
-    Returns a list of available endpoints and their purposes.
-    """
-    return {
-        "name": "SnapAnalyst Schema API",
-        "description": "Access database schema, data mappings, and code lookups",
-        "endpoints": {
-            "/data-mapping": "Complete data mapping schema with all tables, columns, and codes",
-            "/documentation": "Schema documentation",
-            "/tables": "All table structures",
-            "/tables/{table_name}": "Specific table structure (households, household_members, qc_errors)",
-            "/code-lookups": "All code lookup tables",
-            "/code-lookups/{lookup_name}": "Specific code lookup table",
-            "/relationships": "Table relationships and join conditions",
-            "/database-info": "High-level database metadata",
-            "/query-tips": "Tips for writing SQL queries",
-            "/export/tables/csv": "Export all tables to CSV",
-            "/export/tables/pdf": "Export all tables to PDF",
-            "/export/tables/markdown": "Export all tables to Markdown",
-            "/export/code-lookups/csv": "Export code lookups to CSV",
-            "/export/code-lookups/pdf": "Export code lookups to PDF",
-            "/export/code-lookups/markdown": "Export code lookups to Markdown",
-            "/export/database-info/pdf": "Export database info to PDF"
-        },
-        "available_tables": ["households", "household_members", "qc_errors"],
-        "available_code_lookups": [
-            "case_classification_codes",
-            "status_codes",
-            "expedited_service_codes",
-            "categorical_eligibility_codes",
-            "error_finding_codes",
-            "sex_codes",
-            "snap_affiliation_codes",
-            "element_codes",
-            "nature_codes",
-            "agency_responsibility_codes",
-            "discovery_method_codes"
-        ]
-    }
-
-
-# ============================================================================
-# EXPORT ENDPOINTS
-# ============================================================================
-
-@router.get("/export/tables/csv", summary="Export all tables to CSV")
-async def export_tables_csv():
-    """
-    Export all table structures to CSV format.
-    
-    Returns a CSV file with columns:
-    - Table Name
-    - Column Name
-    - Type
-    - Description
-    - Nullable
-    - Range
-    - Example
-    
-    **Usage:**
-    ```bash
-    curl http://localhost:8000/api/v1/schema/export/tables/csv -o tables.csv
-    ```
-    """
-    logger.info("Exporting tables to CSV")
-    try:
-        data_mapping = load_json_file(DATA_MAPPING_PATH)
-        buffer = SchemaExporter.to_csv_buffer(data_mapping, "tables")
-        
-        return StreamingResponse(
-            iter([buffer.getvalue()]),
-            media_type="text/csv",
-            headers={
-                "Content-Disposition": "attachment; filename=snapanalyst_tables.csv"
-            }
-        )
-    except Exception as e:
-        logger.error(f"Error exporting tables to CSV: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/export/tables/pdf", summary="Export all tables to PDF")
-async def export_tables_pdf():
-    """
-    Export all table structures to PDF format.
-    
-    Returns a formatted PDF document with:
-    - Table descriptions
-    - Column definitions
-    - Metadata
-    
-    **Usage:**
-    ```bash
-    curl http://localhost:8000/api/v1/schema/export/tables/pdf -o tables.pdf
-    ```
-    """
-    logger.info("Exporting tables to PDF")
-    try:
-        data_mapping = load_json_file(DATA_MAPPING_PATH)
-        buffer = SchemaExporter.to_pdf_buffer(data_mapping, "tables")
-        
-        return StreamingResponse(
-            iter([buffer.getvalue()]),
-            media_type="application/pdf",
-            headers={
-                "Content-Disposition": "attachment; filename=snapanalyst_tables.pdf"
-            }
-        )
-    except Exception as e:
-        logger.error(f"Error exporting tables to PDF: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/export/tables/markdown", summary="Export all tables to Markdown")
-async def export_tables_markdown():
-    """
-    Export all table structures to Markdown format.
-    
-    Returns a Markdown document with:
-    - Table descriptions
-    - Column tables
-    - Formatted for GitHub/GitLab
-    
-    **Usage:**
-    ```bash
-    curl http://localhost:8000/api/v1/schema/export/tables/markdown -o tables.md
-    ```
-    """
-    logger.info("Exporting tables to Markdown")
-    try:
-        data_mapping = load_json_file(DATA_MAPPING_PATH)
-        markdown = SchemaExporter.to_markdown(data_mapping, "tables")
-        
-        return Response(
-            content=markdown,
-            media_type="text/markdown",
-            headers={
-                "Content-Disposition": "attachment; filename=snapanalyst_tables.md"
-            }
-        )
-    except Exception as e:
-        logger.error(f"Error exporting tables to Markdown: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/export/code-lookups/csv", summary="Export code lookups to CSV")
-async def export_code_lookups_csv():
-    """
-    Export all code lookup tables to CSV format.
-    
-    Returns a CSV file with columns:
-    - Lookup Name
-    - Code
-    - Description
-    
-    **Usage:**
-    ```bash
-    curl http://localhost:8000/api/v1/schema/export/code-lookups/csv -o code_lookups.csv
-    ```
-    """
-    logger.info("Exporting code lookups to CSV")
-    try:
-        data_mapping = load_json_file(DATA_MAPPING_PATH)
-        buffer = SchemaExporter.to_csv_buffer(data_mapping, "code_lookups")
-        
-        return StreamingResponse(
-            iter([buffer.getvalue()]),
-            media_type="text/csv",
-            headers={
-                "Content-Disposition": "attachment; filename=snapanalyst_code_lookups.csv"
-            }
-        )
-    except Exception as e:
-        logger.error(f"Error exporting code lookups to CSV: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/export/code-lookups/pdf", summary="Export code lookups to PDF")
-async def export_code_lookups_pdf():
-    """
-    Export all code lookup tables to PDF format.
-    
-    Returns a formatted PDF document with:
-    - Lookup descriptions
-    - Code-to-description mappings
-    - Source field information
-    
-    **Usage:**
-    ```bash
-    curl http://localhost:8000/api/v1/schema/export/code-lookups/pdf -o code_lookups.pdf
-    ```
-    """
-    logger.info("Exporting code lookups to PDF")
-    try:
-        data_mapping = load_json_file(DATA_MAPPING_PATH)
-        buffer = SchemaExporter.to_pdf_buffer(data_mapping, "code_lookups")
-        
-        return StreamingResponse(
-            iter([buffer.getvalue()]),
-            media_type="application/pdf",
-            headers={
-                "Content-Disposition": "attachment; filename=snapanalyst_code_lookups.pdf"
-            }
-        )
-    except Exception as e:
-        logger.error(f"Error exporting code lookups to PDF: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/export/code-lookups/markdown", summary="Export code lookups to Markdown")
-async def export_code_lookups_markdown():
-    """
-    Export all code lookup tables to Markdown format.
-    
-    Returns a Markdown document with:
-    - Lookup descriptions
-    - Code tables
-    - Formatted for GitHub/GitLab
-    
-    **Usage:**
-    ```bash
-    curl http://localhost:8000/api/v1/schema/export/code-lookups/markdown -o code_lookups.md
-    ```
-    """
-    logger.info("Exporting code lookups to Markdown")
-    try:
-        data_mapping = load_json_file(DATA_MAPPING_PATH)
-        markdown = SchemaExporter.to_markdown(data_mapping, "code_lookups")
-        
-        return Response(
-            content=markdown,
-            media_type="text/markdown",
-            headers={
-                "Content-Disposition": "attachment; filename=snapanalyst_code_lookups.md"
-            }
-        )
-    except Exception as e:
-        logger.error(f"Error exporting code lookups to Markdown: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/export/database-info/pdf", summary="Export database info to PDF")
-async def export_database_info_pdf():
-    """
-    Export database information to PDF format.
-    
-    Returns a formatted PDF document with:
-    - Database name and version
-    - Description and purpose
-    - Available fiscal years
-    - Data source information
-    
-    **Usage:**
-    ```bash
-    curl http://localhost:8000/api/v1/schema/export/database-info/pdf -o database_info.pdf
-    ```
-    """
-    logger.info("Exporting database info to PDF")
-    try:
-        data_mapping = load_json_file(DATA_MAPPING_PATH)
-        buffer = SchemaExporter.to_pdf_buffer(data_mapping, "database_info")
-        
-        return StreamingResponse(
-            iter([buffer.getvalue()]),
-            media_type="application/pdf",
-            headers={
-                "Content-Disposition": "attachment; filename=snapanalyst_database_info.pdf"
-            }
-        )
-    except Exception as e:
-        logger.error(f"Error exporting database info to PDF: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/export/relationships/csv", summary="Export relationships to CSV")
-async def export_relationships_csv():
-    """
-    Export table relationships to CSV format.
-    
-    Returns a CSV file with columns:
-    - Relationship
-    - Type
-    - Description
-    - Join Condition
-    
-    **Usage:**
-    ```bash
-    curl http://localhost:8000/api/v1/schema/export/relationships/csv -o relationships.csv
-    ```
-    """
-    logger.info("Exporting relationships to CSV")
-    try:
-        data_mapping = load_json_file(DATA_MAPPING_PATH)
-        buffer = SchemaExporter.to_csv_buffer(data_mapping, "relationships")
-        
-        return StreamingResponse(
-            iter([buffer.getvalue()]),
-            media_type="text/csv",
-            headers={
-                "Content-Disposition": "attachment; filename=snapanalyst_relationships.csv"
-            }
-        )
-    except Exception as e:
-        logger.error(f"Error exporting relationships to CSV: {e}")
-        raise HTTPException(status_code=500, detail=str(e))

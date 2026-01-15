@@ -137,8 +137,8 @@ async def get_schema_documentation():
         inspector = inspect(engine)
         db_schema = _get_database_schema(inspector)
         
-        # Step 2: Load documentation from JSON file
-        schema_path = Path(__file__).parent.parent.parent.parent / "data_mapping.json"
+        # Step 2: Load documentation from JSON file (now in datasets/snap/)
+        schema_path = Path(__file__).parent.parent.parent.parent / "datasets" / "snap" / "data_mapping.json"
         
         if not schema_path.exists():
             # Fallback to old schema_documentation.json
@@ -433,7 +433,8 @@ async def get_example_queries():
         List of example queries with descriptions
     """
     try:
-        examples_path = Path(__file__).parent.parent.parent / "query_examples.json"
+        # Query examples now in datasets/snap/
+        examples_path = Path(__file__).parent.parent.parent.parent / "datasets" / "snap" / "query_examples.json"
         
         if not examples_path.exists():
             # Return default examples if file doesn't exist yet

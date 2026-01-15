@@ -48,28 +48,31 @@ class Household(Base):
     case_classification: Mapped[Optional[int]] = mapped_column(Integer, comment="CASE - Classification code (1-3): 1=Included in error rate, 2=Excluded SSA, 3=Excluded FNS")
     
     # Geographic & Administrative
-    region_code: Mapped[Optional[str]] = mapped_column(String(10))
-    state_code: Mapped[Optional[str]] = mapped_column(String(2), index=True)
-    state_name: Mapped[Optional[str]] = mapped_column(String(50))
-    year_month: Mapped[Optional[str]] = mapped_column(String(6), index=True)
-    status: Mapped[Optional[int]] = mapped_column(Integer)
-    stratum: Mapped[Optional[str]] = mapped_column(String(20))
+    region_code: Mapped[Optional[str]] = mapped_column(String(10), comment="FNS region code")
+    state_code: Mapped[Optional[str]] = mapped_column(String(2), index=True, comment="2-letter state abbreviation")
+    state_name: Mapped[Optional[str]] = mapped_column(String(50), comment="Full state name for geographic queries")
+    year_month: Mapped[Optional[str]] = mapped_column(String(6), index=True, comment="Review period YYYYMM")
+    status: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("ref_status.code", ondelete="SET NULL"),
+        comment="Error status: JOIN ref_status for description (1=correct, 2=overissuance, 3=underissuance)"
+    )
+    stratum: Mapped[Optional[str]] = mapped_column(String(20), comment="Sampling stratum code")
     
     # Household Composition
-    raw_household_size: Mapped[Optional[int]] = mapped_column(Integer)
-    certified_household_size: Mapped[Optional[int]] = mapped_column(Integer)
-    snap_unit_size: Mapped[Optional[int]] = mapped_column(Integer)
-    num_noncitizens: Mapped[Optional[int]] = mapped_column(Integer, default=0)
-    num_disabled: Mapped[Optional[int]] = mapped_column(Integer, default=0)
-    num_elderly: Mapped[Optional[int]] = mapped_column(Integer, default=0)
-    num_children: Mapped[Optional[int]] = mapped_column(Integer, default=0)
-    composition_code: Mapped[Optional[str]] = mapped_column(String(10))
+    raw_household_size: Mapped[Optional[int]] = mapped_column(Integer, comment="Total persons in household")
+    certified_household_size: Mapped[Optional[int]] = mapped_column(Integer, comment="SNAP-certified household size")
+    snap_unit_size: Mapped[Optional[int]] = mapped_column(Integer, comment="SNAP unit size for benefit calculation")
+    num_noncitizens: Mapped[Optional[int]] = mapped_column(Integer, default=0, comment="Count of non-citizen members")
+    num_disabled: Mapped[Optional[int]] = mapped_column(Integer, default=0, comment="Count of disabled members")
+    num_elderly: Mapped[Optional[int]] = mapped_column(Integer, default=0, comment="Count of members age 60+")
+    num_children: Mapped[Optional[int]] = mapped_column(Integer, default=0, comment="Count of members under 18")
+    composition_code: Mapped[Optional[str]] = mapped_column(String(10), comment="Household composition type")
     
-    # Financial Summary
-    gross_income: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(12, 2))
-    net_income: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(12, 2))
-    earned_income: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(12, 2))
-    unearned_income: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(12, 2))
+    # Financial Summary (monthly amounts in dollars)
+    gross_income: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(12, 2), comment="Total monthly gross income before deductions")
+    net_income: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(12, 2), comment="Monthly income after deductions")
+    earned_income: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(12, 2), comment="Monthly earned income (wages, self-employment)")
+    unearned_income: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(12, 2), comment="Monthly unearned income (SSI, TANF, etc)")
     
     # Assets
     liquid_resources: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(12, 2))
@@ -91,16 +94,22 @@ class Household(Base):
     shelter_expense: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(10, 2))
     homeless_deduction: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(10, 2))
     
-    # Benefits
-    snap_benefit: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(10, 2), index=True)
-    raw_benefit: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(10, 2))
-    maximum_benefit: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(10, 2))
-    minimum_benefit: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(10, 2))
+    # Benefits (monthly amounts in dollars)
+    snap_benefit: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(10, 2), index=True, comment="QC-calculated correct SNAP benefit amount")
+    raw_benefit: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(10, 2), comment="Originally issued SNAP benefit (before QC correction)")
+    maximum_benefit: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(10, 2), comment="Maximum SNAP benefit for household size")
+    minimum_benefit: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(10, 2), comment="Minimum SNAP benefit amount")
     
-    # Eligibility & Certification
-    categorical_eligibility: Mapped[Optional[int]] = mapped_column(Integer)
-    expedited_service: Mapped[Optional[int]] = mapped_column(Integer)
-    certification_month: Mapped[Optional[str]] = mapped_column(String(6))
+    # Eligibility & Certification (FK to reference tables)
+    categorical_eligibility: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("ref_categorical_eligibility.code", ondelete="SET NULL"),
+        comment="Categorical eligibility status: JOIN ref_categorical_eligibility"
+    )
+    expedited_service: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("ref_expedited_service.code", ondelete="SET NULL"),
+        comment="Expedited service status: JOIN ref_expedited_service"
+    )
+    certification_month: Mapped[Optional[str]] = mapped_column(String(6), comment="Certification period YYYYMM")
     # Note: last_certification_date is actually an integer code in the source data, not a date
     last_certification_date: Mapped[Optional[int]] = mapped_column(Integer)
     
@@ -110,9 +119,9 @@ class Household(Base):
     tanf_indicator: Mapped[Optional[bool]] = mapped_column(Boolean)
     
     # QC Information
-    amount_error: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(10, 2))
-    gross_test_result: Mapped[Optional[int]] = mapped_column(Integer)
-    net_test_result: Mapped[Optional[int]] = mapped_column(Integer)
+    amount_error: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(10, 2), comment="Dollar amount of benefit error (positive=over, negative=under)")
+    gross_test_result: Mapped[Optional[int]] = mapped_column(Integer, comment="Gross income test result (1=pass, 2=fail)")
+    net_test_result: Mapped[Optional[int]] = mapped_column(Integer, comment="Net income test result (1=pass, 2=fail)")
     
     # Statistical Weights
     household_weight: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(18, 8))
@@ -165,43 +174,50 @@ class HouseholdMember(Base):
         Integer, primary_key=True, comment="Member position in household (1-17)"
     )
     
-    # Demographics
+    # Demographics (FK to reference tables)
     age: Mapped[Optional[int]] = mapped_column(
-        Integer, CheckConstraint("age >= 0 AND age <= 120")
+        Integer, CheckConstraint("age >= 0 AND age <= 120"),
+        comment="Age in years (0=under 1, 98=98 or older)"
     )
-    sex: Mapped[Optional[int]] = mapped_column(Integer)
-    race_ethnicity: Mapped[Optional[int]] = mapped_column(Integer)
-    relationship_to_head: Mapped[Optional[int]] = mapped_column(Integer)
-    citizenship_status: Mapped[Optional[int]] = mapped_column(Integer)
-    years_education: Mapped[Optional[int]] = mapped_column(Integer)
+    sex: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("ref_sex.code", ondelete="SET NULL"),
+        comment="Gender: JOIN ref_sex for description (1=Male, 2=Female)"
+    )
+    race_ethnicity: Mapped[Optional[int]] = mapped_column(Integer, comment="Race/ethnicity code")
+    relationship_to_head: Mapped[Optional[int]] = mapped_column(Integer, comment="Relationship to head of household")
+    citizenship_status: Mapped[Optional[int]] = mapped_column(Integer, comment="Citizenship status code")
+    years_education: Mapped[Optional[int]] = mapped_column(Integer, comment="Years of education completed")
     
-    # Status Indicators
-    snap_affiliation_code: Mapped[Optional[int]] = mapped_column(Integer, index=True)
-    disability_indicator: Mapped[Optional[int]] = mapped_column(Integer)  # Stored as integer codes
-    foster_child_indicator: Mapped[Optional[int]] = mapped_column(Integer)  # Stored as integer codes
-    work_registration_status: Mapped[Optional[int]] = mapped_column(Integer)
-    abawd_status: Mapped[Optional[int]] = mapped_column(Integer)
-    working_indicator: Mapped[Optional[int]] = mapped_column(Integer)  # Stored as integer codes
+    # Status Indicators (FK to reference tables)
+    snap_affiliation_code: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("ref_snap_affiliation.code", ondelete="SET NULL"), index=True,
+        comment="SNAP eligibility status: JOIN ref_snap_affiliation for description"
+    )
+    disability_indicator: Mapped[Optional[int]] = mapped_column(Integer, comment="Disability status (1=disabled)")
+    foster_child_indicator: Mapped[Optional[int]] = mapped_column(Integer, comment="Foster child status")
+    work_registration_status: Mapped[Optional[int]] = mapped_column(Integer, comment="Work registration status code")
+    abawd_status: Mapped[Optional[int]] = mapped_column(Integer, comment="ABAWD (Able-Bodied Adult) status")
+    working_indicator: Mapped[Optional[int]] = mapped_column(Integer, comment="Currently working indicator")
     
     # Employment
     employment_region: Mapped[Optional[int]] = mapped_column(Integer)
     employment_status_a: Mapped[Optional[int]] = mapped_column(Integer)
     employment_status_b: Mapped[Optional[int]] = mapped_column(Integer)
     
-    # Earned Income Sources
-    wages: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), default=0)
-    self_employment_income: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), default=0)
-    earned_income_tax_credit: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), default=0)
-    other_earned_income: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), default=0)
+    # Earned Income Sources (monthly amounts in dollars)
+    wages: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), default=0, comment="Monthly wages and salaries")
+    self_employment_income: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), default=0, comment="Monthly self-employment income")
+    earned_income_tax_credit: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), default=0, comment="Earned Income Tax Credit")
+    other_earned_income: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), default=0, comment="Other earned income")
     
-    # Unearned Income Sources
-    social_security: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), default=0)
-    ssi: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), default=0)
-    veterans_benefits: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), default=0)
-    unemployment: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), default=0)
-    workers_compensation: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), default=0)
-    tanf: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), default=0)
-    child_support: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), default=0)
+    # Unearned Income Sources (monthly amounts in dollars)
+    social_security: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), default=0, comment="RSDI/Social Security benefits")
+    ssi: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), default=0, comment="Supplemental Security Income")
+    veterans_benefits: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), default=0, comment="Veterans benefits")
+    unemployment: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), default=0, comment="Unemployment compensation")
+    workers_compensation: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), default=0, comment="Workers compensation")
+    tanf: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), default=0, comment="TANF/Welfare benefits")
+    child_support: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), default=0, comment="Child support received")
     general_assistance: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), default=0)
     education_loans: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), default=0)
     other_government_income: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), default=0)
@@ -267,20 +283,38 @@ class QCError(Base):
         Integer, primary_key=True, comment="Error sequence number for this household (1-9)"
     )
     
-    # Error Details
-    element_code: Mapped[Optional[int]] = mapped_column(Integer, index=True)
-    nature_code: Mapped[Optional[int]] = mapped_column(Integer, index=True)
-    responsible_agency: Mapped[Optional[int]] = mapped_column(Integer)
-    error_amount: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(10, 2), index=True)
-    discovery_method: Mapped[Optional[int]] = mapped_column(Integer)
-    verification_status: Mapped[Optional[int]] = mapped_column(Integer)
+    # Error Details (FK to reference tables for Gold Standard lookups)
+    element_code: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("ref_element.code", ondelete="SET NULL"), index=True,
+        comment="Error element type: JOIN ref_element for description and category"
+    )
+    nature_code: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("ref_nature.code", ondelete="SET NULL"), index=True,
+        comment="Nature of error (what went wrong): JOIN ref_nature for description"
+    )
+    responsible_agency: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("ref_agency_responsibility.code", ondelete="SET NULL"),
+        comment="Who caused error: JOIN ref_agency_responsibility (use responsibility_type for client vs agency)"
+    )
+    error_amount: Mapped[Optional[Decimal]] = mapped_column(
+        DECIMAL(10, 2), index=True,
+        comment="Dollar amount of this specific error (positive=overissuance)"
+    )
+    discovery_method: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("ref_discovery.code", ondelete="SET NULL"),
+        comment="How error was discovered: JOIN ref_discovery"
+    )
+    verification_status: Mapped[Optional[int]] = mapped_column(Integer, comment="Verification status code")
     
     # Timing
-    occurrence_date: Mapped[Optional[int]] = mapped_column(Integer)  # Stored as integer YYYYMMDD
-    time_period: Mapped[Optional[str]] = mapped_column(String(20))
+    occurrence_date: Mapped[Optional[int]] = mapped_column(Integer, comment="When error occurred (YYYYMMDD)")
+    time_period: Mapped[Optional[str]] = mapped_column(String(20), comment="Error time period")
     
-    # Finding
-    error_finding: Mapped[Optional[int]] = mapped_column(Integer)
+    # Finding (FK to reference table)
+    error_finding: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("ref_error_finding.code", ondelete="SET NULL"),
+        comment="Error finding (overissuance/underissuance/ineligible): JOIN ref_error_finding"
+    )
     
     # Metadata
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
