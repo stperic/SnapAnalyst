@@ -295,8 +295,8 @@ I'm your AI assistant for analyzing **SNAP Quality Control data**. I can help yo
 💬 *"What's the average income by state?"*  
 💬 *"Find all cases with payment errors"*
 
+---
 - **`/help`** - Show all commands
-
 ---
 
 **Ask me anything about your SNAP QC data!** 🚀
