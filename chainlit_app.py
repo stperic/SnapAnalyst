@@ -196,7 +196,15 @@ async def generate_ai_summary(question: str, sql: str, results: List[Dict], row_
             code_reference = "\n\n📖 CODE REFERENCE (CRITICAL - Use descriptions, NOT numeric codes):\n"
             for col_name, code_dict in code_enrichment.items():
                 code_reference += f"\n{col_name.replace('_', ' ').title()}:\n"
-                for code, description in sorted(code_dict.items(), key=lambda x: x[0]):
+                # Sort codes numerically (convert to int for sorting, fallback to string for non-numeric codes)
+                def numeric_sort_key(item):
+                    code = item[0]
+                    try:
+                        return (0, int(code))  # Numeric codes first, sorted numerically
+                    except (ValueError, TypeError):
+                        return (1, code)  # Non-numeric codes second, sorted lexicographically
+                
+                for code, description in sorted(code_dict.items(), key=numeric_sort_key):
                     code_reference += f"  - Code {code}: {description}\n"
             code_reference += "\n⚠️ IMPORTANT: When discussing results, use the descriptions above (e.g., 'Shelter deduction'), NOT the numeric codes (e.g., '363')!\n"
         
@@ -629,7 +637,10 @@ async def on_download_csv(action: cl.Action):
         results = cl.user_session.get("last_query_results")
         
         if not results or len(results) == 0:
-            await cl.Message(content="⚠️ No query results available to download.").send()
+            await cl.Message(
+                content="I don't have any query results to export right now. Please run a query first, then I can create a CSV export for you.",
+                author="SnapAnalysis App"
+            ).send()
             return
         
         # Create CSV file
@@ -654,13 +665,36 @@ async def on_download_csv(action: cl.Action):
             )
         ]
         
+        # Calculate file size
+        import os
+        file_size_bytes = os.path.getsize(csv_file_path)
+        file_size_kb = file_size_bytes / 1024
+        
+        # Get column count
+        column_count = len(headers)
+        
+        # Create personalized response as SnapAnalyst assistant
+        response = f"""Great! I've prepared your CSV export for you.
+
+📊 **Export Details:**
+- **Rows:** {len(results):,}
+- **Columns:** {column_count}
+- **File Size:** {file_size_kb:.1f} KB
+- **Filename:** `{csv_filename}`
+
+Your file is ready to download below. You can open it in Excel, Google Sheets, or any spreadsheet application."""
+        
         await cl.Message(
-            content=f"✅ CSV ready ({len(results)} rows)",
-            elements=elements
+            content=response,
+            elements=elements,
+            author="SnapAnalysis App"
         ).send()
         
     except Exception as e:
-        await cl.Message(content=f"❌ Error creating CSV: {str(e)}").send()
+        await cl.Message(
+            content=f"I encountered an error while creating your CSV file: {str(e)}\n\nPlease try again, or let me know if you need help troubleshooting this.",
+            author="SnapAnalysis App"
+        ).send()
 
 
 @cl.on_message
