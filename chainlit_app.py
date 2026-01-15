@@ -295,11 +295,7 @@ I'm your AI assistant for analyzing **SNAP Quality Control data**. I can help yo
 💬 *"What's the average income by state?"*  
 💬 *"Find all cases with payment errors"*
 
-### 📋 Special Commands:
 - **`/help`** - Show all commands
-- **`/upload`** - Upload a CSV file from your computer
-- **`/export`** - Export all data to Excel with README
-- **`/filter status`** - Check current filter settings
 
 ---
 
