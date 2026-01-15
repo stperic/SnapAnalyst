@@ -57,13 +57,9 @@ hide_cot = false
 # Link to your github repo. This will add a github button in the UI's header.
 # github = "https://github.com/yourusername/snapanalyst"
 
-<<<<<<< Current (Your changes)
 # Custom logo configuration
 logo_dark = "/public/logo_dark.png"
 logo_light = "/public/logo_light.png"
-
-=======
->>>>>>> Incoming (Background Agent changes)
 # Specify a CSS file that can be used to customize the user interface.
 # The CSS file can be served from the public directory or via an external link.
 custom_css = "/public/custom.css"

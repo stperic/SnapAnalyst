@@ -3,12 +3,13 @@ SnapAnalyst Files API Router
 
 Endpoints for discovering and managing CSV files.
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File
 from pydantic import BaseModel
 from typing import List, Optional
 from pathlib import Path
 from datetime import datetime
 import re
+import shutil
 
 from src.core.config import settings
 from src.core.logging import get_logger
@@ -199,3 +200,71 @@ async def get_file_info(filename: str):
     except Exception as e:
         logger.error(f"Failed to get file info: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get file info: {e}")
+
+
+@router.post("/upload")
+async def upload_file(file: UploadFile = File(...)):
+    """
+    Upload a CSV file to the snapdata directory.
+    
+    Args:
+        file: The CSV file to upload
+        
+    Returns:
+        File information and status
+    """
+    try:
+        # Validate file type
+        if not file.filename.endswith('.csv'):
+            raise HTTPException(
+                status_code=400,
+                detail="Only CSV files are accepted"
+            )
+        
+        # Sanitize filename
+        safe_filename = file.filename.replace('..', '').replace('/', '')
+        
+        # Save to snapdata directory
+        snapdata_path = Path(settings.snapdata_path)
+        snapdata_path.mkdir(parents=True, exist_ok=True)
+        
+        file_path = snapdata_path / safe_filename
+        
+        # Check if file already exists
+        if file_path.exists():
+            # Add timestamp to make it unique
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            name_parts = safe_filename.rsplit('.', 1)
+            safe_filename = f"{name_parts[0]}_{timestamp}.csv"
+            file_path = snapdata_path / safe_filename
+        
+        # Save uploaded file
+        with open(file_path, 'wb') as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        # Get file info
+        file_stat = file_path.stat()
+        fiscal_year = _extract_fiscal_year(safe_filename)
+        
+        logger.info(f"Uploaded file: {safe_filename} ({file_stat.st_size} bytes)")
+        
+        return {
+            "status": "success",
+            "message": f"File uploaded successfully: {safe_filename}",
+            "file": FileInfo(
+                filename=safe_filename,
+                fiscal_year=fiscal_year,
+                size_mb=round(file_stat.st_size / (1024 * 1024), 2),
+                size_bytes=file_stat.st_size,
+                last_modified=datetime.fromtimestamp(file_stat.st_mtime).isoformat(),
+                loaded=False,
+                loaded_at=None,
+                row_count=None,
+            )
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to upload file: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to upload file: {e}")

@@ -340,6 +340,9 @@ class LLMService:
     
     def get_provider_info(self) -> Dict:
         """Get information about the current LLM provider and configuration"""
+        # Check if we can generate text (lazy initialization)
+        status_text = "Ready (lazy init)" if not self._initialized else "Initialized"
+        
         return {
             "provider": self.provider,
             "sql_model": self.sql_model,
@@ -347,6 +350,7 @@ class LLMService:
             "temperature": settings.llm_temperature,
             "max_tokens": settings.llm_max_tokens,
             "initialized": self._initialized,
+            "status": status_text,
             "training_enabled": settings.vanna_training_enabled,
         }
 

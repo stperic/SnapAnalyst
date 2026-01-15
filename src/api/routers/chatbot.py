@@ -85,10 +85,12 @@ class ProviderInfoResponse(BaseModel):
     """Response model for LLM provider information"""
     
     provider: str = Field(..., description="Current LLM provider")
-    model: str = Field(..., description="Current LLM model")
+    sql_model: str = Field(..., description="Model used for SQL generation")
+    summary_model: str = Field(..., description="Model used for text summaries")
     temperature: float = Field(..., description="LLM temperature setting")
     max_tokens: int = Field(..., description="Maximum tokens for LLM response")
     initialized: bool = Field(..., description="Whether service is initialized")
+    status: str = Field(..., description="Service status description")
     training_enabled: bool = Field(..., description="Whether training is enabled")
 
 

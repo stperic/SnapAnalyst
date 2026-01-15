@@ -279,21 +279,14 @@ I'm your AI assistant for analyzing **SNAP Quality Control data**. I can help yo
 ✅ **Query the database** using natural language  
 ✅ **Generate SQL** from your questions  
 ✅ **Execute queries** and show results  
+✅ **Upload CSV files** from your browser  
 ✅ **Load data** from CSV files  
 ✅ **Download data** to Excel with comprehensive README  
 ✅ **Explain database schema** and relationships
 
 ---
 
-### 🔍 Data Filters
 
-Use the **filters in the settings** (click the settings icon in the sidebar) to:
-- Filter by **State** (default: All States)
-- Filter by **Fiscal Year** (default: All Years)
-
-Once set, all queries and exports will automatically use your selected filters!
-
----
 
 ### 🚀 Quick Start Examples:
 
@@ -304,7 +297,8 @@ Once set, all queries and exports will automatically use your selected filters!
 
 ### 📋 Special Commands:
 - **`/help`** - Show all commands
-- **`/download`** - Export all data to Excel with README
+- **`/upload`** - Upload a CSV file from your computer
+- **`/export`** - Export all data to Excel with README
 - **`/filter status`** - Check current filter settings
 
 ---
@@ -458,14 +452,14 @@ async def handle_command(command: str, args: Optional[str] = None):
 **Data Loading:**
 - `/files` - List available CSV files
 - `/load <filename>` - Load a specific CSV file (e.g., `/load qc_pub_fy2023`)
+- `/upload` - Upload a CSV file from your computer
 
 **Data Export:**
-- `/download` - Download all data to Excel with README
-- `/download <fiscal_year>` - Download specific year (e.g., `/download 2023`)
+- `/export` - Download all data to Excel with README
+- `/export <fiscal_year>` - Download specific year (e.g., `/export 2023`)
 
 **Data Filtering:**
 - `/filter status` - Check current filter settings
-- Use Settings (⚙️) to change filters
 
 **Database Management:**
 - `/database` - View database statistics
@@ -489,6 +483,9 @@ Just type your question naturally to query the data! 🚀
     elif command == "/files":
         await handle_files_command()
     
+    elif command == "/upload":
+        await handle_upload_command()
+    
     elif command == "/reset":
         await handle_reset_command()
     
@@ -507,7 +504,7 @@ Just type your question naturally to query the data! 🚀
     elif command == "/history":
         await handle_history_command()
     
-    elif command == "/download":
+    elif command == "/export":
         await handle_download_command(args)
     
     elif command == "/filter":
@@ -686,15 +683,27 @@ async def handle_provider_command():
     try:
         provider_info = await call_api("/chat/provider")
         
+        # Determine status display
+        is_initialized = provider_info.get('initialized', False)
+        training_enabled = provider_info.get('training_enabled', False)
+        
+        # Status explanation
+        if not training_enabled:
+            status_note = "\n\n💡 **Note:** Training is disabled to prevent slow startup. The LLM service initializes automatically on first use (lazy initialization)."
+        else:
+            status_note = ""
+        
         content = f"""
 ### 🤖 LLM Provider Information
 
 **Provider:** {provider_info.get('provider', 'Unknown').upper()}  
-**Model:** {provider_info.get('model', 'Unknown')}  
+**SQL Model:** {provider_info.get('sql_model', 'Unknown')}  
+**Summary Model:** {provider_info.get('summary_model', 'Unknown')}  
 **Temperature:** {provider_info.get('temperature', 'N/A')}  
 **Max Tokens:** {provider_info.get('max_tokens', 'N/A')}  
-**Training:** {'Enabled ✅' if provider_info.get('training_enabled', False) else 'Disabled ❌'}  
-**Status:** {'✅ Initialized' if provider_info.get('initialized', False) else '❌ Not Initialized'}
+**Status:** {provider_info.get('status', 'Unknown')}  
+**Training:** {'✅ Enabled' if training_enabled else '⚠️ Disabled (Performance Mode)'}
+{status_note}
         """
         
         await cl.Message(content=content).send()
@@ -735,6 +744,82 @@ async def handle_files_command():
         
     except Exception as e:
         await cl.Message(content=f'<div class="warning-box">❌ Error listing files: {str(e)}</div>').send()
+
+
+async def handle_upload_command():
+    """Handle /upload command - upload CSV file from browser"""
+    try:
+        # Ask user to upload a file
+        files = await cl.AskFileMessage(
+            content="📤 **Upload CSV File**\n\nPlease select a CSV file to upload to the database.\n\n**Accepted formats:**\n- CSV files (.csv)\n- Maximum size: 100 MB\n\n**File naming:**\n- Include fiscal year in filename (e.g., `qc_pub_fy2023.csv`)\n- File will be saved to the snapdata directory",
+            accept=["text/csv", ".csv"],
+            max_size_mb=100,
+            max_files=1,
+            timeout=180,
+        ).send()
+        
+        if not files:
+            await cl.Message(content="⚠️ No file uploaded.").send()
+            return
+        
+        uploaded_file = files[0]
+        
+        # Show upload progress
+        msg = cl.Message(content=f"📤 Uploading `{uploaded_file.name}`...")
+        await msg.send()
+        
+        # Upload file to API
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            with open(uploaded_file.path, 'rb') as f:
+                files_data = {'file': (uploaded_file.name, f, 'text/csv')}
+                response = await client.post(
+                    f"{API_BASE_URL}{API_PREFIX}/data/upload",
+                    files=files_data
+                )
+                response.raise_for_status()
+                result = response.json()
+        
+        file_info = result.get("file", {})
+        
+        # Show success message
+        success_msg = f"""
+<div class="success-box">
+✅ **File Uploaded Successfully!**
+
+**Filename:** `{file_info.get('filename', uploaded_file.name)}`  
+**Size:** {file_info.get('size_mb', 0):.2f} MB  
+**Fiscal Year:** {file_info.get('fiscal_year', 'N/A')}
+
+The file has been saved to the snapdata directory.
+
+**Next steps:**
+- Use `/load {file_info.get('filename', uploaded_file.name)}` to load this file into the database
+- Or use `/files` to see all available files
+</div>
+        """
+        
+        await cl.Message(content=success_msg).send()
+        
+        # Optionally ask if they want to load it now
+        actions = [
+            cl.Action(
+                name=f"load_{file_info.get('filename')}",
+                value=file_info.get('filename'),
+                label=f"📥 Load Now"
+            )
+        ]
+        
+        await cl.Message(
+            content="Would you like to load this file into the database now?",
+            actions=actions
+        ).send()
+        
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"Upload error: {e}")
+        print(error_trace)
+        await cl.Message(content=f'<div class="warning-box">❌ Error uploading file: {str(e)}</div>').send()
 
 
 async def handle_reset_command():
@@ -949,7 +1034,7 @@ async def handle_filter_command(args: Optional[str] = None):
 
 
 async def handle_download_command(fiscal_year: Optional[str] = None):
-    """Handle /download command - download all data to Excel"""
+    """Handle /export command - download all data to Excel"""
     try:
         await cl.Message(content="📥 Preparing your data export...").send()
         
