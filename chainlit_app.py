@@ -9,27 +9,147 @@ from typing import Dict, List, Optional
 from datetime import datetime
 import os
 from pathlib import Path
+import logging
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 # API Configuration
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
 API_PREFIX = "/api/v1"
 
+# Code column mappings - maps column names to lookup keys in data_mapping.json
+CODE_COLUMN_MAPPINGS = {
+    'element_code': 'element_codes',
+    'nature_code': 'nature_codes',
+    'status': 'status_codes',
+    'error_finding': 'error_finding_codes',
+    'case_classification': 'case_classification_codes',
+    'expedited_service': 'expedited_service_codes',
+    'categorical_eligibility': 'categorical_eligibility_codes',
+    'sex': 'sex_codes',
+    'snap_affiliation_code': 'snap_affiliation_codes',
+    'agency_responsibility': 'agency_responsibility_codes',
+    'discovery_method': 'discovery_method_codes',
+}
 
-async def generate_ai_summary(question: str, sql: str, results: List[Dict], row_count: int, filters: str = "") -> str:
+# Global cache for code lookups (loaded once)
+_CODE_LOOKUPS_CACHE = None
+
+
+def load_code_lookups() -> Dict:
     """
-    Generate AI summary of query results using hybrid approach.
+    Load code lookups from data_mapping.json.
+    Cached after first load for performance.
+    
+    Returns:
+        Dictionary of all code lookups
+    """
+    global _CODE_LOOKUPS_CACHE
+    
+    if _CODE_LOOKUPS_CACHE is not None:
+        return _CODE_LOOKUPS_CACHE
+    
+    try:
+        data_mapping_path = Path(__file__).parent / "data_mapping.json"
+        with open(data_mapping_path, 'r') as f:
+            data = json.load(f)
+            _CODE_LOOKUPS_CACHE = data.get('code_lookups', {})
+            logger.info(f"Loaded {len(_CODE_LOOKUPS_CACHE)} code lookup tables from data_mapping.json")
+            return _CODE_LOOKUPS_CACHE
+    except Exception as e:
+        logger.error(f"Error loading code lookups: {e}")
+        return {}
+
+
+def enrich_results_with_code_descriptions(results: List[Dict]) -> Dict[str, Dict[str, str]]:
+    """
+    Find code columns in results and load their descriptions.
+    Returns only the codes that actually appear in the results.
     
     Args:
-        question: User's original question
+        results: List of query result dictionaries
+        
+    Returns:
+        Dictionary mapping column names to {code: description} dictionaries
+        Example: {
+            'element_code': {
+                '311': 'Wages and salaries',
+                '363': 'Shelter deduction'
+            }
+        }
+    """
+    if not results:
+        return {}
+    
+    # Detect code columns in results
+    column_names = set(results[0].keys())
+    code_columns = column_names & CODE_COLUMN_MAPPINGS.keys()
+    
+    if not code_columns:
+        return {}  # No code columns found
+    
+    logger.info(f"Detected code columns in results: {code_columns}")
+    
+    # Load code lookups
+    code_lookups = load_code_lookups()
+    
+    enriched = {}
+    for col_name in code_columns:
+        lookup_key = CODE_COLUMN_MAPPINGS[col_name]
+        
+        # Extract unique codes from results (convert to string for lookup)
+        unique_codes = set()
+        for row in results:
+            code_value = row.get(col_name)
+            if code_value is not None:
+                unique_codes.add(str(code_value))
+        
+        if not unique_codes:
+            continue
+        
+        # Load ONLY those codes that appear in results
+        lookup_table = code_lookups.get(lookup_key, {})
+        
+        enriched[col_name] = {}
+        for code in unique_codes:
+            # Get description, skip metadata fields
+            if code in lookup_table and code not in ['description', 'source_field']:
+                enriched[col_name][code] = lookup_table[code]
+            else:
+                enriched[col_name][code] = f"Unknown code {code}"
+        
+        logger.info(f"Enriched {col_name}: {len(enriched[col_name])} codes mapped")
+    
+    return enriched
+
+
+async def generate_ai_summary(question: str, sql: str, results: List[Dict], row_count: int, filters: str = "", analysis_instructions: Optional[str] = None) -> str:
+    """
+    Generate AI summary of query results using dynamic prompt sizing.
+    
+    Strategy:
+    1. Always format full dataset
+    2. Build complete prompt
+    3. Check if prompt size is under limit (configured in .env)
+    4. If yes: send to LLM for AI summary
+    5. If no: use simple fallback message
+    
+    Args:
+        question: User's SQL question (left of | separator)
         sql: SQL query executed
         results: Query results
         row_count: Number of rows returned
         filters: Active filters description
+        analysis_instructions: Special analysis instructions (right of | separator)
     
     Returns:
-        AI-generated summary text
+        AI-generated summary text or simple fallback
     """
     try:
+        # Import settings for dynamic limit
+        from src.core.config import settings
+        
         # Determine approach based on result size
         if row_count == 0:
             return "No results found for your query."
@@ -41,81 +161,104 @@ async def generate_ai_summary(question: str, sql: str, results: List[Dict], row_
             filter_text = f" (filtered by {filters})" if filters else ""
             return f"**{value:,}** {column_name.replace('_', ' ')}{filter_text}."
         
-        # Prepare data context based on row count
-        if row_count <= 10:
-            # Full context - send all results
-            data_context = f"All {row_count} results:\n{json.dumps(results, indent=2)}"
-            approach = "detailed"
-        elif row_count <= 100:
-            # Statistical summary + sample
-            sample = results[:5]
-            
-            # Calculate basic statistics for numeric columns
-            stats = {}
-            if results:
-                for key in results[0].keys():
-                    values = [r.get(key) for r in results if r.get(key) is not None]
-                    if values and isinstance(values[0], (int, float)):
-                        try:
-                            stats[key] = {
-                                "min": min(values),
-                                "max": max(values),
-                                "avg": sum(values) / len(values) if values else 0
-                            }
-                        except:
-                            pass
-            
-            data_context = f"Results: {row_count} rows\nSample (first 5):\n{json.dumps(sample, indent=2)}"
-            if stats:
-                data_context += f"\n\nStatistics:\n{json.dumps(stats, indent=2)}"
-            approach = "statistical"
-        else:
-            # Simple summary - just counts and sample
-            sample = results[:3]
-            data_context = f"Results: {row_count} rows (large dataset)\nSample (first 3):\n{json.dumps(sample, indent=2)}"
-            approach = "simple"
+        # Helper function to format numeric values to 2 decimals
+        def format_results_for_llm(data):
+            """Format numeric values to 2 decimals to reduce tokens and improve readability"""
+            formatted = []
+            for row in data:
+                formatted_row = {}
+                for key, value in row.items():
+                    # Try to format numeric values
+                    try:
+                        if isinstance(value, float):
+                            formatted_row[key] = round(value, 2)
+                        elif isinstance(value, str):
+                            # Try to parse as float
+                            float_val = float(value)
+                            formatted_row[key] = round(float_val, 2)
+                        else:
+                            formatted_row[key] = value
+                    except (ValueError, TypeError):
+                        # Not a number, keep as is
+                        formatted_row[key] = value
+                formatted.append(formatted_row)
+            return formatted
         
-        # Build system prompt
-        system_prompt = f"""You are a helpful data analyst. Summarize these database query results in 2-3 clear, conversational sentences.
+        # Always try to format full dataset first
+        formatted_results = format_results_for_llm(results)
+        
+        # Check for code columns and enrich with descriptions
+        code_enrichment = enrich_results_with_code_descriptions(results)
+        
+        # Build code reference section if codes are present
+        code_reference = ""
+        if code_enrichment:
+            code_reference = "\n\n📖 CODE REFERENCE (CRITICAL - Use descriptions, NOT numeric codes):\n"
+            for col_name, code_dict in code_enrichment.items():
+                code_reference += f"\n{col_name.replace('_', ' ').title()}:\n"
+                for code, description in sorted(code_dict.items(), key=lambda x: x[0]):
+                    code_reference += f"  - Code {code}: {description}\n"
+            code_reference += "\n⚠️ IMPORTANT: When discussing results, use the descriptions above (e.g., 'Shelter deduction'), NOT the numeric codes (e.g., '363')!\n"
+        
+        data_context = f"""Complete dataset ({row_count} rows):
+{json.dumps(formatted_results, indent=2)}
+{code_reference}
+Note: Analyze this data to specifically answer the user's question. Consider patterns, comparisons, and insights relevant to what they asked."""
+        
+        # Build complete prompt - question-focused
+        system_prompt = f"""You are a data analyst. The user asked a question about their data. Your job is to analyze the data and provide insights that directly answer their question.
 
-GUIDELINES:
-- Start with the main finding and key numbers
-- Be specific - mention actual values, not just "results were found"
-- If there are interesting patterns, mention them briefly
-- Keep it natural and easy to understand
-- Don't mention the SQL or technical details
-- If filters are active, incorporate that context naturally
+USER'S QUESTION: "{question}"
 
-USER QUESTION: {question}
+{f"🎯 SPECIAL ANALYSIS INSTRUCTIONS: {analysis_instructions}" if analysis_instructions else ""}
+{f"^^^ CRITICAL: Follow these specific instructions in your analysis! ^^^" if analysis_instructions else ""}
 
-ACTIVE FILTERS: {filters if filters else "None"}
+{f"ACTIVE FILTERS: {filters}" if filters else ""}
 
-DATA SUMMARY:
+DATA TO ANALYZE:
 {data_context}
 
-SQL EXECUTED: {sql}
+INSTRUCTIONS:
+1. Answer the user's specific question based on the data provided
+2. {"MOST IMPORTANT: " + analysis_instructions if analysis_instructions else "Provide 2-3 sentences with relevant insights and specific values"}
+3. Use actual values from the data (numbers are already rounded to 2 decimals)
+4. If the question asks about extremes (highest/lowest), identify them accurately
+5. If the question asks about patterns or comparisons, discuss those
+6. Be natural and conversational
+7. Don't mention SQL, technical details, or how you got the data
+8. {"CRITICAL: Always use code descriptions (from CODE REFERENCE), never use numeric codes in your response!" if code_enrichment else ""}
 
-Provide a brief, insightful summary for a non-technical user:"""
+Provide your analysis:"""
 
-        # Truncate prompt if too long (API max is 2000 chars)
-        if len(system_prompt) > 1900:
-            # Reduce data_context
-            data_context_short = data_context[:500] + "... (truncated)"
-            system_prompt = f"""You are a helpful data analyst. Summarize these database query results in 2-3 clear, conversational sentences.
-
-USER QUESTION: {question}
-ACTIVE FILTERS: {filters if filters else "None"}
-DATA SUMMARY: {data_context_short}
-SQL EXECUTED: {sql}
-
-Provide a brief, insightful summary:"""
-
+        # Check prompt size against configurable limit
+        prompt_size = len(system_prompt)
+        max_prompt_size = settings.llm_summary_max_prompt_size
+        
+        # Use logger instead of print for async context
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Summary Generation - Prompt size: {prompt_size} chars, Limit: {max_prompt_size} chars, Row count: {row_count}")
+        
+        if prompt_size > max_prompt_size:
+            logger.info(f"Prompt too large ({prompt_size} > {max_prompt_size}), using fallback")
+            # Prompt too large - use simple fallback
+            if row_count <= 10:
+                return f"Found {row_count} results. See the data table below for details."
+            elif row_count <= 100:
+                return f"Query returned {row_count} results. Showing key findings in the data table below."
+            else:
+                return f"Query returned a large dataset with {row_count} rows. Showing the first 50 results."
+        
+        # Prompt fits - send to LLM for AI summary
+        # Adjust max_tokens based on dataset size
+        max_tokens = 200 if row_count > 20 else 150
+        
         # Call LLM service
         try:
             summary_response = await call_api(
                 "/chat/generate-text",
                 method="POST",
-                data={"prompt": system_prompt, "max_tokens": 150}
+                data={"prompt": system_prompt, "max_tokens": max_tokens}
             )
             
             if summary_response and "text" in summary_response:
@@ -217,7 +360,22 @@ def format_sql_results(results: List[Dict], row_count: int) -> str:
         html += f'<tr style="background: {bg}; border-bottom: 1px solid #e2e8f0;">'
         for header in headers:
             cell = row_dict.get(header)
-            cell_value = cell if cell is not None else '<span style="color: #94a3b8; font-style: italic;">NULL</span>'
+            if cell is None:
+                cell_value = '<span style="color: #94a3b8; font-style: italic;">NULL</span>'
+            else:
+                # Try to format as number (handle both float and string)
+                try:
+                    if isinstance(cell, float):
+                        cell_value = f"{cell:.2f}"
+                    elif isinstance(cell, str):
+                        # Try to parse as float
+                        float_val = float(cell)
+                        cell_value = f"{float_val:.2f}"
+                    else:
+                        cell_value = str(cell)
+                except (ValueError, TypeError):
+                    # Not a number, keep as string
+                    cell_value = str(cell)
             html += f'<td style="padding: 2px 6px; color: #1e293b; line-height: 1.2;">{cell_value}</td>'
         html += "</tr>"
     html += "</tbody></table></div>"
@@ -259,70 +417,100 @@ async def start():
                     initial_value="All Years",
                     description="Filter all queries and exports by fiscal year",
                 ),
+                cl.input_widget.Switch(
+                    id="training_enabled",
+                    label="🧠 AI Training",
+                    initial=False,
+                    description="Enable persistent training (stores embeddings in ChromaDB). When disabled, clears vector database.",
+                ),
             ]
         ).send()
         
         # Store initial filter state
         cl.user_session.set("current_state_filter", "All States")
         cl.user_session.set("current_year_filter", "All Years")
+        cl.user_session.set("training_enabled", False)
         
     except Exception as e:
         print(f"Error setting up filters: {e}")
         # Continue without filters if API call fails
     
-    # Welcome message
-    welcome = """
-# 🎯 Welcome to SnapAnalyst AI Chatbot!
-
-I'm your AI assistant for analyzing **SNAP Quality Control data**. I can help you:
-
-✅ **Query the database** using natural language  
-✅ **Generate SQL** from your questions  
-✅ **Execute queries** and show results  
-✅ **Upload CSV files** from your browser  
-✅ **Load data** from CSV files  
-✅ **Download data** to Excel with comprehensive README  
-✅ **Explain database schema** and relationships
-
----
-
-
-
-### 🚀 Quick Start Examples:
-
-💬 *"Show me the top 5 states with highest SNAP benefits"*  
-💬 *"How many households are in the database?"*  
-💬 *"What's the average income by state?"*  
-💬 *"Find all cases with payment errors"*
-
----
-- **`/help`** - Show all commands
----
-
-**Ask me anything about your SNAP QC data!** 🚀
-    """
+    # Check all system components on startup
+    status_content = "### 🚀 System Status\n\n"
+    all_ok = True
     
-    await cl.Message(content=welcome).send()
-    
-    # Check API health
+    # 1. Check API Connection
+    api_status = "❌"
+    api_version = "unknown"
     try:
-        # Try the root health endpoint (not /api/v1/health)
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.get(f"{API_BASE_URL}/health")
             health = response.json()
-        await cl.Message(
-            content=f'<div class="success-box">✅ Connected to SnapAnalyst API (v{health.get("version", "unknown")})</div>',
-            author="system"
-        ).send()
-        
-        # Skip stats check on startup - too slow and blocks the API
-        # Users can run /status command to check database statistics
-            
+            api_version = health.get("version", "unknown")
+            api_status = "✅"
     except Exception as e:
-        await cl.Message(
-            content=f'<div class="warning-box">⚠️ Could not connect to API: {str(e)}\n\nMake sure the API is running: `PYTHONPATH=. python src/api/main.py`</div>',
-            author="system"
-        ).send()
+        all_ok = False
+        logger.error(f"API health check failed: {e}")
+    
+    status_content += f"{api_status} **API Service** (v{api_version})\n"
+    
+    # 2. Check Database Connection
+    db_status = "❌"
+    db_name = "unknown"
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(f"{API_BASE_URL}/api/v1/data/health")
+            health = response.json()
+            db_info = health.get("database", {})
+            if db_info.get('connected', False):
+                db_status = "✅"
+                db_name = db_info.get('name', 'snapanalyst_db')
+            else:
+                all_ok = False
+    except Exception as e:
+        all_ok = False
+        logger.error(f"Database health check failed: {e}")
+    
+    status_content += f"{db_status} **PostgreSQL Database** ({db_name})\n"
+    
+    # 3. Check LLM Service
+    llm_status = "❌"
+    llm_provider = "unknown"
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(f"{API_BASE_URL}/api/v1/chat/provider")
+            provider_info = response.json()
+            llm_provider = provider_info.get('provider', 'Unknown').upper()
+            llm_service_status = provider_info.get('status', 'Unknown')
+            
+            # Consider it OK if provider is configured (even if lazy initialized)
+            if llm_provider and llm_provider != 'UNKNOWN':
+                llm_status = "✅"
+            else:
+                all_ok = False
+    except Exception as e:
+        all_ok = False
+        logger.error(f"LLM service check failed: {e}")
+    
+    status_content += f"{llm_status} **LLM Service** ({llm_provider})\n\n"
+    
+    # Add summary
+    if all_ok:
+        status_content += "---\n\n🟢 **Apps are ready**"
+    else:
+        status_content += "---\n\n🟡 **Some services unavailable** - Check logs for details"
+    
+    await cl.Message(
+        content=status_content,
+        author="SnapAnalysis App"
+    ).send()
+    
+    # Welcome message after API health check
+    welcome = """
+**Ask me anything about your SNAP QC data! See Readme for more information** 🚀
+    """
+    
+    await cl.Message(content=welcome).send()
 
 
 @cl.on_settings_update
@@ -331,42 +519,105 @@ async def on_settings_update(settings: Dict):
     try:
         state_filter = settings.get("state_filter", "All States")
         year_filter = settings.get("year_filter", "All Years")
+        training_enabled = settings.get("training_enabled", False)
         
         # Get previous values
         prev_state = cl.user_session.get("current_state_filter", "All States")
         prev_year = cl.user_session.get("current_year_filter", "All Years")
+        prev_training = cl.user_session.get("training_enabled", False)
         
-        # Check if filters changed
-        if state_filter == prev_state and year_filter == prev_year:
-            return  # No change
+        # Handle training toggle
+        if training_enabled != prev_training:
+            cl.user_session.set("training_enabled", training_enabled)
+            
+            if training_enabled:
+                # Training enabled
+                message = """🧠 **AI Training Enabled**
+
+The system will now:
+- Store embeddings in ChromaDB for faster queries
+- Learn from query patterns
+- Persist training data across restarts
+
+Note: First queries may be slower while building embeddings."""
+                await cl.Message(content=message, author="SnapAnalysis App").send()
+                
+                # Call API to enable training
+                try:
+                    await call_api("/llm/training/enable", method="POST")
+                except Exception as e:
+                    logger.warning(f"Could not enable training via API: {e}")
+                    
+            else:
+                # Training disabled - clean ChromaDB
+                message = """🧠 **AI Training Disabled**
+
+Cleaning vector database..."""
+                msg = await cl.Message(content=message, author="SnapAnalysis App").send()
+                
+                try:
+                    # Clean ChromaDB folder
+                    import shutil
+                    from pathlib import Path
+                    
+                    chromadb_path = Path("./chromadb")
+                    if chromadb_path.exists():
+                        shutil.rmtree(chromadb_path)
+                        await msg.update(content="""🧠 **AI Training Disabled**
+
+✅ Vector database cleaned successfully.
+
+The system will now:
+- Generate SQL from schema on each query (no persistence)
+- Faster startup times
+- No disk storage for embeddings""")
+                    else:
+                        await msg.update(content="""🧠 **AI Training Disabled**
+
+✅ No vector database to clean (already empty).""")
+                        
+                    # Call API to disable training
+                    try:
+                        await call_api("/llm/training/disable", method="POST")
+                    except Exception as e:
+                        logger.warning(f"Could not disable training via API: {e}")
+                        
+                except Exception as e:
+                    await msg.update(content=f"""🧠 **AI Training Disabled**
+
+⚠️ Error cleaning vector database: {str(e)}
+
+You may need to manually delete the `chromadb/` folder.""")
         
-        # Update session
-        cl.user_session.set("current_state_filter", state_filter)
-        cl.user_session.set("current_year_filter", year_filter)
-        
-        # Apply to backend API
-        state_val = None if state_filter == "All States" else state_filter
-        year_val = None if year_filter == "All Years" else int(year_filter)
-        
-        # Update filter via API
-        await call_api(
-            "/filter/set",
-            method="POST",
-            data={"state": state_val, "fiscal_year": year_val}
-        )
-        
-        # Show confirmation message
-        if state_val or year_val:
-            message = f"🔍 **Filter Applied:** State: **{state_val or 'All'}** | Year: **FY{year_val or 'All'}**\n\nAll queries and exports will now use this filter."
-        else:
-            message = "🔍 **Filter Cleared:** Showing all data"
-        
-        await cl.Message(content=message, author="system").send()
+        # Handle filter changes
+        if state_filter != prev_state or year_filter != prev_year:
+            # Update session
+            cl.user_session.set("current_state_filter", state_filter)
+            cl.user_session.set("current_year_filter", year_filter)
+            
+            # Apply to backend API
+            state_val = None if state_filter == "All States" else state_filter
+            year_val = None if year_filter == "All Years" else int(year_filter)
+            
+            # Update filter via API
+            await call_api(
+                "/filter/set",
+                method="POST",
+                data={"state": state_val, "fiscal_year": year_val}
+            )
+            
+            # Show confirmation message
+            if state_val or year_val:
+                message = f"🔍 **Filter Applied:** State: **{state_val or 'All'}** | Year: **FY{year_val or 'All'}**\n\nAll queries and exports will now use this filter."
+            else:
+                message = "🔍 **Filter Cleared:** Showing all data"
+            
+            await cl.Message(content=message, author="SnapAnalysis App").send()
         
     except Exception as e:
         await cl.Message(
-            content=f'<div class="warning-box">❌ Error updating filter: {str(e)}</div>',
-            author="system"
+            content=f'<div class="warning-box">❌ Error updating settings: {str(e)}</div>',
+            author="SnapAnalysis App"
         ).send()
 
 
@@ -468,7 +719,14 @@ async def handle_command(command: str, args: Optional[str] = None):
 **Chat:**
 - `/history` - Show your query history
 - `/clear` - Clear chat history
+- `/samples` - View sample questions
+- `/edit-samples` - Edit sample questions (team editable)
 - `/help` - Show this help message
+
+**💡 Pro Tips:**
+- Use `|` separator for focused analysis: `Average income by state | Focus on Maryland`
+- Power users: Enter SQL directly: `SELECT state_name, COUNT(*) FROM households GROUP BY state_name | Show top 5`
+- Direct SQL is read-only (SELECT/WITH only)
 
 Just type your question naturally to query the data! 🚀
         """).send()
@@ -510,6 +768,12 @@ Just type your question naturally to query the data! 🚀
         cl.user_session.set("chat_history", [])
         cl.user_session.set("query_count", 0)
         await cl.Message(content="✅ Chat history cleared!").send()
+    
+    elif command == "/samples":
+        await handle_samples_command()
+    
+    elif command == "/edit-samples":
+        await handle_edit_samples_command()
     
     else:
         await cl.Message(content=f"❌ Unknown command: `{command}`. Type `/help` for available commands.").send()
@@ -918,10 +1182,6 @@ async def handle_database_command():
             print(traceback.format_exc())
         
         content += f"""
-#### 🔧 Actions
-- Use `/load` to add data
-- Use `/reset` to clear database
-- Use `/files` to see available files
         """
         
         await cl.Message(content=content).send()
@@ -1111,15 +1371,121 @@ This is a complete, self-documenting data package! 🎉
         await cl.Message(content=f'<div class="warning-box">❌ Error generating download: {str(e)}</div>').send()
 
 
+def is_direct_sql(text: str) -> bool:
+    """
+    Check if the text appears to be a direct SQL query.
+    
+    Args:
+        text: User input to check
+        
+    Returns:
+        True if text starts with SQL keywords (SELECT, WITH)
+    """
+    text_stripped = text.strip().upper()
+    return text_stripped.startswith('SELECT') or text_stripped.startswith('WITH')
+
+
+def validate_readonly_sql(sql: str) -> tuple[bool, str]:
+    """
+    Validate that SQL is read-only (only SELECT/WITH allowed).
+    
+    Args:
+        sql: SQL query to validate
+        
+    Returns:
+        Tuple of (is_valid, error_message)
+        - (True, "") if valid read-only SQL
+        - (False, "error message") if contains write operations
+    """
+    sql_upper = sql.upper()
+    
+    # List of forbidden write operations
+    forbidden_keywords = [
+        'INSERT', 'UPDATE', 'DELETE', 'DROP', 'ALTER', 
+        'CREATE', 'TRUNCATE', 'REPLACE', 'MERGE', 'GRANT', 
+        'REVOKE', 'EXEC', 'EXECUTE'
+    ]
+    
+    for keyword in forbidden_keywords:
+        if keyword in sql_upper:
+            return False, f"⚠️ Direct SQL queries are read-only. '{keyword}' statements are not allowed.\n\nPlease use SELECT or WITH statements only, or use natural language for your question."
+    
+    return True, ""
+
+
 async def handle_chat_query(question: str):
-    """Handle natural language chat query"""
+    """Handle natural language chat query with optional separator for analysis instructions"""
     
     try:
-        query_response = await call_api(
-            "/chat/query",
-            method="POST",
-            data={"question": question, "execute": True, "explain": False}  # Execute immediately, no follow-ups
-        )
+        # Parse question for separator pattern: <SQL_QUERY> | <ANALYSIS_INSTRUCTIONS>
+        sql_question = question
+        analysis_instructions = None
+        
+        if "|" in question:
+            parts = question.split("|", maxsplit=1)
+            sql_question = parts[0].strip()
+            analysis_instructions = parts[1].strip() if len(parts) > 1 and parts[1].strip() else None
+        
+        # Check if user provided direct SQL (left of | separator)
+        is_sql_query = is_direct_sql(sql_question)
+        
+        logger.info(f"Processing query - Is SQL: {is_sql_query}, Question: {sql_question[:100]}")
+        
+        if is_sql_query:
+            # User provided SQL directly - validate it's read-only
+            is_valid, error_msg = validate_readonly_sql(sql_question)
+            
+            logger.info(f"SQL validation - Valid: {is_valid}")
+            
+            if not is_valid:
+                # Reject write operations
+                await cl.Message(content=f'<div class="warning-box">❌ {error_msg}</div>').send()
+                return
+            
+            # Valid read-only SQL - execute directly without Vanna
+            logger.info("Executing SQL directly (bypassing Vanna)")
+            try:
+                # Use the direct query execution endpoint
+                response = await call_api(
+                    "/query/sql",
+                    method="POST",
+                    data={"sql": sql_question, "limit": 50000}
+                )
+                
+                # Check if execution was successful
+                if not response.get("success"):
+                    error_msg = response.get("error", "Unknown error")
+                    logger.error(f"SQL execution failed: {error_msg}")
+                    await cl.Message(content=f'<div class="warning-box">❌ SQL execution error: {error_msg}</div>').send()
+                    return
+                
+                # Reformat response to match expected structure
+                sql = sql_question
+                results = response.get("data", [])
+                row_count = response.get("row_count", len(results))
+                
+                logger.info(f"Direct SQL execution successful - {row_count} rows returned")
+                
+                query_response = {
+                    "sql": sql,
+                    "executed": True,
+                    "results": results,
+                    "row_count": row_count,
+                    "explanation": f"Direct SQL execution (bypassed Vanna) - {response.get('execution_time_ms', 0):.2f}ms"
+                }
+                
+            except Exception as e:
+                logger.error(f"Direct SQL execution error: {e}")
+                await cl.Message(content=f'<div class="warning-box">❌ SQL execution error: {str(e)}</div>').send()
+                return
+        else:
+            # Natural language - send to Vanna for SQL generation
+            logger.info("Sending to Vanna for SQL generation")
+            query_response = await call_api(
+                "/chat/query",
+                method="POST",
+                data={"question": sql_question, "execute": True, "explain": False}  # Execute immediately, no follow-ups
+            )
         
         sql = query_response.get("sql")
         explanation = query_response.get("explanation", "")
@@ -1150,13 +1516,15 @@ async def handle_chat_query(question: str):
                 filter_parts.append(f"Year: {year_filter}")
             filters_desc = ", ".join(filter_parts) if filter_parts else ""
             
-            # Generate AI summary using hybrid approach
+            # Generate AI summary using dynamic approach
+            # Pass both the original question and any analysis instructions
             ai_summary = await generate_ai_summary(
-                question=question,
+                question=sql_question,  # SQL question (left of |)
                 sql=sql,
                 results=query_response["results"],
                 row_count=query_response.get("row_count", 0),
-                filters=filters_desc
+                filters=filters_desc,
+                analysis_instructions=analysis_instructions  # Right of | (if any)
             )
             
             # Get filter indicator for bottom of response
@@ -1202,6 +1570,78 @@ async def handle_chat_query(question: str):
         
     except Exception as e:
         await cl.Message(content=f'<div class="warning-box">❌ Error: {str(e)}</div>').send()
+
+
+async def handle_samples_command():
+    """Display sample questions from file"""
+    try:
+        samples_path = Path("./sample_questions.md")
+        if samples_path.exists():
+            with open(samples_path, 'r') as f:
+                content = f.read()
+            
+            await cl.Message(content=f"""
+### 📚 Sample Questions
+
+{content}
+
+---
+**💡 Tip**: Use `/edit-samples` to add your own questions!
+            """).send()
+        else:
+            await cl.Message(content="⚠️ Sample questions file not found. Use `/edit-samples` to create it.").send()
+    except Exception as e:
+        await cl.Message(content=f"❌ Error loading samples: {str(e)}").send()
+
+
+async def handle_edit_samples_command():
+    """Allow editing of sample questions"""
+    try:
+        samples_path = Path("./sample_questions.md")
+        
+        # Load current content
+        if samples_path.exists():
+            with open(samples_path, 'r') as f:
+                current_content = f.read()
+        else:
+            current_content = "# Sample Questions\n\nAdd your team's frequently used queries here!\n"
+        
+        # Ask user for new content
+        res = await cl.AskUserMessage(
+            content=f"""### ✏️ Edit Sample Questions
+
+**Current content** ({len(current_content)} characters):
+
+```markdown
+{current_content[:500]}...
+```
+
+Please provide the **complete new content** for the sample questions file:
+""",
+            timeout=300
+        ).send()
+        
+        if res:
+            new_content = res['output']
+            
+            # Save to file
+            with open(samples_path, 'w') as f:
+                f.write(new_content)
+            
+            await cl.Message(content=f"""
+✅ **Sample questions updated successfully!**
+
+- File: `sample_questions.md`
+- Size: {len(new_content)} characters
+- Location: {samples_path.absolute()}
+
+Use `/samples` to view the updated questions.
+            """).send()
+        else:
+            await cl.Message(content="❌ Edit cancelled - no changes made.").send()
+            
+    except Exception as e:
+        await cl.Message(content=f"❌ Error editing samples: {str(e)}").send()
 
 
 @cl.action_callback("execute")
