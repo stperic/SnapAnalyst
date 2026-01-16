@@ -19,6 +19,12 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
+# External URL for download links (browser-accessible)
+# Options:
+#   - "relative" or "" → Use relative URLs (for production behind reverse proxy)
+#   - "http://localhost:8000" → Explicit URL (for local development)
+#   - "https://api.example.com" → Custom domain
+API_EXTERNAL_URL = os.getenv("API_EXTERNAL_URL", "http://localhost:8000")
 API_PREFIX = "/api/v1"
 
 # Timeout configuration (seconds)
@@ -124,23 +130,45 @@ async def check_database_health() -> tuple[bool, str]:
 
 async def check_llm_health() -> tuple[bool, str]:
     """
-    Check LLM service health.
+    Check LLM service health and availability.
+    
+    Performs actual connectivity check:
+    - OpenAI: Verifies API key is set and valid
+    - Anthropic: Verifies API key is configured
+    - Ollama: Verifies server is reachable and model available
     
     Returns:
-        Tuple of (is_available, provider_name)
+        Tuple of (is_healthy, provider_name_with_status)
+        - provider_name_with_status includes error info if unhealthy
     """
     try:
-        async with httpx.AsyncClient(timeout=API_TIMEOUT_HEALTH) as client:
-            response = await client.get(f"{API_BASE_URL}/api/v1/chat/provider")
-            provider_info = response.json()
-            llm_provider = provider_info.get('provider', 'Unknown').upper()
+        async with httpx.AsyncClient(timeout=10.0) as client:  # Longer timeout for Ollama check
+            response = await client.get(f"{API_BASE_URL}/api/v1/chat/health")
+            health = response.json()
             
-            if llm_provider and llm_provider != 'UNKNOWN':
-                return True, llm_provider
-            return False, "unknown"
+            is_healthy = health.get('healthy', False)
+            provider = health.get('provider', 'Unknown')
+            status = health.get('status', 'unknown')
+            error = health.get('error', '')
+            
+            if is_healthy:
+                return True, provider
+            else:
+                # Return provider with status for display
+                if status == "not_configured":
+                    return False, f"{provider} (not configured)"
+                elif status == "not_reachable":
+                    return False, f"{provider} (not reachable)"
+                elif status == "model_not_found":
+                    return False, f"{provider} (model not found)"
+                elif status == "connection_failed":
+                    return False, f"{provider} (connection failed)"
+                else:
+                    return False, f"{provider} ({status})"
+                    
     except Exception as e:
-        logger.error(f"LLM service check failed: {e}")
-        return False, "unknown"
+        logger.error(f"LLM health check failed: {e}")
+        return False, "unknown (API error)"
 
 
 async def upload_file(file_path: str, filename: str) -> Dict:
@@ -166,8 +194,21 @@ async def upload_file(file_path: str, filename: str) -> Dict:
 
 
 def get_api_base_url() -> str:
-    """Get the API base URL."""
+    """Get the API base URL (for internal API calls)."""
     return API_BASE_URL
+
+
+def get_api_external_url() -> str:
+    """
+    Get the external API URL (for browser download links).
+    
+    Returns:
+        - Empty string if set to "relative" or "" (for use behind reverse proxy)
+        - Full URL otherwise (e.g., "http://localhost:8000")
+    """
+    if API_EXTERNAL_URL.lower() in ("relative", ""):
+        return ""  # Use relative URLs
+    return API_EXTERNAL_URL
 
 
 def get_api_prefix() -> str:

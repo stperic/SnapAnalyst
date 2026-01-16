@@ -204,7 +204,6 @@ chainlit run chainlit_app.py --port 8001
 | Command | Description |
 |---------|-------------|
 | `/help` | Show all commands |
-| `/load <filename>` | Load a data file |
 | `/download` | Export data to Excel |
 | `/filter status` | Check current filters |
 | `/database` | Database statistics |

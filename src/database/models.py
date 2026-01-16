@@ -49,9 +49,9 @@ class Household(Base):
     
     # Geographic & Administrative
     region_code: Mapped[Optional[str]] = mapped_column(String(10), comment="FNS region code")
-    state_code: Mapped[Optional[str]] = mapped_column(String(2), index=True, comment="2-letter state abbreviation")
+    state_code: Mapped[Optional[str]] = mapped_column(String(2), comment="2-letter state abbreviation")  # Indexed in __table_args__
     state_name: Mapped[Optional[str]] = mapped_column(String(50), comment="Full state name for geographic queries")
-    year_month: Mapped[Optional[str]] = mapped_column(String(6), index=True, comment="Review period YYYYMM")
+    year_month: Mapped[Optional[str]] = mapped_column(String(6), comment="Review period YYYYMM")  # Indexed in __table_args__
     status: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("ref_status.code", ondelete="SET NULL"),
         comment="Error status: JOIN ref_status for description (1=correct, 2=overissuance, 3=underissuance)"
@@ -95,7 +95,7 @@ class Household(Base):
     homeless_deduction: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(10, 2))
     
     # Benefits (monthly amounts in dollars)
-    snap_benefit: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(10, 2), index=True, comment="QC-calculated correct SNAP benefit amount")
+    snap_benefit: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(10, 2), comment="QC-calculated correct SNAP benefit amount")  # Indexed in __table_args__
     raw_benefit: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(10, 2), comment="Originally issued SNAP benefit (before QC correction)")
     maximum_benefit: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(10, 2), comment="Maximum SNAP benefit for household size")
     minimum_benefit: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(10, 2), comment="Minimum SNAP benefit amount")
@@ -142,11 +142,19 @@ class Household(Base):
     )
     
     # Constraints and Indexes
+    # Performance indexes for common query patterns:
+    # - Filter by state + year (most common)
+    # - Filter by year only (for year-over-year analysis)
+    # - Filter by state only
     __table_args__ = (
         Index("idx_household_state_year", "state_name", "fiscal_year"),
+        Index("idx_household_year_state", "fiscal_year", "state_name"),  # Reverse order for year-first queries
+        Index("idx_household_fiscal_year", "fiscal_year"),  # Year-only queries
         Index("idx_household_state_code", "state_code"),
+        Index("idx_household_state_name", "state_name"),  # State-only queries
         Index("idx_household_year_month", "year_month"),
         Index("idx_household_snap_benefit", "snap_benefit"),
+        Index("idx_household_status", "status"),  # Common filter for error analysis
     )
     
     def __repr__(self) -> str:
@@ -190,9 +198,9 @@ class HouseholdMember(Base):
     
     # Status Indicators (FK to reference tables)
     snap_affiliation_code: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("ref_snap_affiliation.code", ondelete="SET NULL"), index=True,
+        Integer, ForeignKey("ref_snap_affiliation.code", ondelete="SET NULL"),
         comment="SNAP eligibility status: JOIN ref_snap_affiliation for description"
-    )
+    )  # Indexed in __table_args__ as idx_member_affiliation
     disability_indicator: Mapped[Optional[int]] = mapped_column(Integer, comment="Disability status (1=disabled)")
     foster_child_indicator: Mapped[Optional[int]] = mapped_column(Integer, comment="Foster child status")
     work_registration_status: Mapped[Optional[int]] = mapped_column(Integer, comment="Work registration status code")
@@ -246,12 +254,16 @@ class HouseholdMember(Base):
     household: Mapped["Household"] = relationship("Household", back_populates="members")
     
     # Constraints and Indexes
+    # Performance indexes for common query patterns:
+    # - Filter by fiscal year (for year-specific analysis)
+    # - Join to households via (case_id, fiscal_year) - covered by FK
     __table_args__ = (
         ForeignKeyConstraint(
             ['case_id', 'fiscal_year'],
             ['households.case_id', 'households.fiscal_year'],
             ondelete='CASCADE'
         ),
+        Index("idx_member_fiscal_year", "fiscal_year"),  # Year-only queries
         Index("idx_member_age", "age"),
         Index("idx_member_affiliation", "snap_affiliation_code"),
         Index("idx_member_wages", "wages"),
@@ -285,21 +297,21 @@ class QCError(Base):
     
     # Error Details (FK to reference tables for Gold Standard lookups)
     element_code: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("ref_element.code", ondelete="SET NULL"), index=True,
+        Integer, ForeignKey("ref_element.code", ondelete="SET NULL"),
         comment="Error element type: JOIN ref_element for description and category"
-    )
+    )  # Indexed in __table_args__ as idx_error_element
     nature_code: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("ref_nature.code", ondelete="SET NULL"), index=True,
+        Integer, ForeignKey("ref_nature.code", ondelete="SET NULL"),
         comment="Nature of error (what went wrong): JOIN ref_nature for description"
-    )
+    )  # Indexed in __table_args__ as idx_error_nature
     responsible_agency: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("ref_agency_responsibility.code", ondelete="SET NULL"),
         comment="Who caused error: JOIN ref_agency_responsibility (use responsibility_type for client vs agency)"
     )
     error_amount: Mapped[Optional[Decimal]] = mapped_column(
-        DECIMAL(10, 2), index=True,
+        DECIMAL(10, 2),
         comment="Dollar amount of this specific error (positive=overissuance)"
-    )
+    )  # Indexed in __table_args__ as idx_error_amount
     discovery_method: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("ref_discovery.code", ondelete="SET NULL"),
         comment="How error was discovered: JOIN ref_discovery"
@@ -323,15 +335,21 @@ class QCError(Base):
     household: Mapped["Household"] = relationship("Household", back_populates="errors")
     
     # Constraints and Indexes
+    # Performance indexes for common query patterns:
+    # - Filter by fiscal year (for year-specific analysis)
+    # - Filter by error type (element, nature)
+    # - Join to households via (case_id, fiscal_year) - covered by FK
     __table_args__ = (
         ForeignKeyConstraint(
             ['case_id', 'fiscal_year'],
             ['households.case_id', 'households.fiscal_year'],
             ondelete='CASCADE'
         ),
+        Index("idx_error_fiscal_year", "fiscal_year"),  # Year-only queries
         Index("idx_error_element", "element_code"),
         Index("idx_error_nature", "nature_code"),
         Index("idx_error_amount", "error_amount"),
+        Index("idx_error_finding", "error_finding"),  # Common filter for over/under issuance
     )
     
     def __repr__(self) -> str:

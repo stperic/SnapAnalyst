@@ -486,9 +486,15 @@ async def handle_history():
 
 async def handle_export(fiscal_year: Optional[str] = None):
     """Handle /export command - download all data to Excel."""
+    import httpx
+    import tempfile
+    import os
+    from datetime import datetime
+    
     try:
-        await send_message("📥 Preparing your data export...")
+        await send_message("📥 Preparing your data export... This may take a moment.")
         
+        # Build API URL (internal Docker network URL)
         api_base_url = get_api_base_url()
         api_prefix = get_api_prefix()
         
@@ -501,30 +507,49 @@ async def handle_export(fiscal_year: Optional[str] = None):
                 if fy in SUPPORTED_FISCAL_YEARS:
                     fy_param = f"?fiscal_year={fy}"
                     data_scope = f"FY {fiscal_year}"
-                    await send_message(f"📊 Exporting data for Fiscal Year {fy}...")
                 else:
                     await send_warning(f"Invalid fiscal year: {fiscal_year}. Using all years.")
             except ValueError:
                 await send_warning("Invalid fiscal year format. Using all years.")
-        else:
-            await send_message(f"📊 Exporting all data ({data_scope})...")
         
-        download_url = f"{api_base_url}{api_prefix}/data/export/excel{fy_param}"
+        # Fetch the Excel file from the API internally
+        api_url = f"{api_base_url}{api_prefix}/data/export/excel{fy_param}"
         
-        content = MSG_EXCEL_EXPORT_READY.format(
-            data_scope=data_scope,
-            download_url=download_url
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            response = await client.get(api_url)
+            response.raise_for_status()
+            
+            # Generate filename with timestamp
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"snapanalyst_export_{timestamp}.xlsx"
+            
+            # Save to temp file
+            temp_dir = tempfile.gettempdir()
+            temp_path = os.path.join(temp_dir, filename)
+            
+            with open(temp_path, 'wb') as f:
+                f.write(response.content)
+        
+        # Create Chainlit file element for direct download
+        file_element = cl.File(
+            name=filename,
+            path=temp_path,
+            display="inline"
         )
         
-        elements = [
-            cl.Text(
-                name="Download Link",
-                content=f"Download URL: {download_url}",
-                display="inline"
-            )
-        ]
+        content = f"""### ✅ Your Excel export is ready!
+
+**What's included:**
+- 📖 **README** - Complete documentation (opens first)
+- 📊 **Households** - Household case data
+- 👥 **Members** - Household member data  
+- ⚠️ **QC_Errors** - Quality control errors
+
+**Data scope:** {data_scope}
+
+Click the file below to download:"""
         
-        await send_message(content, elements=elements)
+        await send_message(content, elements=[file_element])
         
         tips = """### 💡 Pro Tips:
 
@@ -532,7 +557,6 @@ async def handle_export(fiscal_year: Optional[str] = None):
 2. **Code Lookups**: Use the code tables in README to decode numeric codes
 3. **Filtering**: Use Excel's built-in filters on each data sheet
 4. **Pivot Tables**: Create pivot tables for quick analysis
-5. **Formulas**: Reference the README sheet for column descriptions
 
 **Example analysis:**
 - Filter Households by `status=2` (overissuance errors)
@@ -540,6 +564,8 @@ async def handle_export(fiscal_year: Optional[str] = None):
         
         await send_message(tips)
         
+    except httpx.HTTPError as e:
+        await send_error(f"Error fetching export from API: {str(e)}")
     except Exception as e:
         await send_error(f"Error generating download: {str(e)}")
 

@@ -493,17 +493,14 @@ MSG_HELP = """### 📚 Available Commands
 **Quick Stats:**
 - `/status` - Check health of all services (API, Database, LLM)
 - `/provider` - LLM configuration details
-- `/database` - Database statistics (tables, rows)
+- `/database` - Database statistics 
 
 **Data Management:**
 - `/files` - List available data files
-- `/load <filename>` - Load a specific data file
-- `/upload` - Upload a new CSV file
 - `/reset` - Clear all data (with confirmation)
 
 **Data Export:**
 - `/export` - Download all data to Excel with README
-- `/export <fiscal_year>` - Download specific year (e.g., `/export 2023`)
 
 **Data Filtering:**
 - `/filter status` - Check current filter settings

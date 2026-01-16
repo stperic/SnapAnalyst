@@ -98,6 +98,16 @@ class ProviderInfoResponse(BaseModel):
     training_enabled: bool = Field(..., description="Whether training is enabled")
 
 
+class LLMHealthResponse(BaseModel):
+    """Response model for LLM health check"""
+    
+    healthy: bool = Field(..., description="Whether LLM service is healthy and available")
+    provider: str = Field(..., description="LLM provider name (OPENAI, ANTHROPIC, OLLAMA)")
+    model: str = Field(..., description="Configured model name")
+    status: str = Field(..., description="Status: connected, not_configured, not_reachable, model_not_found, etc.")
+    error: Optional[str] = Field(None, description="Error message if not healthy")
+
+
 class TrainingStatusResponse(BaseModel):
     """Response model for training status"""
     
@@ -250,6 +260,40 @@ async def get_provider_info() -> ProviderInfoResponse:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
+        )
+
+
+@router.get(
+    "/health",
+    response_model=LLMHealthResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Check LLM service health",
+    description="Verify LLM provider connectivity and configuration",
+)
+async def check_llm_health() -> LLMHealthResponse:
+    """
+    Check LLM service health and availability.
+    
+    This endpoint verifies:
+    - **OpenAI**: API key is configured and valid
+    - **Anthropic**: API key is configured
+    - **Ollama**: Server is reachable and model is available
+    
+    Returns healthy=True only if the LLM can actually be used.
+    Use this to display accurate status indicators in the UI.
+    """
+    try:
+        llm_service = get_llm_service()
+        health = llm_service.check_health()
+        return LLMHealthResponse(**health)
+    except Exception as e:
+        logger.error(f"Failed to check LLM health: {e}")
+        return LLMHealthResponse(
+            healthy=False,
+            provider="UNKNOWN",
+            model="unknown",
+            status="error",
+            error=str(e)
         )
 
 

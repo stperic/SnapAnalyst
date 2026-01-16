@@ -361,6 +361,100 @@ class LLMService:
             "status": status_text,
             "training_enabled": settings.vanna_training_enabled,
         }
+    
+    def check_health(self) -> Dict:
+        """
+        Check LLM provider health/availability.
+        
+        Verifies:
+        - OpenAI: API key is configured
+        - Anthropic: API key is configured
+        - Ollama: Server is reachable
+        
+        Returns:
+            Dict with 'healthy', 'provider', 'status', and optional 'error' keys
+        """
+        result = {
+            "provider": self.provider.upper(),
+            "healthy": False,
+            "status": "unknown",
+            "model": self.sql_model,
+        }
+        
+        try:
+            if self.provider == "openai":
+                # Check if API key is configured
+                if not settings.openai_api_key:
+                    result["status"] = "not_configured"
+                    result["error"] = "OPENAI_API_KEY not set"
+                    return result
+                
+                # Try a minimal API call to verify the key works
+                try:
+                    from openai import OpenAI
+                    client = OpenAI(api_key=settings.openai_api_key)
+                    # List models is a lightweight way to verify the key
+                    client.models.list()
+                    result["healthy"] = True
+                    result["status"] = "connected"
+                except Exception as e:
+                    result["status"] = "connection_failed"
+                    result["error"] = str(e)
+                    
+            elif self.provider == "anthropic":
+                # Check if API key is configured
+                if not settings.anthropic_api_key:
+                    result["status"] = "not_configured"
+                    result["error"] = "ANTHROPIC_API_KEY not set"
+                    return result
+                
+                # For Anthropic, just verify key format (starts with sk-ant-)
+                if settings.anthropic_api_key.startswith("sk-ant-"):
+                    result["healthy"] = True
+                    result["status"] = "configured"
+                else:
+                    result["status"] = "invalid_key_format"
+                    result["error"] = "API key doesn't match expected format"
+                    
+            elif self.provider == "ollama":
+                # Check if Ollama server is reachable
+                import httpx
+                
+                try:
+                    with httpx.Client(timeout=5.0) as client:
+                        # Check Ollama's /api/tags endpoint (lists models)
+                        response = client.get(f"{settings.ollama_base_url}/api/tags")
+                        if response.status_code == 200:
+                            models = response.json().get("models", [])
+                            model_names = [m.get("name", "") for m in models]
+                            
+                            # Check if our configured model is available
+                            if any(self.sql_model in name for name in model_names):
+                                result["healthy"] = True
+                                result["status"] = "connected"
+                                result["available_models"] = model_names[:5]  # Show first 5
+                            else:
+                                result["status"] = "model_not_found"
+                                result["error"] = f"Model '{self.sql_model}' not found. Available: {model_names[:3]}"
+                        else:
+                            result["status"] = "server_error"
+                            result["error"] = f"Server returned {response.status_code}"
+                except httpx.ConnectError:
+                    result["status"] = "not_reachable"
+                    result["error"] = f"Cannot connect to Ollama at {settings.ollama_base_url}"
+                except Exception as e:
+                    result["status"] = "connection_failed"
+                    result["error"] = str(e)
+            else:
+                result["status"] = "unknown_provider"
+                result["error"] = f"Unknown provider: {self.provider}"
+                
+        except Exception as e:
+            logger.error(f"LLM health check failed: {e}")
+            result["status"] = "error"
+            result["error"] = str(e)
+        
+        return result
 
 
 # =============================================================================
