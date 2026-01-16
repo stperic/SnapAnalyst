@@ -9,7 +9,27 @@ Provides functions to export schema information in various formats:
 import csv
 import io
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
+
+
+def _numeric_sort_key(item: Tuple[str, Any]) -> Tuple[int, Any]:
+    """
+    Sort key function for sorting code lookups numerically.
+    
+    Codes that are numeric are sorted numerically.
+    Non-numeric codes are sorted after numeric codes, alphabetically.
+    
+    Args:
+        item: Tuple of (code, description)
+        
+    Returns:
+        Tuple for sorting: (0, numeric_value) for numbers, (1, string) for non-numbers
+    """
+    code = item[0]
+    try:
+        return (0, int(code))
+    except (ValueError, TypeError):
+        return (1, str(code))
 
 import pandas as pd
 from reportlab.lib import colors
@@ -64,10 +84,12 @@ class SchemaExporter:
             writer.writerow(["Lookup Name", "Code", "Description"])
             
             code_lookups = data.get("code_lookups", {})
-            for lookup_name, lookup_data in code_lookups.items():
-                for code, description in lookup_data.items():
-                    if code not in ["description", "source_field"]:
-                        writer.writerow([lookup_name, code, description])
+            for lookup_name, lookup_data in sorted(code_lookups.items()):
+                # Filter out metadata fields and sort codes numerically
+                code_items = [(k, v) for k, v in lookup_data.items() 
+                              if k not in ["description", "source_field"]]
+                for code, description in sorted(code_items, key=_numeric_sort_key):
+                    writer.writerow([lookup_name, code, description])
                         
         elif export_type == "relationships":
             # Export table relationships
@@ -130,7 +152,7 @@ class SchemaExporter:
             md_lines.append("## Code Lookup Tables\n")
             
             code_lookups = data.get("code_lookups", {})
-            for lookup_name, lookup_data in code_lookups.items():
+            for lookup_name, lookup_data in sorted(code_lookups.items()):
                 md_lines.append(f"### {lookup_name}\n")
                 md_lines.append(f"**Description:** {lookup_data.get('description', 'N/A')}\n")
                 md_lines.append(f"**Source Field:** {lookup_data.get('source_field', 'N/A')}\n")
@@ -138,10 +160,12 @@ class SchemaExporter:
                 md_lines.append("\n| Code | Description |")
                 md_lines.append("|------|-------------|")
                 
-                for code, description in lookup_data.items():
-                    if code not in ["description", "source_field"]:
-                        desc_clean = str(description).replace("|", "\\|")
-                        md_lines.append(f"| {code} | {desc_clean} |")
+                # Filter out metadata fields and sort codes numerically
+                code_items = [(k, v) for k, v in lookup_data.items() 
+                              if k not in ["description", "source_field"]]
+                for code, description in sorted(code_items, key=_numeric_sort_key):
+                    desc_clean = str(description).replace("|", "\\|")
+                    md_lines.append(f"| {code} | {desc_clean} |")
                 
                 md_lines.append("\n")
         
@@ -267,7 +291,7 @@ class SchemaExporter:
         elif export_type == "code_lookups":
             code_lookups = data.get("code_lookups", {})
             
-            for lookup_name, lookup_data in code_lookups.items():
+            for lookup_name, lookup_data in sorted(code_lookups.items()):
                 # Lookup heading
                 elements.append(Paragraph(f"Code Lookup: {lookup_name}", heading_style))
                 
@@ -285,10 +309,12 @@ class SchemaExporter:
                 # Codes table
                 table_data = [["Code", "Description"]]
                 
-                for code, description in lookup_data.items():
-                    if code not in ["description", "source_field"]:
-                        desc_str = str(description)[:80]  # Truncate long descriptions
-                        table_data.append([str(code), desc_str])
+                # Filter out metadata fields and sort codes numerically
+                code_items = [(k, v) for k, v in lookup_data.items() 
+                              if k not in ["description", "source_field"]]
+                for code, description in sorted(code_items, key=_numeric_sort_key):
+                    desc_str = str(description)[:80]  # Truncate long descriptions
+                    table_data.append([str(code), desc_str])
                 
                 if len(table_data) > 1:
                     lookup_table = Table(table_data, colWidths=[1*inch, 5.5*inch])

@@ -11,8 +11,6 @@
 #   docker-compose down               # Stop all services
 #   docker-compose down -v            # Stop and remove volumes
 
-version: '3.8'
-
 services:
   # ==========================================================================
   # PostgreSQL Database
@@ -83,6 +81,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      data-init:
+        condition: service_completed_successfully
     networks:
       - snapanalyst-network
     restart: unless-stopped
@@ -99,6 +99,16 @@ services:
     environment:
       # API connection (internal Docker network)
       API_BASE_URL: http://api:8000
+      
+      # Required by src.core.config (loaded by chainlit_app.py)
+      DATABASE_URL: postgresql://snapanalyst:${DATABASE_PASSWORD:-snapanalyst_dev_password}@postgres:5432/snapanalyst_db
+      SECRET_KEY: ${SECRET_KEY:-change-this-in-production}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      SNAPDATA_PATH: /data
+      
+      # LLM Configuration (for display purposes in UI)
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
       
       # Chainlit settings
       CHAINLIT_HOST: 0.0.0.0
@@ -117,6 +127,27 @@ services:
     restart: unless-stopped
     command: chainlit run chainlit_app.py --host 0.0.0.0 --port 8001
 
+  # ==========================================================================
+  # Data Initialization (downloads data AND loads into database)
+  # ==========================================================================
+  data-init:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: snapanalyst-data-init
+    environment:
+      DATABASE_URL: postgresql://snapanalyst:${DATABASE_PASSWORD:-snapanalyst_dev_password}@postgres:5432/snapanalyst_db
+      SNAPDATA_PATH: /data
+      SECRET_KEY: ${SECRET_KEY:-init-only}
+    volumes:
+      - snapanalyst_data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - snapanalyst-network
+    command: python /app/scripts/docker_init_data.py
+
 # =============================================================================
 # Volumes
 # =============================================================================
@@ -125,8 +156,6 @@ volumes:
     driver: local
   snapanalyst_data:
     driver: local
-    # To pre-populate with data, you can use:
-    # docker run --rm -v snapanalyst_data:/data -v $(pwd)/datasets/snap/data:/source alpine cp -r /source/. /data/
 
 # =============================================================================
 # Networks

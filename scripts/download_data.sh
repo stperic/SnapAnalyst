@@ -32,12 +32,14 @@ DATA_DIR="${DATA_DIR:-$PROJECT_ROOT/datasets/snap/data}"
 BASE_URL="https://www.fns.usda.gov/sites/default/files/resource-files"
 
 # Available fiscal years and their file names
-# Format: YEAR:FILENAME
+# These are the publicly available SNAP QC files from USDA FNS
 declare -A DATA_FILES=(
     ["2023"]="qc_pub_fy2023.csv"
     ["2022"]="qc_pub_fy2022.csv"
     ["2021"]="qc_pub_fy2021.csv"
 )
+
+# Note: Each file is approximately 200-250MB
 
 # Parse arguments
 DOCKER_MODE=false
