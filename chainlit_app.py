@@ -14,12 +14,19 @@ Structure:
 """
 
 # Configure ONNX Runtime before any imports
-# CRITICAL: Explicitly set thread count to prevent CPU affinity errors in LXC containers
-# When thread count is explicit, ONNX Runtime skips automatic CPU affinity (which fails in LXC)
+# CRITICAL: Multiple settings to completely disable CPU affinity in LXC containers
 # See: https://github.com/chroma-core/chroma/issues/1420
 import os  # noqa: I001 - Must be first to configure ONNX before other imports
 if not os.environ.get('OMP_NUM_THREADS') or os.environ.get('OMP_NUM_THREADS') == '0':
     os.environ['OMP_NUM_THREADS'] = '4'
+if not os.environ.get('ORT_DISABLE_CPU_EP_AFFINITY'):
+    os.environ['ORT_DISABLE_CPU_EP_AFFINITY'] = '1'
+if not os.environ.get('ORT_DISABLE_THREAD_AFFINITY'):
+    os.environ['ORT_DISABLE_THREAD_AFFINITY'] = '1'
+if not os.environ.get('OMP_WAIT_POLICY'):
+    os.environ['OMP_WAIT_POLICY'] = 'PASSIVE'
+if not os.environ.get('OMP_PROC_BIND'):
+    os.environ['OMP_PROC_BIND'] = 'false'
 
 # Suppress noisy libraries BEFORE importing chainlit
 # This must happen first to catch loggers before they're configured

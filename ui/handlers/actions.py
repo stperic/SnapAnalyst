@@ -192,7 +192,7 @@ async def handle_refresh_database():
     Handle database stats refresh action.
     Called when user clicks the refresh button on database stats.
     """
-    from .commands import handle_database
+    from .commands.info_commands import handle_database
     await handle_database()
 
 

@@ -103,6 +103,7 @@ def setup_logging(log_level: str | None = None) -> None:
     # Suppress Chainlit internal noise
     logging.getLogger("chainlit").setLevel(logging.INFO)
     logging.getLogger("chainlit.socket").setLevel(logging.WARNING)
+    logging.getLogger("chainlit.data.sql_alchemy").setLevel(logging.ERROR)  # Suppress blob storage warnings
 
     # Suppress ML/Vector DB noise
     logging.getLogger("chromadb").setLevel(logging.WARNING)
@@ -110,6 +111,14 @@ def setup_logging(log_level: str | None = None) -> None:
     logging.getLogger("openai").setLevel(logging.WARNING)
     logging.getLogger("anthropic").setLevel(logging.WARNING)
     logging.getLogger("ollama").setLevel(logging.WARNING)
+
+    # Suppress Vanna verbose prompt/response logging
+    logging.getLogger("vanna").setLevel(logging.ERROR)
+    logging.getLogger("vanna.openai").setLevel(logging.ERROR)
+    logging.getLogger("vanna.anthropic").setLevel(logging.ERROR)
+    logging.getLogger("vanna.chromadb").setLevel(logging.ERROR)
+    logging.getLogger("vanna.base").setLevel(logging.ERROR)
+    logging.getLogger("vanna.legacy").setLevel(logging.ERROR)
 
     # Suppress other noisy libraries
     logging.getLogger("asyncio").setLevel(logging.WARNING)

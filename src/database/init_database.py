@@ -185,33 +185,27 @@ def create_enriched_views() -> None:
     """
     views = {
         # Enriched errors view - includes all human-readable labels
+        # Match schema.sql definition exactly to avoid column rename conflicts
         "v_qc_errors_enriched": """
             CREATE OR REPLACE VIEW v_qc_errors_enriched AS
             SELECT
-                e.case_id,
-                e.fiscal_year,
-                e.error_number,
-                e.element_code,
+                e.*,
+                h.state_name,
+                h.state_code,
+                h.status AS household_status,
                 re.description AS element_description,
                 re.category AS element_category,
-                e.nature_code,
                 rn.description AS nature_description,
                 rn.category AS nature_category,
-                e.responsible_agency,
-                ra.description AS responsibility_description,
+                ra.description AS agency_description,
                 ra.responsibility_type,
-                e.error_finding,
-                rf.description AS finding_description,
-                e.error_amount,
-                h.state_name,
-                h.snap_benefit,
-                h.gross_income
+                rf.description AS finding_description
             FROM qc_errors e
+            JOIN households h ON e.case_id = h.case_id AND e.fiscal_year = h.fiscal_year
             LEFT JOIN ref_element re ON e.element_code = re.code
             LEFT JOIN ref_nature rn ON e.nature_code = rn.code
             LEFT JOIN ref_agency_responsibility ra ON e.responsible_agency = ra.code
             LEFT JOIN ref_error_finding rf ON e.error_finding = rf.code
-            LEFT JOIN households h ON e.case_id = h.case_id AND e.fiscal_year = h.fiscal_year
         """,
 
         # Enriched households view - includes status descriptions
@@ -220,8 +214,8 @@ def create_enriched_views() -> None:
             SELECT
                 h.*,
                 rs.description AS status_description,
-                rce.description AS cat_elig_description,
-                res.description AS expedited_description
+                rce.description AS categorical_eligibility_description,
+                res.description AS expedited_service_description
             FROM households h
             LEFT JOIN ref_status rs ON h.status = rs.code
             LEFT JOIN ref_categorical_eligibility rce ON h.categorical_eligibility = rce.code

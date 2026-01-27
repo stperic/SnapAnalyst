@@ -22,17 +22,25 @@ from __future__ import annotations
 import atexit
 import os
 import threading
-from contextlib import contextmanager
+from contextlib import contextmanager, redirect_stdout
+from io import StringIO
 from typing import TYPE_CHECKING
 
 import pandas as pd
 
 # Configure ONNX Runtime before any Vanna/ChromaDB imports
-# CRITICAL: Explicitly set thread count to prevent CPU affinity errors in LXC containers
-# When thread count is explicit, ONNX Runtime skips automatic CPU affinity (which fails in LXC)
+# CRITICAL: Multiple settings to completely disable CPU affinity in LXC containers
 # See: https://github.com/chroma-core/chroma/issues/1420
 if not os.environ.get('OMP_NUM_THREADS') or os.environ.get('OMP_NUM_THREADS') == '0':
     os.environ['OMP_NUM_THREADS'] = '4'
+if not os.environ.get('ORT_DISABLE_CPU_EP_AFFINITY'):
+    os.environ['ORT_DISABLE_CPU_EP_AFFINITY'] = '1'
+if not os.environ.get('ORT_DISABLE_THREAD_AFFINITY'):
+    os.environ['ORT_DISABLE_THREAD_AFFINITY'] = '1'
+if not os.environ.get('OMP_WAIT_POLICY'):
+    os.environ['OMP_WAIT_POLICY'] = 'PASSIVE'
+if not os.environ.get('OMP_PROC_BIND'):
+    os.environ['OMP_PROC_BIND'] = 'false'
 
 # Azure OpenAI support
 from psycopg2 import pool
@@ -470,6 +478,7 @@ def _get_vanna_instance():
             'api_key': settings.openai_api_key,
             'model': model,
             'path': chroma_path,
+            'log_level': 'WARNING',  # Suppress verbose SQL prompt/response logging
         })
         logger.info(f"Created OpenAI Vanna with model: {model}")
 
@@ -480,6 +489,7 @@ def _get_vanna_instance():
         _vanna_instance = AzureOpenAIVanna(config={
             'model': model,  # Use sql_model from settings
             'path': chroma_path,
+            'log_level': 'WARNING',  # Suppress verbose SQL prompt/response logging
         })
         logger.info(f"Created Azure OpenAI Vanna with model: {model}")
 
@@ -491,6 +501,7 @@ def _get_vanna_instance():
             'api_key': settings.anthropic_api_key,
             'model': model,
             'path': chroma_path,
+            'log_level': 'WARNING',  # Suppress verbose SQL prompt/response logging
         })
         logger.info(f"Created Anthropic Vanna with model: {model}")
 
@@ -499,6 +510,7 @@ def _get_vanna_instance():
             'model': model,
             'path': chroma_path,
             'temperature': 0.1,  # Lower temperature for SQL generation
+            'log_level': 'WARNING',  # Suppress verbose SQL prompt/response logging
         })
         logger.info(f"Created Ollama Vanna with model: {model} at {settings.ollama_base_url}")
 
@@ -559,17 +571,20 @@ def train_vanna_with_ddl(force_retrain: bool = False):
         ddl_statements = get_all_ddl_statements(include_samples=True)
         logger.info(f"Training Vanna with {len(ddl_statements)} DDL statements")
 
-        for i, ddl in enumerate(ddl_statements):
-            try:
-                vn.train(ddl=ddl)
-                logger.debug(f"Trained DDL {i+1}/{len(ddl_statements)}")
-            except Exception as e:
-                logger.warning(f"Failed to train DDL {i+1}: {e}")
+        # Suppress verbose "Adding ddl:" print statements from Vanna
+        with redirect_stdout(StringIO()):
+            for i, ddl in enumerate(ddl_statements):
+                try:
+                    vn.train(ddl=ddl)
+                    logger.debug(f"Trained DDL {i+1}/{len(ddl_statements)}")
+                except Exception as e:
+                    logger.warning(f"Failed to train DDL {i+1}: {e}")
 
         # Add business documentation
         from src.core.prompts import BUSINESS_CONTEXT_DOCUMENTATION
         try:
-            vn.train(documentation=BUSINESS_CONTEXT_DOCUMENTATION)
+            with redirect_stdout(StringIO()):
+                vn.train(documentation=BUSINESS_CONTEXT_DOCUMENTATION)
             logger.info("Trained with business documentation")
         except Exception as e:
             logger.warning(f"Failed to train documentation: {e}")

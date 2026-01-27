@@ -91,10 +91,13 @@ services:
       ANONYMIZED_TELEMETRY: "False"
 
       # ONNX Runtime optimization for LXC containers (Proxmox, etc.)
-      # CRITICAL: OMP_NUM_THREADS must be set to non-zero value to prevent pthread_setaffinity_np errors
-      # When explicitly set, ONNX Runtime skips automatic CPU affinity (which fails in LXC containers)
+      # CRITICAL: Multiple settings to prevent pthread_setaffinity_np errors
       # See: https://github.com/chroma-core/chroma/issues/1420
-      OMP_NUM_THREADS: "${OMP_NUM_THREADS:-4}"
+      OMP_NUM_THREADS: "4"
+      ORT_DISABLE_CPU_EP_AFFINITY: "1"
+      ORT_DISABLE_THREAD_AFFINITY: "1"
+      OMP_WAIT_POLICY: "PASSIVE"
+      OMP_PROC_BIND: "false"
     volumes:
       - snapanalyst_data:/data
       - ./docker/logs:/app/logs
@@ -149,8 +152,16 @@ services:
       
       # Suppress verbose logging
       CHAINLIT_DEBUG: "false"
+
+      # ONNX Runtime optimization (same as backend)
+      OMP_NUM_THREADS: "4"
+      ORT_DISABLE_CPU_EP_AFFINITY: "1"
+      ORT_DISABLE_THREAD_AFFINITY: "1"
+      OMP_WAIT_POLICY: "PASSIVE"
+      OMP_PROC_BIND: "false"
     volumes:
       - ./docker/logs:/app/logs
+      - chainlit_files:/app/.files  # Persistent file storage for uploads/exports
     ports:
       - "${CHAINLIT_PORT:-8001}:8001"
     depends_on:
@@ -179,6 +190,13 @@ services:
       DATABASE_URL: postgresql://snapanalyst:${DATABASE_PASSWORD:-snapanalyst_dev_password}@postgres:5432/snapanalyst_db
       SNAPDATA_PATH: /data
       SECRET_KEY: ${SECRET_KEY:-init-only}
+
+      # ONNX Runtime optimization
+      OMP_NUM_THREADS: "4"
+      ORT_DISABLE_CPU_EP_AFFINITY: "1"
+      ORT_DISABLE_THREAD_AFFINITY: "1"
+      OMP_WAIT_POLICY: "PASSIVE"
+      OMP_PROC_BIND: "false"
     volumes:
       - snapanalyst_data:/data
     depends_on:
@@ -199,6 +217,8 @@ volumes:
   chromadb_data:
     driver: local
   chroma_cache:
+    driver: local
+  chainlit_files:
     driver: local
 
 # =============================================================================

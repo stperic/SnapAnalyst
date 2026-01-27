@@ -22,6 +22,12 @@ mask_user_env = false
 # Authorized origins
 allow_origins = ["*"]
 
+# File storage configuration for attachments, exports, and uploads
+# Stores files on local filesystem instead of database for better performance
+[storage]
+provider = "local"
+path = ".files"
+
 [features]
 # Process and display HTML in messages. This can be a security risk (see https://stackoverflow.com/questions/19603097/why-is-it-dangerous-to-render-user-generated-html-or-javascript)
 unsafe_allow_html = true
@@ -92,7 +98,7 @@ reaction_on_message_received = false
 
 [UI]
 # Name of the assistant.
-name = "Assistant"
+name = "Snap Analyst"
 
 # default_theme = "dark"
 
@@ -105,7 +111,7 @@ name = "Assistant"
 default_sidebar_state = "open"
 
 # Description of the assistant. This is used for HTML tags.
-# description = ""
+description = "AI-powered SNAP Quality Control data analysis platform"
 
 # Chain of Thought (CoT) display mode. Can be "hidden", "tool_call" or "full".
 cot = "full"

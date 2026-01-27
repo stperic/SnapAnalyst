@@ -115,3 +115,7 @@ temp/
 # ChromaDB vector store (Vanna.AI embeddings)
 chromadb/
 *-*-*-*-*/
+
+# Chainlit file storage
+.files/
+.chainlit/.files/
