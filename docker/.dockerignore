@@ -1,0 +1,74 @@
+# SnapAnalyst Docker Build Ignore File
+# =====================================
+# Files and directories to exclude from Docker build context
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# Environment files (except examples)
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation (keep README)
+*.md
+!README.md
+!chainlit.md
+
+# Testing
+tests/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+*.egg
+
+# Logs (will be mounted as volume)
+logs/
+*.log
+
+# Data files (will be mounted as volume)
+datasets/snap/data/*.csv
+backups/
+
+# ChromaDB vector store
+chromadb/
+
+# Docker files (don't need to copy docker folder into container)
+docker/
+
+# Cursor/IDE specific
+.cursor/
+
+# Schema exports (generated files)
+schema_exports/

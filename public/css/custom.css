@@ -1,0 +1,13 @@
+/* =============================================================================
+   SnapAnalyst Custom Styles - Main Entry Point
+   
+   This file imports all custom stylesheets:
+   - chainlit_ui.css: Chainlit global UI customizations
+   - tabulator_combined.css: Data table styling (Tabulator library + theme overrides)
+   ============================================================================= */
+
+/* Chainlit Global UI Customizations */
+@import url('./chainlit_ui.css');
+
+/* Tabulator Data Table Styles */
+@import url('./tabulator_combined.css');

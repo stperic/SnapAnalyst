@@ -1,0 +1,59 @@
+# SnapAnalyst Base Dependencies
+# Updated: 2026-01-16 - Pinned versions for stability and reproducibility
+# Resolved dependency conflicts for httpx compatibility
+
+# FastAPI & Web Server
+fastapi==0.116.1  # Required by Chainlit 2.9.5 (>=0.116.1)
+uvicorn[standard]==0.35.0  # Required by Chainlit 2.9.5 (>=0.35.0)
+python-multipart==0.0.18
+
+# Database
+sqlalchemy==2.0.36  # Latest SQLAlchemy 2.x
+alembic==1.14.0
+psycopg2-binary==2.9.10
+asyncpg==0.30.0  # Required by Chainlit 2.9.5 data layer
+greenlet==3.3.0  # Required by SQLAlchemyDataLayer for async operations
+
+# Data Processing
+polars==1.17.1  # Latest Polars
+pyarrow==18.1.0  # Latest PyArrow
+
+# Configuration & Validation
+pydantic==2.10.5  # Latest Pydantic v2
+pydantic-core==2.27.2
+pydantic-settings==2.10.1  # Required by Chainlit 2.9.5 (>=2.10.1)
+python-dotenv==1.0.1
+
+# Security & Authentication
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+bcrypt==5.0.0  # For password hashing in Chainlit authentication
+
+# HTTP Client - Latest version compatible with all AI packages
+httpx==0.28.1  # Latest httpx, compatible with ollama 0.6.1+, vanna 2.0.1, openai, anthropic
+
+# Export & Reporting
+reportlab==4.2.5
+pandas==2.2.3
+openpyxl==3.1.5
+
+# AI/LLM Integration (Vanna 2.x with agent architecture)
+vanna==2.0.1  # Latest - agent-based SQL generation
+openai==1.60.2  # Latest OpenAI SDK
+anthropic==0.40.0  # Required for Vanna 2.x
+ollama==0.6.1  # Latest - supports httpx>=0.27 (including 0.28.x)
+chromadb==0.5.23  # ChromaDB for KB vector storage (separate from Vanna agent memory)
+posthog==2.4.2  # Pin PostHog version for ChromaDB telemetry compatibility
+numpy==1.26.4  # Required for ChromaDB compatibility (must be <2.0.0)
+tiktoken==0.8.0  # Token counting for context budget management
+
+# SSE Streaming
+sse-starlette==2.1.3  # Server-Sent Events for streaming API responses
+
+# Chatbot UI
+chainlit==2.9.5  # Latest Chainlit with Starters, modern UI features
+
+# Socket.IO - Pin compatible versions for Chainlit 2.9.5
+python-socketio>=5.11.0,<6.0.0
+python-engineio>=4.9.0,<5.0.0
+

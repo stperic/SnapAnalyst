@@ -1,0 +1,88 @@
+# SnapAnalyst .dockerignore
+# Exclude files from Docker build context
+
+# Git
+.git/
+.gitignore
+.github/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# IDEs
+.vscode/
+.idea/
+.cursor/
+*.swp
+*.swo
+
+# Testing
+.coverage
+htmlcov/
+coverage.xml
+*.cover
+.tox/
+
+# Data files (large CSV files)
+snapdata/*.csv
+backups/
+*.csv
+*.xlsx
+*.xls
+
+# Documentation
+docs/
+*.md
+!README.md
+!chainlit.md
+
+# Logs
+logs/
+*.log
+
+# ChromaDB (will be created in container)
+chromadb/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.backup
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-compose.override.yml
+Dockerfile
+.dockerignore
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+*.sql
+!datasets/*/schema.sql

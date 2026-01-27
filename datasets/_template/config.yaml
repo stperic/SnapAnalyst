@@ -1,0 +1,53 @@
+# Dataset Configuration Template
+# ==============================
+# Copy this file and customize for your dataset
+
+name: your_dataset_name  # Lowercase, no spaces (used in code)
+display_name: "Your Dataset Display Name"
+description: |
+  Brief description of what this dataset contains and its purpose.
+  Include information about the data source and intended use cases.
+
+version: "1.0"
+
+# PostgreSQL schema name for namespace isolation
+# Use 'public' to share the default schema, or a custom name for isolation
+schema: public
+
+# Data source information
+source:
+  name: "Data Source Name"
+  format: csv  # csv, wide_csv, json, parquet, etc.
+  url: "https://example.com/data"  # Optional URL to data source
+
+# Table structure
+tables:
+  # Primary table (main entity)
+  primary: your_main_table
+  
+  # Related tables (one-to-many from primary)
+  related:
+    - related_table_1
+    - related_table_2
+  
+  # Metadata/tracking tables (optional)
+  metadata:
+    - data_load_history
+
+# Reference/lookup tables (code-to-description mappings)
+reference_tables:
+  - ref_your_lookup_1
+  - ref_your_lookup_2
+
+# Key relationships between tables
+relationships:
+  - name: primary_to_related1
+    type: one_to_many
+    from: your_main_table
+    to: related_table_1
+    join: "(id, fiscal_year)"
+
+# Business terminology (optional - for documentation)
+terminology:
+  TERM1: "Definition of term 1"
+  TERM2: "Definition of term 2"

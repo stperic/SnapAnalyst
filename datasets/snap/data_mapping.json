@@ -1,0 +1,1696 @@
+{
+    "database": {
+        "name": "SnapAnalyst",
+        "description": "SNAP Quality Control database with normalized household, member, and QC error data. Data is structured to eliminate the wide-format CSV issue (1200+ columns reduced to ~100 columns across 3 tables).",
+        "version": "1.1",
+        "fiscal_years_available": [
+            2021,
+            2022,
+            2023
+        ],
+        "total_households": "~150,000 across all years",
+        "purpose": "Enable analysis of SNAP (food stamps) quality control reviews to understand benefit accuracy, household characteristics, income sources, and program errors.",
+        "data_source": "FNS SNAP Quality Control Public Use Files (FY2021, FY2022, FY2023)",
+        "notes": {
+            "max_members": "FY2021-2022: up to 16 members per household; FY2023: up to 17 members",
+            "max_errors": "Up to 9 QC errors per household (all years)",
+            "code_compatibility": "Code mappings are compatible across all fiscal years (superset approach)"
+        }
+    },
+    "code_lookups": {
+        "case_classification_codes": {
+            "description": "Case classification for error rate calculation",
+            "source_field": "CASE",
+            "1": "Included in error rate calculation",
+            "2": "Excluded from error rate calculation—processed by SSA worker",
+            "3": "Excluded from error rate calculation, as designated by FNS (for example, demonstration project, simplified SNAP)"
+        },
+        "status_codes": {
+            "description": "Status of case error findings",
+            "source_field": "STATUS",
+            "1": "Amount correct",
+            "2": "Overissuance",
+            "3": "Underissuance"
+        },
+        "expedited_service_codes": {
+            "description": "Whether household received expedited SNAP benefits",
+            "source_field": "EXPEDSER",
+            "1": "Entitled to expedited service and received benefits within Federal time frame",
+            "2": "Entitled to expedited service but did not receive benefits within Federal time frame",
+            "3": "Not entitled to expedited service"
+        },
+        "categorical_eligibility_codes": {
+            "description": "Indicator of categorical eligibility status",
+            "source_field": "CAT_ELIG",
+            "0": "Unit not categorically eligible for benefits",
+            "1": "Unit reported as categorically eligible for benefits and therefore not subject to SNAP income or asset tests",
+            "2": "Unit recoded as categorically eligible after being identified as pure cash PA or as meeting State-specified criteria for BBCE"
+        },
+        "error_finding_codes": {
+            "description": "Impact of variance on benefits (error finding)",
+            "source_field": "E_FINDG",
+            "2": "Overissuance",
+            "3": "Underissuance",
+            "4": "Ineligible"
+        },
+        "sex_codes": {
+            "description": "Sex of household member",
+            "source_field": "SEX",
+            "1": "Male",
+            "2": "Female",
+            "3": "Prefer not to answer"
+        },
+        "snap_affiliation_codes": {
+            "description": "SNAP case affiliation status",
+            "source_field": "FSAFIL",
+            "1": "Eligible member of SNAP case under review and entitled to receive benefits",
+            "2": "Eligible SNAP participant in another unit, not currently under review",
+            "3": "Reserved/legacy code (undocumented in FY2023 codebook)",
+            "4": "Member is ineligible noncitizen and not participating in State-funded SNAP",
+            "5": "Member not paying/cooperating with child support agency",
+            "6": "Member is ineligible striker",
+            "7": "Member is ineligible student",
+            "8": "Member disqualified for program violation",
+            "9": "Member ineligible to participate due to disqualification or failure to meet work requirements",
+            "10": "ABAWD time limit exhausted",
+            "11": "Fleeing felon or parole and probation violator",
+            "12": "Reserved/legacy code (undocumented in FY2023 codebook)",
+            "13": "Convicted drug felon",
+            "14": "Social Security Number disqualified",
+            "15": "SSI recipient in California",
+            "16": "Prisoner in detention center",
+            "17": "Foster care",
+            "18": "Member is ineligible noncitizen and participating in State-funded SNAP",
+            "19": "Individual in the home but not part of SNAP household",
+            "99": "Unknown"
+        },
+        "element_codes": {
+            "description": "Type of variance element (what area had the problem)",
+            "source_field": "ELEMENT",
+            "111": "Student status",
+            "130": "Citizenship and noncitizen status",
+            "140": "Residency",
+            "150": "Unit composition",
+            "151": "Recipient disqualification",
+            "160": "Employment and training programs",
+            "161": "Time-limited participation",
+            "162": "Work registration requirements",
+            "163": "Voluntary quit/reduced work effort",
+            "164": "Workfare and comparable workfare",
+            "165": "Employment status/job availability",
+            "166": "Acceptance of employment",
+            "170": "Social Security number",
+            "211": "Bank accounts or cash on hand",
+            "212": "Nonrecurring lump-sum payment",
+            "213": "Other liquid assets",
+            "221": "Real property",
+            "222": "Vehicles",
+            "224": "Other nonliquid resources",
+            "225": "Combined resources",
+            "311": "Wages and salaries",
+            "312": "Self-employment",
+            "314": "Other earned income",
+            "321": "Earned income deductions",
+            "323": "Dependent care deduction",
+            "331": "RSDI benefits",
+            "332": "Veterans' benefits",
+            "333": "SSI and/or State SSI supplement",
+            "334": "Unemployment compensation",
+            "335": "Workers' compensation",
+            "336": "Other government benefits",
+            "342": "Contributions",
+            "343": "Deemed income",
+            "344": "TANF, PA, or GA",
+            "345": "Educational grants/scholarships/loans",
+            "346": "Other unearned income",
+            "350": "Child support payments received from absent parent",
+            "361": "Standard deduction",
+            "363": "Shelter deduction",
+            "364": "Standard utility allowance",
+            "365": "Medical expense deductions",
+            "366": "Child support payment deduction",
+            "371": "Combined gross income",
+            "372": "Combined net income",
+            "520": "Arithmetic computation",
+            "530": "Transitional benefits",
+            "560": "Reporting systems",
+            "810": "SNAP simplification project",
+            "820": "Demonstration projects"
+        },
+        "nature_codes": {
+            "description": "Nature of each variance (what went wrong)",
+            "source_field": "NATURE",
+            "6": "Eligible person(s) excluded",
+            "7": "Ineligible person(s) included",
+            "12": "Eligible person(s) with no income, resources, or deductible expenses excluded",
+            "13": "Eligible person(s) with income excluded",
+            "14": "Eligible person(s) with resources excluded",
+            "15": "Eligible person(s) with deductible expenses excluded",
+            "16": "Newborn improperly excluded",
+            "20": "Incorrect resource limit applied",
+            "24": "Resource should have been excluded",
+            "28": "Incorrect income limit applied",
+            "29": "Exceeds prescribed limit",
+            "30": "Resource should have been included",
+            "32": "Failed to consider or incorrectly considered income of ineligible member",
+            "35": "Unreported source of income (do not use for change in employment status)",
+            "36": "Rounding used/not used or incorrectly applied",
+            "37": "All income from source known but not included",
+            "38": "More income received from this source than budgeted",
+            "39": "Employment status changed from unemployed to employed",
+            "40": "Employment status changed from employed to unemployed",
+            "41": "Change only in amount of earnings",
+            "42": "Conversion to monthly amount not used or incorrectly applied",
+            "43": "Averaging not used or incorrectly applied",
+            "44": "Less income received from this source than budgeted",
+            "45": "Cost of doing business not used or incorrectly applied",
+            "46": "Failed to consider/anticipate month with extra pay date",
+            "52": "Deduction that should have been included was not",
+            "53": "Deduction included that should not have been",
+            "54": "Incorrect standard used (not as a result of change in unit size or move)",
+            "64": "Incorrect amount used resulting from change in residence",
+            "65": "Incorrect standard used resulting from change in unit size",
+            "75": "Benefit/allotment/eligibility incorrectly computed",
+            "77": "Unit not entitled to transitional benefits",
+            "79": "Incorrect use of allotment tables",
+            "80": "Improper prorating of initial month's benefits",
+            "97": "Not required to be reported or acted upon based on time frames and reporting requirements",
+            "98": "Transcription or computation errors",
+            "99": "Other",
+            "111": "Child support payment(s) not considered or incorrectly applied for initial month(s) of eligibility",
+            "112": "Retained child support payment(s) not considered or incorrectly applied",
+            "120": "Variance/errors resulting from noncompliance with this means-tested public assistance program",
+            "123": "Incorrectly prorated",
+            "124": "Variances resulting from use of automatic Federal information exchange system",
+            "127": "Pass-through not considered or incorrectly applied",
+            "200": "Eligible noncitizen excluded",
+            "201": "Ineligible noncitizen included",
+            "301": "Unit improperly participating under retrospective budgeting",
+            "302": "Unit improperly participating under prospective budgeting",
+            "303": "Unit improperly participating under monthly reporting",
+            "304": "Unit improperly participating under quarterly reporting",
+            "305": "Unit improperly participating under semiannual reporting",
+            "306": "Unit improperly participating under change reporting",
+            "307": "Unit improperly participating under status reporting",
+            "308": "Unit improperly participating under 5 hour reporting",
+            "309": "Unit improperly participating in transitional benefits"
+        },
+        "agency_responsibility_codes": {
+            "description": "Primary cause of variance (agency vs client responsibility)",
+            "source_field": "AGENCY",
+            "1": "Information not reported",
+            "2": "Incomplete or incorrect information provided; agency not required to verify",
+            "3": "Information withheld by client (case referred for IPV investigation)",
+            "4": "Incorrect information provided by client (case referred for IPV investigation)",
+            "7": "Inaccurate information reported by collateral contact",
+            "8": "Acted on incorrect Federal computer match information not requiring verification",
+            "10": "Policy incorrectly applied",
+            "12": "Reported information disregarded or not applied",
+            "14": "Agency failed to follow up on inconsistent or incomplete information",
+            "15": "Agency failed to follow up on impending changes",
+            "16": "Agency failed to verify required information",
+            "17": "Computer programming error",
+            "18": "Data entry and/or coding error",
+            "19": "Mass change error",
+            "20": "Arithmetic computation error",
+            "21": "Computer user error",
+            "22": "22 Reserved (undocumented)",
+            "26": "26 Reserved (undocumented)",
+            "99": "Other"
+        },
+        "discovery_method_codes": {
+            "description": "How variance was discovered",
+            "source_field": "DISCOV",
+            "1": "Variance clearly identified from case record (not automated match)",
+            "2": "Variance clearly identified from case record (automated match)",
+            "3": "Variance discovered from recipient interview",
+            "4": "Employer (present or former)",
+            "5": "Financial institution, insurance company, or other business",
+            "6": "Landlord",
+            "7": "Government agency or public records, not automated match",
+            "8": "Government agency or public records, automated match",
+            "9": "Other"
+        },
+        "state_codes": {
+            "description": "State/territory FIPS codes",
+            "source_field": "STATE",
+            "1": {
+                "name": "Alabama",
+                "abbr": "AL"
+            },
+            "2": {
+                "name": "Alaska",
+                "abbr": "AK"
+            },
+            "4": {
+                "name": "Arizona",
+                "abbr": "AZ"
+            },
+            "5": {
+                "name": "Arkansas",
+                "abbr": "AR"
+            },
+            "6": {
+                "name": "California",
+                "abbr": "CA"
+            },
+            "8": {
+                "name": "Colorado",
+                "abbr": "CO"
+            },
+            "9": {
+                "name": "Connecticut",
+                "abbr": "CT"
+            },
+            "10": {
+                "name": "Delaware",
+                "abbr": "DE"
+            },
+            "11": {
+                "name": "District of Columbia",
+                "abbr": "DC"
+            },
+            "12": {
+                "name": "Florida",
+                "abbr": "FL"
+            },
+            "13": {
+                "name": "Georgia",
+                "abbr": "GA"
+            },
+            "15": {
+                "name": "Hawaii",
+                "abbr": "HI"
+            },
+            "16": {
+                "name": "Idaho",
+                "abbr": "ID"
+            },
+            "17": {
+                "name": "Illinois",
+                "abbr": "IL"
+            },
+            "18": {
+                "name": "Indiana",
+                "abbr": "IN"
+            },
+            "19": {
+                "name": "Iowa",
+                "abbr": "IA"
+            },
+            "20": {
+                "name": "Kansas",
+                "abbr": "KS"
+            },
+            "21": {
+                "name": "Kentucky",
+                "abbr": "KY"
+            },
+            "22": {
+                "name": "Louisiana",
+                "abbr": "LA"
+            },
+            "23": {
+                "name": "Maine",
+                "abbr": "ME"
+            },
+            "24": {
+                "name": "Maryland",
+                "abbr": "MD"
+            },
+            "25": {
+                "name": "Massachusetts",
+                "abbr": "MA"
+            },
+            "26": {
+                "name": "Michigan",
+                "abbr": "MI"
+            },
+            "27": {
+                "name": "Minnesota",
+                "abbr": "MN"
+            },
+            "28": {
+                "name": "Mississippi",
+                "abbr": "MS"
+            },
+            "29": {
+                "name": "Missouri",
+                "abbr": "MO"
+            },
+            "30": {
+                "name": "Montana",
+                "abbr": "MT"
+            },
+            "31": {
+                "name": "Nebraska",
+                "abbr": "NE"
+            },
+            "32": {
+                "name": "Nevada",
+                "abbr": "NV"
+            },
+            "33": {
+                "name": "New Hampshire",
+                "abbr": "NH"
+            },
+            "34": {
+                "name": "New Jersey",
+                "abbr": "NJ"
+            },
+            "35": {
+                "name": "New Mexico",
+                "abbr": "NM"
+            },
+            "36": {
+                "name": "New York",
+                "abbr": "NY"
+            },
+            "37": {
+                "name": "North Carolina",
+                "abbr": "NC"
+            },
+            "38": {
+                "name": "North Dakota",
+                "abbr": "ND"
+            },
+            "39": {
+                "name": "Ohio",
+                "abbr": "OH"
+            },
+            "40": {
+                "name": "Oklahoma",
+                "abbr": "OK"
+            },
+            "41": {
+                "name": "Oregon",
+                "abbr": "OR"
+            },
+            "42": {
+                "name": "Pennsylvania",
+                "abbr": "PA"
+            },
+            "44": {
+                "name": "Rhode Island",
+                "abbr": "RI"
+            },
+            "45": {
+                "name": "South Carolina",
+                "abbr": "SC"
+            },
+            "46": {
+                "name": "South Dakota",
+                "abbr": "SD"
+            },
+            "47": {
+                "name": "Tennessee",
+                "abbr": "TN"
+            },
+            "48": {
+                "name": "Texas",
+                "abbr": "TX"
+            },
+            "49": {
+                "name": "Utah",
+                "abbr": "UT"
+            },
+            "50": {
+                "name": "Vermont",
+                "abbr": "VT"
+            },
+            "51": {
+                "name": "Virginia",
+                "abbr": "VA"
+            },
+            "53": {
+                "name": "Washington",
+                "abbr": "WA"
+            },
+            "54": {
+                "name": "West Virginia",
+                "abbr": "WV"
+            },
+            "55": {
+                "name": "Wisconsin",
+                "abbr": "WI"
+            },
+            "56": {
+                "name": "Wyoming",
+                "abbr": "WY"
+            },
+            "66": {
+                "name": "Guam",
+                "abbr": "GU"
+            },
+            "72": {
+                "name": "Puerto Rico",
+                "abbr": "PR"
+            },
+            "78": {
+                "name": "Virgin Islands",
+                "abbr": "VI"
+            }
+        },
+        "element_categories": {
+            "description": "Categories for element codes to group related error types",
+            "eligibility": [
+                111,
+                130,
+                140,
+                150,
+                151,
+                160,
+                161,
+                162,
+                163,
+                164,
+                165,
+                166,
+                170
+            ],
+            "assets": [
+                211,
+                212,
+                213,
+                221,
+                222,
+                224,
+                225
+            ],
+            "earned_income": [
+                311,
+                312,
+                314,
+                321
+            ],
+            "unearned_income": [
+                331,
+                332,
+                333,
+                334,
+                335,
+                336,
+                342,
+                343,
+                344,
+                345,
+                346,
+                350
+            ],
+            "deductions": [
+                323,
+                361,
+                363,
+                364,
+                365,
+                366
+            ],
+            "income_totals": [
+                371,
+                372
+            ],
+            "computation": [
+                520,
+                530,
+                560,
+                810,
+                820
+            ]
+        },
+        "agency_responsibility_types": {
+            "description": "Classification of agency vs client responsibility codes",
+            "client": [
+                1,
+                2,
+                3,
+                4,
+                7,
+                8
+            ],
+            "agency": [
+                10,
+                12,
+                14,
+                15,
+                16,
+                17,
+                18,
+                19,
+                20,
+                21
+            ],
+            "other": [
+                99
+            ]
+        },
+        "abawd_status_codes": {
+            "description": "Able-Bodied Adult Without Dependents (ABAWD) status",
+            "source_field": "ABWDSTi",
+            "1": "Not an able-bodied adult without dependents (ABAWD)",
+            "2": "Ineligible householder",
+            "3": "ABAWD meeting work requirements at 7 CFR 273.24(a)(1)",
+            "4": "ABAWD meeting work requirements (in 3 months of eligibility)",
+            "5": "ABAWD in a waived area",
+            "6": "Exempt based on discretionary exemption",
+            "8": "Ineligible householder also coded as an eligible member of the SNAP unit"
+        },
+        "citizenship_status_codes": {
+            "description": "Citizenship status of household member",
+            "source_field": "CTZNi",
+            "1": "US-born citizen",
+            "2": "Naturalized citizen",
+            "3": "Legal permanent resident with 40 quarters work/military/5 years residency/disability/under 18",
+            "4": "Reserved/legacy code (undocumented in FY2023 codebook)",
+            "5": "Person admitted as refugee, granted asylum, or given stay of deportation",
+            "6": "Other eligible noncitizen",
+            "7": "Noncitizen legally in U.S. not meeting eligibility but income/resources considered",
+            "8": "Other ineligible legal noncitizen (visitor, tourist, student, diplomat)",
+            "9": "Undocumented noncitizen",
+            "10": "Noncitizen, status unknown"
+        },
+        "race_ethnicity_codes": {
+            "description": "Race and ethnicity of household member",
+            "source_field": "RACETHi",
+            "1": "Racial/ethnic data not available (application not found)",
+            "2": "Not recorded on application",
+            "3": "American Indian or Alaska Native (Not Hispanic)",
+            "4": "Asian (Not Hispanic)",
+            "5": "Black or African American (Not Hispanic)",
+            "6": "Native Hawaiian or other Pacific Islander (Not Hispanic)",
+            "7": "White (Not Hispanic)",
+            "8": "American Indian or Alaska Native and White (Not Hispanic)",
+            "9": "Asian and White (Not Hispanic)",
+            "10": "Black or African American and White (Not Hispanic)",
+            "11": "American Indian or Alaska Native and Black or African American (Not Hispanic)",
+            "12": "Multiple races - other combinations (Not Hispanic)",
+            "13": "Hispanic or Latino and American Indian or Alaska Native",
+            "14": "Hispanic or Latino and Asian",
+            "15": "Hispanic or Latino and Black or African American",
+            "16": "Hispanic or Latino and Native Hawaiian or other Pacific Islander",
+            "17": "Hispanic or Latino and White",
+            "18": "Hispanic or Latino and American Indian or Alaska Native and White",
+            "19": "Hispanic or Latino and Asian and White",
+            "20": "Hispanic or Latino and Black or African American and White",
+            "21": "Hispanic or Latino and American Indian or Alaska Native and Black or African American",
+            "22": "Hispanic or Latino and multiple races (other combinations)"
+        },
+        "relationship_codes": {
+            "description": "Relationship to head of household",
+            "source_field": "RELi",
+            "1": "Head of household",
+            "2": "Spouse",
+            "3": "Parent",
+            "4": "Daughter, stepdaughter, son, or stepson",
+            "5": "Other related person (brother, sister, niece, nephew, grandchild)",
+            "6": "Foster child",
+            "7": "Unrelated person"
+        },
+        "work_registration_codes": {
+            "description": "Work registration status",
+            "source_field": "WRKREGi",
+            "1": "Work registrant",
+            "2": "Federal exemption - physically or mentally unfit for employment",
+            "3": "Federal exemption - care of child under 6 or incapacitated person",
+            "4": "Federal exemption - working/earning equivalent of 30 hours per week",
+            "5": "Federal exemption - other",
+            "6": "Should have been registered but was not (FY2021 legacy code)"
+        },
+        "education_level_codes": {
+            "description": "Highest educational level completed",
+            "source_field": "YRSEDi",
+            "0": "None",
+            "1": "Grade 1",
+            "2": "Grade 2",
+            "3": "Grade 3",
+            "4": "Grade 4",
+            "5": "Grade 5",
+            "6": "Grade 6",
+            "7": "Grade 7",
+            "8": "Grade 8",
+            "9": "Grade 9",
+            "10": "Grade 10",
+            "11": "Grade 11",
+            "12": "High school graduate or GED",
+            "13": "Postsecondary education (technical or some college)",
+            "14": "College graduate or postgraduate degree"
+        },
+        "employment_status_type_codes": {
+            "description": "Employment status type",
+            "source_field": "EMPSTAi",
+            "1": "Not in labor force and not looking for work",
+            "2": "Unemployed and looking for work",
+            "3": "Active-duty military",
+            "4": "Migrant farm laborer",
+            "5": "Nonmigrant farm laborer",
+            "6": "Self-employed, farming",
+            "7": "Self-employed, nonfarming",
+            "8": "Employed by other"
+        },
+        "disability_codes": {
+            "description": "Disability indicator",
+            "source_field": "DISi",
+            "0": "Not disabled",
+            "1": "Disabled"
+        },
+        "working_indicator_codes": {
+            "description": "Person-level working indicator",
+            "source_field": "WORKi",
+            "0": "Not working",
+            "1": "Working"
+        },
+        "homelessness_codes": {
+            "description": "Homelessness status",
+            "source_field": "HOMEDED",
+            "1": "Not homeless",
+            "2": "Homeless, not receiving homeless shelter allowance",
+            "3": "Homeless, receiving homeless shelter allowance"
+        },
+        "reporting_system_codes": {
+            "description": "Reporting requirement/system",
+            "source_field": "REP_SYS",
+            "1": "Change reporting with $125 change in earned income",
+            "2": "Change reporting with change of wage rate, salary, or employment status",
+            "3": "5-hour change in hours worked expected to continue over a month",
+            "4": "Simplified reporting (exceeding 130% of income poverty guidelines)",
+            "5": "Quarterly reporting",
+            "6": "Simplified monthly reporting",
+            "7": "Transitional benefits (no reporting requirement)",
+            "8": "Transitional benefits (reporting requirement)",
+            "9": "Other",
+            "10": "Reserved"
+        },
+        "action_type_codes": {
+            "description": "Type of action on case",
+            "source_field": "ACTNTYPE",
+            "1": "Certification",
+            "2": "Recertification"
+        },
+        "allotment_adjustment_codes": {
+            "description": "Allotment adjustment type",
+            "source_field": "ALLADJ",
+            "1": "No adjustment",
+            "2": "Prorated benefit",
+            "3": "Other adjustment"
+        },
+        "ssi_cap_codes": {
+            "description": "SSI Combined Application Project (SSI-CAP) participation status",
+            "source_field": "SSI_CAP",
+            "0": "Not in SSI-CAP",
+            "1": "SSI-CAP case with standard shelter expenses",
+            "2": "SSI-CAP case with standard benefit, consistent with program rules",
+            "3": "SSI-CAP case with standard benefit, inconsistent with program rules",
+            "4": "NYSCAP case (New York SSI-CAP, added FY2022)"
+        }
+    },
+    "tables": {
+        "households": {
+            "description": "Core household case data. Each row represents one SNAP household case from quality control review.",
+            "row_count": "~50,000 per fiscal year",
+            "primary_key": "(case_id, fiscal_year)",
+            "unique_constraint": "(case_id, fiscal_year)",
+            "source_notes": "Derived from SNAP QC FY2023 Public Use File wide-format CSV with 1200+ columns",
+            "columns": {
+                "case_id": {
+                    "type": "VARCHAR(50)",
+                    "description": "SNAP household identification number (row number from source file - unique unit identifier, part of composite primary key)",
+                    "nullable": false,
+                    "range": "1-55115",
+                    "example": "12345",
+                    "source_field": "HHLDNO",
+                    "notes": "Natural primary key from source data"
+                },
+                "fiscal_year": {
+                    "type": "INTEGER",
+                    "description": "Fiscal year (part of composite primary key)",
+                    "nullable": false,
+                    "range": "2021-2023",
+                    "example": 2023,
+                    "source_field": "Derived from data file name",
+                    "notes": "Part of composite primary key to support multiple years"
+                },
+                "case_classification": {
+                    "type": "INTEGER",
+                    "description": "Case classification for error rate calculation",
+                    "nullable": true,
+                    "range": "1-3",
+                    "codes": {
+                        "1": "Included in error rate calculation",
+                        "2": "Excluded—processed by SSA worker",
+                        "3": "Excluded—designated by FNS"
+                    },
+                    "source_field": "CASE"
+                },
+                "fiscal_year": {
+                    "type": "INTEGER",
+                    "description": "Fiscal year of the quality control review",
+                    "nullable": false,
+                    "example": 2023,
+                    "range": "2021-2023",
+                    "source_field": "Derived from YRMONTH or specified during data load",
+                    "notes": "Not explicitly in CSV - determined from year_month or load parameter"
+                },
+                "state_code": {
+                    "type": "VARCHAR(2)",
+                    "description": "FIPS code for State or territory (numeric)",
+                    "nullable": true,
+                    "range": "1-78",
+                    "example": "9",
+                    "source_field": "STATE"
+                },
+                "state_name": {
+                    "type": "VARCHAR(50)",
+                    "description": "State or territory name",
+                    "nullable": true,
+                    "example": "Connecticut",
+                    "source_field": "STATENAME"
+                },
+                "year_month": {
+                    "type": "VARCHAR(6)",
+                    "description": "Sample year and month in YYYYMM format",
+                    "nullable": true,
+                    "range": "202210-202309",
+                    "example": "202210",
+                    "source_field": "YRMONTH"
+                },
+                "status": {
+                    "type": "INTEGER",
+                    "description": "Status of case error findings",
+                    "nullable": true,
+                    "range": "1-3",
+                    "example": 1,
+                    "source_field": "STATUS",
+                    "codes": {
+                        "1": "Amount correct",
+                        "2": "Overissuance",
+                        "3": "Underissuance"
+                    }
+                },
+                "snap_benefit": {
+                    "type": "DECIMAL(10,2)",
+                    "description": "Final calculated benefit (SNAP benefit allotment)",
+                    "nullable": true,
+                    "range": "4-3690",
+                    "example": 281.00,
+                    "source_field": "FSBEN"
+                },
+                "raw_benefit": {
+                    "type": "DECIMAL(10,2)",
+                    "description": "Reported SNAP benefit received (before QC corrections)",
+                    "nullable": true,
+                    "range": "0-9998",
+                    "example": 281.00,
+                    "source_field": "RAWBEN"
+                },
+                "amount_error": {
+                    "type": "DECIMAL(10,2)",
+                    "description": "Amount of benefit in error",
+                    "nullable": true,
+                    "range": "0-1265",
+                    "example": 0.00,
+                    "source_field": "AMTERR"
+                },
+                "maximum_benefit": {
+                    "type": "DECIMAL(10,2)",
+                    "description": "Maximum benefit amount for unit size and region",
+                    "nullable": true,
+                    "range": "281-4092",
+                    "example": 281.00,
+                    "source_field": "BENMAX"
+                },
+                "minimum_benefit": {
+                    "type": "DECIMAL(10,2)",
+                    "description": "Minimum benefit amount",
+                    "nullable": true,
+                    "range": "23-44",
+                    "example": 23.00,
+                    "source_field": "MINIMUM_BEN"
+                },
+                "gross_income": {
+                    "type": "DECIMAL(12,2)",
+                    "description": "Final gross countable unit income",
+                    "nullable": true,
+                    "range": "0-9488",
+                    "example": 561.00,
+                    "source_field": "FSGRINC"
+                },
+                "net_income": {
+                    "type": "DECIMAL(12,2)",
+                    "description": "Final net countable income after deductions",
+                    "nullable": true,
+                    "range": "0-8499",
+                    "example": 0.00,
+                    "source_field": "FSNETINC"
+                },
+                "earned_income": {
+                    "type": "DECIMAL(12,2)",
+                    "description": "Countable unit earned income",
+                    "nullable": true,
+                    "range": "0-8365",
+                    "example": 0.00,
+                    "source_field": "FSEARN"
+                },
+                "unearned_income": {
+                    "type": "DECIMAL(12,2)",
+                    "description": "Countable unit unearned income",
+                    "nullable": true,
+                    "range": "0-6863",
+                    "example": 561.00,
+                    "source_field": "FSUNEARN"
+                },
+                "certified_household_size": {
+                    "type": "INTEGER",
+                    "description": "Certified unit size",
+                    "nullable": true,
+                    "range": "1-17",
+                    "example": 1,
+                    "source_field": "CERTHHSZ"
+                },
+                "raw_household_size": {
+                    "type": "INTEGER",
+                    "description": "Reported number of people in household",
+                    "nullable": true,
+                    "range": "1-16",
+                    "example": 1,
+                    "source_field": "RAWHSIZE"
+                },
+                "snap_unit_size": {
+                    "type": "INTEGER",
+                    "description": "Constructed certified unit size",
+                    "nullable": true,
+                    "range": "1-17",
+                    "example": 1,
+                    "source_field": "FSUSIZE"
+                },
+                "num_elderly": {
+                    "type": "INTEGER",
+                    "description": "Number of elderly individuals in unit (age 60+)",
+                    "nullable": true,
+                    "range": "0-2",
+                    "example": 1,
+                    "source_field": "FSNELDER"
+                },
+                "num_children": {
+                    "type": "INTEGER",
+                    "description": "Number of children in unit (under 18)",
+                    "nullable": true,
+                    "range": "0-15",
+                    "example": 0,
+                    "source_field": "FSNKID"
+                },
+                "num_disabled": {
+                    "type": "INTEGER",
+                    "description": "Number of non-elderly individuals with disabilities",
+                    "nullable": true,
+                    "range": "0-7",
+                    "example": 0,
+                    "source_field": "FSNDIS"
+                },
+                "num_noncitizens": {
+                    "type": "INTEGER",
+                    "description": "Number of noncitizens in unit",
+                    "nullable": true,
+                    "range": "0-10",
+                    "example": 0,
+                    "source_field": "FSNONCIT"
+                },
+                "poverty_level": {
+                    "type": "DECIMAL(10,2)",
+                    "description": "Gross income/poverty level ratio",
+                    "nullable": true,
+                    "range": "0-621",
+                    "example": 50.00,
+                    "source_field": "TPOV"
+                },
+                "categorical_eligibility": {
+                    "type": "INTEGER",
+                    "description": "Indicator of categorical eligibility status",
+                    "nullable": true,
+                    "range": "0-2",
+                    "example": 1,
+                    "source_field": "CAT_ELIG",
+                    "codes": {
+                        "0": "Unit not categorically eligible",
+                        "1": "Unit categorically eligible",
+                        "2": "Unit recoded as categorically eligible"
+                    }
+                },
+                "expedited_service": {
+                    "type": "INTEGER",
+                    "description": "Received expedited service indicator",
+                    "nullable": true,
+                    "range": "1-3",
+                    "example": 3,
+                    "source_field": "EXPEDSER",
+                    "codes": {
+                        "1": "Entitled and received within Federal time frame",
+                        "2": "Entitled but did NOT receive within time frame",
+                        "3": "Not entitled to expedited service"
+                    }
+                },
+                "working_poor_indicator": {
+                    "type": "BOOLEAN",
+                    "description": "Indicator of working poor unit",
+                    "nullable": true,
+                    "example": false,
+                    "source_field": "WRK_POOR"
+                },
+                "tanf_indicator": {
+                    "type": "BOOLEAN",
+                    "description": "Indicator of TANF receipt for unit",
+                    "nullable": true,
+                    "example": false,
+                    "source_field": "TANF_IND"
+                },
+                "standard_deduction": {
+                    "type": "DECIMAL(10,2)",
+                    "description": "Standard deduction",
+                    "nullable": true,
+                    "range": "170-515",
+                    "example": 193.00,
+                    "source_field": "FSSTDDED"
+                },
+                "earned_income_deduction": {
+                    "type": "DECIMAL(10,2)",
+                    "description": "Calculated earned income deduction",
+                    "nullable": true,
+                    "range": "0-1673",
+                    "example": 0.00,
+                    "source_field": "FSERNDED"
+                },
+                "dependent_care_deduction": {
+                    "type": "DECIMAL(10,2)",
+                    "description": "Reported dependent care deduction",
+                    "nullable": true,
+                    "range": "0-3844",
+                    "example": 0.00,
+                    "source_field": "FSDEPDED"
+                },
+                "medical_deduction": {
+                    "type": "DECIMAL(10,2)",
+                    "description": "Calculated medical expense deduction",
+                    "nullable": true,
+                    "range": "0-1978",
+                    "example": 0.00,
+                    "source_field": "FSMEDDED"
+                },
+                "shelter_deduction": {
+                    "type": "DECIMAL(10,2)",
+                    "description": "Calculated excess shelter expense deduction",
+                    "nullable": true,
+                    "range": "0-4675",
+                    "example": 837.00,
+                    "source_field": "FSSLTDED"
+                },
+                "total_deductions": {
+                    "type": "DECIMAL(10,2)",
+                    "description": "Total deductions",
+                    "nullable": true,
+                    "range": "0-7056",
+                    "example": 1030.00,
+                    "source_field": "FSTOTDED"
+                },
+                "rent": {
+                    "type": "DECIMAL(10,2)",
+                    "description": "Rent/mortgage amount",
+                    "nullable": true,
+                    "range": "0-4721",
+                    "example": 100.00,
+                    "source_field": "RENT"
+                },
+                "utilities": {
+                    "type": "DECIMAL(10,2)",
+                    "description": "Utility amount",
+                    "nullable": true,
+                    "range": "0-1075",
+                    "example": 921.00,
+                    "source_field": "UTIL"
+                },
+                "shelter_expense": {
+                    "type": "DECIMAL(10,2)",
+                    "description": "Calculated shelter expenses",
+                    "nullable": true,
+                    "range": "0-5360",
+                    "example": 0.00,
+                    "source_field": "FSSLTEXP"
+                },
+                "liquid_resources": {
+                    "type": "DECIMAL(12,2)",
+                    "description": "Countable liquid assets under State rules",
+                    "nullable": true,
+                    "range": "0-8402",
+                    "example": 0.00,
+                    "source_field": "LIQRESOR"
+                },
+                "real_property": {
+                    "type": "DECIMAL(12,2)",
+                    "description": "Countable real property under State rules",
+                    "nullable": true,
+                    "range": "0-2500",
+                    "example": 0.00,
+                    "source_field": "REALPROP"
+                },
+                "vehicle_assets": {
+                    "type": "DECIMAL(12,2)",
+                    "description": "Countable non-excluded vehicles' value",
+                    "nullable": true,
+                    "range": "0-2825",
+                    "example": 0.00,
+                    "source_field": "FSVEHAST"
+                },
+                "total_assets": {
+                    "type": "DECIMAL(12,2)",
+                    "description": "Total countable assets under State rules",
+                    "nullable": true,
+                    "range": "0-8402",
+                    "example": 0.00,
+                    "source_field": "FSASSET"
+                },
+                "certification_month": {
+                    "type": "VARCHAR(6)",
+                    "description": "Months in certification period",
+                    "nullable": true,
+                    "range": "0-95",
+                    "example": "36",
+                    "source_field": "CERTMTH"
+                },
+                "last_certification_date": {
+                    "type": "INTEGER",
+                    "description": "Date case was certified/recertified in YYYYMMDD format",
+                    "nullable": true,
+                    "range": "20130213-20230930",
+                    "example": 20221015,
+                    "source_field": "RCNTACTN"
+                },
+                "gross_test_result": {
+                    "type": "INTEGER",
+                    "description": "Indicator of passing gross income test",
+                    "nullable": true,
+                    "range": "0-1",
+                    "example": 1,
+                    "source_field": "FSGRTEST",
+                    "codes": {
+                        "0": "No",
+                        "1": "Yes"
+                    }
+                },
+                "net_test_result": {
+                    "type": "INTEGER",
+                    "description": "Indicator of passing net income test",
+                    "nullable": true,
+                    "range": "0-1",
+                    "example": 1,
+                    "source_field": "FSNETEST",
+                    "codes": {
+                        "0": "No",
+                        "1": "Yes"
+                    }
+                },
+                "household_weight": {
+                    "type": "DECIMAL(18,8)",
+                    "description": "Monthly sample weight",
+                    "nullable": true,
+                    "range": "45.99-78335.51",
+                    "example": 3382.9227541,
+                    "source_field": "HWGT"
+                },
+                "fiscal_year_weight": {
+                    "type": "DECIMAL(18,8)",
+                    "description": "Weight used for full-year calculations",
+                    "nullable": true,
+                    "range": "3.83-6527.96",
+                    "example": 281.9102295,
+                    "source_field": "FYWGT"
+                },
+                "region_code": {
+                    "type": "VARCHAR(10)",
+                    "description": "FNS region code",
+                    "nullable": true,
+                    "range": "1-7",
+                    "example": "1",
+                    "source_field": "REGIONCD"
+                },
+                "stratum": {
+                    "type": "VARCHAR(20)",
+                    "description": "Stratum identification",
+                    "nullable": true,
+                    "range": "0-0",
+                    "example": "0",
+                    "source_field": "STRATUM"
+                },
+                "composition_code": {
+                    "type": "VARCHAR(10)",
+                    "description": "Unit composition code",
+                    "nullable": true,
+                    "range": "0-5",
+                    "example": "0",
+                    "source_field": "COMPOSITION"
+                },
+                "homeless_deduction": {
+                    "type": "DECIMAL(10,2)",
+                    "description": "Amount of homeless household shelter deduction",
+                    "nullable": true,
+                    "range": "0-167",
+                    "example": 0.00,
+                    "source_field": "HOMELESS_DED"
+                },
+                "created_at": {
+                    "type": "TIMESTAMP",
+                    "description": "Record creation timestamp",
+                    "nullable": false,
+                    "source_field": "Auto-generated by database",
+                    "notes": "Not in source CSV - database audit field"
+                },
+                "updated_at": {
+                    "type": "TIMESTAMP",
+                    "description": "Record last update timestamp",
+                    "nullable": false,
+                    "source_field": "Auto-generated by database",
+                    "notes": "Not in source CSV - database audit field"
+                }
+            }
+        },
+        "household_members": {
+            "description": "Individual household member data. Each household has 1-17 members.",
+            "row_count": "~120,000 (about 2.4 members per household average)",
+            "primary_key": "(case_id, fiscal_year, member_number)",
+            "foreign_keys": [
+                "(case_id, fiscal_year) → households(case_id, fiscal_year)"
+            ],
+            "unique_constraint": "(case_id, fiscal_year, member_number)",
+            "source_notes": "Person-level data extracted from columns with suffix 1-17 in source CSV",
+            "columns": {
+                "case_id": {
+                    "type": "VARCHAR(50)",
+                    "description": "SNAP household identification number (part of composite primary key)",
+                    "nullable": false,
+                    "source_field": "HHLDNO",
+                    "notes": "Part of composite primary key and foreign key to households"
+                },
+                "fiscal_year": {
+                    "type": "INTEGER",
+                    "description": "Fiscal year (part of composite primary key)",
+                    "nullable": false,
+                    "source_field": "Derived from data file",
+                    "notes": "Part of composite primary key and foreign key to households"
+                },
+                "member_number": {
+                    "type": "INTEGER",
+                    "description": "Member position in household (1-17, part of composite primary key)",
+                    "nullable": false,
+                    "range": "1-17",
+                    "example": 1,
+                    "source_field": "Derived from column suffix (AGE1→1, AGE2→2, etc.)",
+                    "notes": "Extracted from the 'i' in source field names like AGEi, WAGESi"
+                },
+                "age": {
+                    "type": "INTEGER",
+                    "description": "Age in years",
+                    "nullable": true,
+                    "range": "0-98",
+                    "example": 62,
+                    "source_field": "AGEi",
+                    "codes": {
+                        "0": "Age less than 1 year",
+                        "1-97": "Age in years",
+                        "98": "Age 98 years or older"
+                    }
+                },
+                "sex": {
+                    "type": "INTEGER",
+                    "description": "Sex of member",
+                    "nullable": true,
+                    "range": "1-3",
+                    "source_field": "SEXi",
+                    "codes": {
+                        "1": "Male",
+                        "2": "Female",
+                        "3": "Prefer not to answer"
+                    }
+                },
+                "snap_affiliation_code": {
+                    "type": "INTEGER",
+                    "description": "SNAP case affiliation - member's participation status",
+                    "nullable": true,
+                    "range": "1-99",
+                    "source_field": "FSAFILi",
+                    "codes": {
+                        "1": "Eligible member entitled to receive benefits",
+                        "2": "Eligible participant in another unit",
+                        "4": "Ineligible noncitizen (not in State-funded SNAP)",
+                        "7": "Ineligible student",
+                        "8": "Disqualified for program violation",
+                        "9": "Ineligible due to work requirement failure",
+                        "19": "Individual in home but not part of SNAP household",
+                        "99": "Unknown"
+                    }
+                },
+                "disability_indicator": {
+                    "type": "INTEGER",
+                    "description": "Person-level disability indicator",
+                    "nullable": true,
+                    "range": "0-1",
+                    "source_field": "DISi",
+                    "codes": {
+                        "0": "Not disabled",
+                        "1": "Disabled"
+                    }
+                },
+                "foster_child_indicator": {
+                    "type": "INTEGER",
+                    "description": "Foster child status",
+                    "nullable": true,
+                    "source_field": "FOSTERi",
+                    "notes": "Coded value from source data"
+                },
+                "working_indicator": {
+                    "type": "INTEGER",
+                    "description": "Person-level working indicator",
+                    "nullable": true,
+                    "range": "0-1",
+                    "source_field": "WORKi",
+                    "codes": {
+                        "0": "No",
+                        "1": "Yes"
+                    }
+                },
+                "wages": {
+                    "type": "DECIMAL(10,2)",
+                    "description": "Countable wages and salaries",
+                    "nullable": false,
+                    "range": "0-7526",
+                    "example": 0.00,
+                    "source_field": "WAGESi"
+                },
+                "self_employment_income": {
+                    "type": "DECIMAL(10,2)",
+                    "description": "Countable self-employment income",
+                    "nullable": false,
+                    "range": "0-5210",
+                    "example": 0.00,
+                    "source_field": "SLFEMPi"
+                },
+                "social_security": {
+                    "type": "DECIMAL(10,2)",
+                    "description": "Countable Social Security income (RSDI)",
+                    "nullable": false,
+                    "range": "0-6800",
+                    "example": 561.00,
+                    "source_field": "SOCSECi"
+                },
+                "ssi": {
+                    "type": "DECIMAL(10,2)",
+                    "description": "Countable SSI benefits",
+                    "nullable": false,
+                    "range": "0-2406",
+                    "example": 0.00,
+                    "source_field": "SSIi"
+                },
+                "unemployment": {
+                    "type": "DECIMAL(10,2)",
+                    "description": "Countable unemployment compensation",
+                    "nullable": false,
+                    "range": "0-3254",
+                    "example": 0.00,
+                    "source_field": "UNEMPi"
+                },
+                "tanf": {
+                    "type": "DECIMAL(10,2)",
+                    "description": "Countable TANF payments",
+                    "nullable": false,
+                    "range": "0-2185",
+                    "example": 0.00,
+                    "source_field": "TANFi"
+                },
+                "child_support": {
+                    "type": "DECIMAL(10,2)",
+                    "description": "Countable child support payment income",
+                    "nullable": false,
+                    "range": "0-2561",
+                    "example": 0.00,
+                    "source_field": "CSUPRTi"
+                },
+                "veterans_benefits": {
+                    "type": "DECIMAL(10,2)",
+                    "description": "Countable veterans' benefits",
+                    "nullable": false,
+                    "range": "0-4273",
+                    "example": 0.00,
+                    "source_field": "VETi"
+                },
+                "workers_compensation": {
+                    "type": "DECIMAL(10,2)",
+                    "description": "Countable workers' compensation benefits",
+                    "nullable": false,
+                    "range": "0-4441",
+                    "example": 0.00,
+                    "source_field": "WCOMPi"
+                },
+                "total_earned_income": {
+                    "type": "DECIMAL(10,2)",
+                    "description": "Sum of all earned income sources (calculated field)",
+                    "nullable": true,
+                    "source_field": "Calculated: wages + self_employment_income + other_earned",
+                    "notes": "Not in source CSV - computed from member income fields"
+                },
+                "total_unearned_income": {
+                    "type": "DECIMAL(10,2)",
+                    "description": "Sum of all unearned income sources (calculated field)",
+                    "nullable": true,
+                    "source_field": "Calculated: social_security + ssi + unemployment + tanf + child_support + veterans_benefits + workers_compensation",
+                    "notes": "Not in source CSV - computed from member income fields"
+                },
+                "total_income": {
+                    "type": "DECIMAL(10,2)",
+                    "description": "Total income (earned + unearned) (calculated field)",
+                    "nullable": true,
+                    "source_field": "Calculated: total_earned_income + total_unearned_income",
+                    "notes": "Not in source CSV - computed field"
+                }
+            }
+        },
+        "qc_errors": {
+            "description": "Quality Control errors (variances) found during review. Up to 9 errors per household.",
+            "row_count": "~20,000 errors across all households",
+            "primary_key": "(case_id, fiscal_year, error_number)",
+            "foreign_keys": [
+                "(case_id, fiscal_year) → households(case_id, fiscal_year)"
+            ],
+            "unique_constraint": "(case_id, fiscal_year, error_number)",
+            "source_notes": "Error data extracted from columns with suffix 1-9 in source CSV",
+            "columns": {
+                "case_id": {
+                    "type": "VARCHAR(50)",
+                    "description": "SNAP household identification number (part of composite primary key)",
+                    "nullable": false,
+                    "source_field": "HHLDNO",
+                    "notes": "Part of composite primary key and foreign key to households"
+                },
+                "fiscal_year": {
+                    "type": "INTEGER",
+                    "description": "Fiscal year (part of composite primary key)",
+                    "nullable": false,
+                    "source_field": "Derived from data file",
+                    "notes": "Part of composite primary key and foreign key to households"
+                },
+                "error_number": {
+                    "type": "INTEGER",
+                    "description": "Error sequence number for this household (1-9, part of composite primary key)",
+                    "nullable": false,
+                    "range": "1-9",
+                    "example": 1,
+                    "source_field": "Derived from column suffix (ELEMENT1→1, ELEMENT2→2, etc.)",
+                    "notes": "Extracted from the 'i' in source field names like ELEMENTi, NATUREi"
+                },
+                "element_code": {
+                    "type": "INTEGER",
+                    "description": "Variance element - type of problem area",
+                    "nullable": true,
+                    "range": "111-820",
+                    "example": 520,
+                    "source_field": "ELEMENTi"
+                },
+                "nature_code": {
+                    "type": "INTEGER",
+                    "description": "Nature of variance - what went wrong",
+                    "nullable": true,
+                    "range": "6-309",
+                    "example": 75,
+                    "source_field": "NATUREi"
+                },
+                "responsible_agency": {
+                    "type": "INTEGER",
+                    "description": "Agency or client responsibility",
+                    "nullable": true,
+                    "range": "1-99",
+                    "example": 17,
+                    "source_field": "AGENCYi"
+                },
+                "error_amount": {
+                    "type": "DECIMAL(10,2)",
+                    "description": "Variance dollar amount",
+                    "nullable": true,
+                    "range": "0-1480",
+                    "example": 57.00,
+                    "source_field": "AMOUNTi"
+                },
+                "discovery_method": {
+                    "type": "INTEGER",
+                    "description": "How variance was discovered",
+                    "nullable": true,
+                    "range": "1-9",
+                    "example": 2,
+                    "source_field": "DISCOVi"
+                },
+                "verification_status": {
+                    "type": "INTEGER",
+                    "description": "How variance was verified",
+                    "nullable": true,
+                    "range": "1-9",
+                    "example": 2,
+                    "source_field": "VERIFi"
+                },
+                "occurrence_date": {
+                    "type": "INTEGER",
+                    "description": "Variance occurrence date in YYYYMM format",
+                    "nullable": true,
+                    "range": "200112-999999",
+                    "example": 202210,
+                    "source_field": "OCCDATEi",
+                    "codes": {
+                        "999999": "Unknown"
+                    }
+                },
+                "time_period": {
+                    "type": "VARCHAR(20)",
+                    "description": "Variance time period",
+                    "nullable": true,
+                    "range": "1-9",
+                    "example": "3",
+                    "source_field": "TIMEPERi",
+                    "codes": {
+                        "1": "Before most recent action",
+                        "2": "At time of most recent action",
+                        "3": "After most recent action",
+                        "9": "Cannot be determined"
+                    }
+                },
+                "error_finding": {
+                    "type": "INTEGER",
+                    "description": "Impact of variance on benefits",
+                    "nullable": true,
+                    "range": "2-4",
+                    "example": 3,
+                    "source_field": "E_FINDGi",
+                    "codes": {
+                        "2": "Overissuance",
+                        "3": "Underissuance",
+                        "4": "Ineligible"
+                    }
+                },
+                "created_at": {
+                    "type": "TIMESTAMP",
+                    "description": "Record creation timestamp",
+                    "nullable": false,
+                    "source_field": "Auto-generated by database",
+                    "notes": "Not in source CSV - database audit field"
+                }
+            }
+        }
+    },
+    "relationships": {
+        "households_to_members": {
+            "type": "ONE_TO_MANY",
+            "description": "One household has 1-17 members",
+            "join": "households.case_id = household_members.case_id AND households.fiscal_year = household_members.fiscal_year"
+        },
+        "households_to_errors": {
+            "type": "ONE_TO_MANY",
+            "description": "One household has 0-9 QC errors",
+            "join": "households.case_id = qc_errors.case_id AND households.fiscal_year = qc_errors.fiscal_year"
+        }
+    },
+    "column_display_formats": {
+        "_description": "Display format hints for UI table rendering. Format types: integer (whole number with commas), rawint (whole number WITHOUT commas for codes/dates), year (year without commas), currency ($ with 2 decimals), weight (4 decimals), text (as-is), boolean, datetime",
+        "year": {
+            "_description": "Display as year without comma separators (e.g., 2023 not 2,023)",
+            "columns": [
+                "fiscal_year",
+                "year",
+                "sample_year",
+                "certification_year"
+            ]
+        },
+        "rawint": {
+            "_description": "Display as whole number WITHOUT comma separators - for codes, dates in YYYYMMDD/YYYYMM format",
+            "columns": [
+                "last_certification_date",
+                "occurrence_date",
+                "element_code",
+                "nature_code",
+                "responsible_agency",
+                "discovery_method",
+                "verification_status",
+                "error_finding",
+                "case_classification",
+                "status",
+                "categorical_eligibility",
+                "expedited_service",
+                "gross_test_result",
+                "net_test_result",
+                "sex",
+                "race_ethnicity",
+                "relationship_to_head",
+                "citizenship_status",
+                "snap_affiliation_code",
+                "disability_indicator",
+                "foster_child_indicator",
+                "work_registration_status",
+                "abawd_status",
+                "working_indicator",
+                "employment_region",
+                "employment_status_a",
+                "employment_status_b"
+            ]
+        },
+        "integer": {
+            "_description": "Display as whole numbers WITH comma separators - for counts and quantities",
+            "columns": [
+                "case_id",
+                "member_number",
+                "error_number",
+                "raw_household_size",
+                "certified_household_size",
+                "snap_unit_size",
+                "num_noncitizens",
+                "num_disabled",
+                "num_elderly",
+                "num_children",
+                "age",
+                "years_education",
+                "id",
+                "total_rows_in_file",
+                "rows_loaded",
+                "rows_skipped",
+                "households_created",
+                "members_created",
+                "errors_created",
+                "duration_seconds",
+                "file_size_bytes",
+                "total_households",
+                "total_members",
+                "total_errors",
+                "count",
+                "total_count",
+                "row_count"
+            ]
+        },
+        "currency": {
+            "_description": "Display with 2 decimal places for dollar amounts. Also matches aggregate columns like avg_*, average_*, sum_*, total_* containing income/benefit/amount keywords.",
+            "columns": [
+                "gross_income",
+                "net_income",
+                "earned_income",
+                "unearned_income",
+                "average_income",
+                "avg_income",
+                "avg_snap_benefit",
+                "average_snap_benefit",
+                "sum_income",
+                "sum_benefit",
+                "total_benefit",
+                "avg_benefit",
+                "average_benefit",
+                "avg_gross_income",
+                "avg_net_income",
+                "avg_earned_income",
+                "avg_unearned_income",
+                "liquid_resources",
+                "real_property",
+                "vehicle_assets",
+                "total_assets",
+                "standard_deduction",
+                "earned_income_deduction",
+                "dependent_care_deduction",
+                "medical_deduction",
+                "shelter_deduction",
+                "total_deductions",
+                "rent",
+                "utilities",
+                "shelter_expense",
+                "homeless_deduction",
+                "snap_benefit",
+                "raw_benefit",
+                "maximum_benefit",
+                "minimum_benefit",
+                "amount_error",
+                "poverty_level",
+                "wages",
+                "self_employment_income",
+                "earned_income_tax_credit",
+                "other_earned_income",
+                "social_security",
+                "ssi",
+                "veterans_benefits",
+                "unemployment",
+                "workers_compensation",
+                "tanf",
+                "child_support",
+                "general_assistance",
+                "education_loans",
+                "other_government_income",
+                "contributions",
+                "deemed_income",
+                "other_unearned_income",
+                "dependent_care_cost",
+                "energy_assistance",
+                "wage_supplement",
+                "diversion_payment",
+                "total_earned_income",
+                "total_unearned_income",
+                "total_income",
+                "error_amount"
+            ]
+        },
+        "weight": {
+            "_description": "Display with 4 decimal places for statistical weights",
+            "columns": [
+                "household_weight",
+                "fiscal_year_weight"
+            ]
+        },
+        "text": {
+            "_description": "Display as-is without formatting",
+            "columns": [
+                "state_code",
+                "state_name",
+                "region_code",
+                "year_month",
+                "composition_code",
+                "certification_month",
+                "stratum",
+                "time_period",
+                "filename",
+                "load_status",
+                "error_message",
+                "loaded_by",
+                "load_method"
+            ]
+        },
+        "boolean": {
+            "_description": "Display as Yes/No or true/false",
+            "columns": [
+                "working_poor_indicator",
+                "tanf_indicator"
+            ]
+        },
+        "datetime": {
+            "_description": "Display as formatted date/time",
+            "columns": [
+                "created_at",
+                "updated_at",
+                "started_at",
+                "completed_at"
+            ]
+        }
+    }
+}

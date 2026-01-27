@@ -1,0 +1,209 @@
+# SnapAnalyst Docker Compose
+# 
+# This file runs the complete SnapAnalyst application:
+# - PostgreSQL database
+# - FastAPI backend API
+# - Chainlit web UI
+#
+# Usage:
+#   docker-compose up -d              # Start all services
+#   docker-compose logs -f            # View logs
+#   docker-compose down               # Stop all services
+#   docker-compose down -v            # Stop and remove volumes
+
+name: snapanalyst
+
+services:
+  # ==========================================================================
+  # PostgreSQL Database
+  # ==========================================================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres
+    environment:
+      POSTGRES_USER: snapanalyst
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-snapanalyst_dev_password}
+      POSTGRES_DB: snapanalyst_db
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U snapanalyst -d snapanalyst_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - network
+    restart: unless-stopped
+
+  # ==========================================================================
+  # FastAPI Backend API
+  # ==========================================================================
+  backend-server:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: backend-server
+    environment:
+      # Database
+      DATABASE_URL: postgresql://snapanalyst:${DATABASE_PASSWORD:-snapanalyst_dev_password}@postgres:5432/snapanalyst_db
+      
+      # Application
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DEBUG: ${DEBUG:-false}
+      SECRET_KEY: ${SECRET_KEY:-change-this-in-production}
+      
+      # Data paths (inside container)
+      SNAPDATA_PATH: /data
+      
+      # LLM Configuration
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      
+      # Azure OpenAI Configuration (OpenAI-compatible endpoint)
+      AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-}
+      AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY:-}
+      
+      # LLM Model Settings
+      LLM_SQL_MODEL: ${LLM_SQL_MODEL:-}
+      LLM_SQL_MAX_TOKENS: ${LLM_SQL_MAX_TOKENS:-2000}
+      LLM_SQL_TEMPERATURE: ${LLM_SQL_TEMPERATURE:-0.1}
+      LLM_KB_MODEL: ${LLM_KB_MODEL:-}
+      LLM_KB_MAX_TOKENS: ${LLM_KB_MAX_TOKENS:-150}
+      LLM_KB_MAX_DATA_SIZE: ${LLM_KB_MAX_DATA_SIZE:-8000}
+      LLM_KB_MAX_PROMPT_SIZE: ${LLM_KB_MAX_PROMPT_SIZE:-10000}
+      LLM_KB_TEMPERATURE: ${LLM_KB_TEMPERATURE:-}
+      
+      # Query Result Settings
+      MAX_RESULT_COLUMNS: ${MAX_RESULT_COLUMNS:-10}
+      
+      # Vanna Configuration
+      VANNA_TRAINING_ENABLED: ${VANNA_TRAINING_ENABLED:-false}
+      VANNA_CHROMADB_PATH: /app/chromadb
+
+      # Disable ChromaDB telemetry (reduces log noise)
+      ANONYMIZED_TELEMETRY: "False"
+
+      # ONNX Runtime optimization for LXC containers (Proxmox, etc.)
+      # CRITICAL: OMP_NUM_THREADS must be set to non-zero value to prevent pthread_setaffinity_np errors
+      # When explicitly set, ONNX Runtime skips automatic CPU affinity (which fails in LXC containers)
+      # See: https://github.com/chroma-core/chroma/issues/1420
+      OMP_NUM_THREADS: "${OMP_NUM_THREADS:-4}"
+    volumes:
+      - snapanalyst_data:/data
+      - ./docker/logs:/app/logs
+      - chromadb_data:/app/chromadb
+      - chroma_cache:/root/.cache/chroma  # Persist ONNX embedding model (79MB)
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - network
+    restart: unless-stopped
+    command: uvicorn src.api.main:app --host 0.0.0.0 --port 8000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ==========================================================================
+  # Chainlit Web UI
+  # ==========================================================================
+  frontend-server:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: frontend-server
+    environment:
+      # API connection (internal Docker network)
+      API_BASE_URL: http://backend-server:8000
+      # External API URL for browser download links
+      # Options: "relative" (behind reverse proxy), "http://localhost:8000" (local dev), 
+      #          or custom like "https://api.example.com"
+      API_EXTERNAL_URL: ${API_EXTERNAL_URL:-http://localhost:8000}
+      
+      # Required by src.core.config (loaded by chainlit_app.py)
+      DATABASE_URL: postgresql://snapanalyst:${DATABASE_PASSWORD:-snapanalyst_dev_password}@postgres:5432/snapanalyst_db
+      SECRET_KEY: ${SECRET_KEY:-change-this-in-production}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      SNAPDATA_PATH: /data
+      
+      # LLM Configuration (for display purposes in UI)
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      
+      # Chainlit settings
+      CHAINLIT_HOST: 0.0.0.0
+      CHAINLIT_PORT: 8001
+      CHAINLIT_AUTH_SECRET: ${CHAINLIT_AUTH_SECRET}
+      
+      # Suppress verbose logging
+      CHAINLIT_DEBUG: "false"
+    volumes:
+      - ./docker/logs:/app/logs
+    ports:
+      - "${CHAINLIT_PORT:-8001}:8001"
+    depends_on:
+      backend-server:
+        condition: service_healthy
+    networks:
+      - network
+    restart: unless-stopped
+    command: chainlit run chainlit_app.py --host 0.0.0.0 --port 8001
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ==========================================================================
+  # Data Initialization (downloads data AND loads into database)
+  # ==========================================================================
+  data-loader:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: data-loader
+    environment:
+      DATABASE_URL: postgresql://snapanalyst:${DATABASE_PASSWORD:-snapanalyst_dev_password}@postgres:5432/snapanalyst_db
+      SNAPDATA_PATH: /data
+      SECRET_KEY: ${SECRET_KEY:-init-only}
+    volumes:
+      - snapanalyst_data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - network
+    command: python /app/scripts/docker_init_data.py
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  postgres_data:
+    driver: local
+  snapanalyst_data:
+    driver: local
+  chromadb_data:
+    driver: local
+  chroma_cache:
+    driver: local
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  network:
+    driver: bridge

@@ -1,0 +1,99 @@
+# SNAP QC Dataset Configuration
+# ==============================
+# This file defines the SNAP Quality Control dataset for the multi-dataset
+# architecture. It provides metadata and structure information that can be
+# loaded without importing Python modules.
+
+name: snap
+display_name: "SNAP QC Public Data"
+description: |
+  FNS SNAP Quality Control public use file. Contains household-level data,
+  person-level data, and QC error findings for analyzing SNAP benefit accuracy
+  and program integrity.
+
+version: "1.0"
+
+# PostgreSQL schema name for namespace isolation
+# Currently 'public' for backward compatibility
+# Change to 'snap' when migrating to schema isolation
+schema: public
+
+# Data source information
+source:
+  name: "FNS SNAP Quality Control FY2023 Public Use File"
+  format: wide_csv
+  columns: 1200+  # Original wide format
+  url: "https://snapqcdata.net/data"
+  original_source: "https://www.fns.usda.gov/snap/quality-control-data"
+
+# Available fiscal years
+fiscal_years:
+  - 2021
+  - 2022
+  - 2023
+
+# Table structure
+tables:
+  primary: households
+  related:
+    - household_members
+    - qc_errors
+  metadata:
+    - data_load_history
+
+# Reference/lookup tables (for code-to-description mappings)
+reference_tables:
+  # Core error analysis
+  - ref_status
+  - ref_element
+  - ref_nature
+  - ref_agency_responsibility
+  - ref_error_finding
+  - ref_discovery
+  # Geographic
+  - ref_state
+  # Demographics
+  - ref_sex
+  - ref_snap_affiliation
+  - ref_categorical_eligibility
+  - ref_expedited_service
+  - ref_case_classification
+  # Extended demographics
+  - ref_abawd_status
+  - ref_citizenship_status
+  - ref_race_ethnicity
+  - ref_relationship
+  - ref_work_registration
+  - ref_education_level
+  - ref_employment_status_type
+  - ref_disability
+  - ref_working_indicator
+  - ref_homelessness
+  - ref_reporting_system
+  - ref_action_type
+  - ref_allotment_adjustment
+
+# Key relationships
+relationships:
+  - name: households_to_members
+    type: one_to_many
+    from: households
+    to: household_members
+    join: "(case_id, fiscal_year)"
+    
+  - name: households_to_errors
+    type: one_to_many
+    from: households
+    to: qc_errors
+    join: "(case_id, fiscal_year)"
+
+# Program terminology (for documentation)
+terminology:
+  SNAP: "Supplemental Nutrition Assistance Program (formerly food stamps)"
+  QC: "Quality Control review process to ensure benefit accuracy"
+  Overissuance: "Household received more benefits than entitled"
+  Underissuance: "Household received less benefits than entitled"
+  RSDI: "Retirement, Survivors, and Disability Insurance (Social Security)"
+  SSI: "Supplemental Security Income"
+  TANF: "Temporary Assistance for Needy Families"
+  ABAWD: "Able-Bodied Adults Without Dependents"

@@ -1,0 +1,21 @@
+{
+    "dataset": "your_dataset_name",
+    "description": "Example queries for Vanna training",
+    "example_queries": [
+        {
+            "question": "Show me all active records",
+            "sql": "SELECT * FROM your_main_table WHERE status = 1 LIMIT 100",
+            "description": "Basic filter query"
+        },
+        {
+            "question": "How many records are in each category?",
+            "sql": "SELECT category, COUNT(*) as count FROM your_main_table GROUP BY category ORDER BY count DESC",
+            "description": "Aggregation query"
+        },
+        {
+            "question": "Show me records with their status descriptions",
+            "sql": "SELECT t.*, r.description as status_description FROM your_main_table t JOIN ref_your_lookup_1 r ON t.status = r.code",
+            "description": "Join with reference table"
+        }
+    ]
+}

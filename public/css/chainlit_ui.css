@@ -1,0 +1,103 @@
+/* =============================================================================
+   Chainlit UI Customizations
+   Global styles for Chainlit interface (not related to Tabulator tables)
+   ============================================================================= */
+
+/* Hide "No threads found" empty state message in sidebar */
+[class*="MuiAlert-root"],
+[class*="MuiAlert-standardInfo"],
+.MuiAlert-root.MuiAlert-standardInfo {
+    display: none !important;
+}
+
+/* =============================================================================
+   Login Page - Clean and Simple (hide decorative right panel)
+   ============================================================================= */
+
+/* Hide the decorative right panel on login page */
+.lg\:block.bg-muted.overflow-hidden,
+.relative.bg-muted.lg\:block,
+div[class*="lg:block"][class*="bg-muted"][class*="overflow-hidden"] {
+    display: none !important;
+}
+
+/* Override the 2-column grid to single column */
+.lg\:grid-cols-2 {
+    grid-template-columns: 1fr !important;
+}
+
+/* =============================================================================
+   Login Page - Custom Logo Above Welcome Text
+   ============================================================================= */
+
+/* Hide the small header icon at the top of the login page - Multiple approaches */
+/* Method 1: Target common header/nav elements on login page */
+.min-h-svh header,
+.min-h-svh nav,
+.min-h-svh [role="banner"],
+.min-h-svh [role="navigation"] {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    overflow: hidden !important;
+}
+
+/* Method 2: Hide any links to "/" in the top area of login page */
+.min-h-svh a[href="/"] {
+    display: none !important;
+    visibility: hidden !important;
+    position: absolute !important;
+    width: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+}
+
+/* Method 3: Hide logo images in the login page header area */
+.min-h-svh img[src*="logo"],
+.min-h-svh img[alt*="logo"],
+.min-h-svh img[alt*="Logo"] {
+    display: none !important;
+    visibility: hidden !important;
+}
+
+/* Method 4: Target any SVG icons in header */
+.min-h-svh.grid>*>a>svg,
+.min-h-svh.grid header svg,
+.min-h-svh.grid nav svg {
+    display: none !important;
+}
+
+/* Style the login form container */
+.min-h-svh.grid>div:first-child {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    height: 100vh !important;
+}
+
+/* Add custom logo above the form using the form's parent */
+.min-h-svh .flex.flex-1.items-center.justify-center {
+    flex: none !important;
+    width: 100% !important;
+    max-width: 350px !important;
+    flex-direction: column !important;
+}
+
+/* Add the SNAP logo above the login card */
+.min-h-svh .flex.flex-1.items-center.justify-center::before {
+    content: "";
+    display: block;
+    width: 120px;
+    height: 135px;
+    background-image: url('/public/logo_login.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    margin-bottom: 1.5rem;
+}
+
+/* =============================================================================
+   Loading Indicator
+   Note: Chainlit uses its own default loading indicator (white dot with shading)
+   ============================================================================= */
