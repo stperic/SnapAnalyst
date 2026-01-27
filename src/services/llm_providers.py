@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import atexit
 import os
+import threading
 from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
@@ -60,8 +61,6 @@ logger = get_logger(__name__)
 # =============================================================================
 # THREAD-LOCAL STORAGE FOR USER CONTEXT (Multi-User Safety)
 # =============================================================================
-
-import threading
 
 _thread_local = threading.local()
 

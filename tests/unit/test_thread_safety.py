@@ -8,8 +8,6 @@ import concurrent.futures
 import threading
 import time
 
-import pytest
-
 
 class TestThreadLocalStorage:
     """Test thread-local storage for user context."""

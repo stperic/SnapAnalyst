@@ -42,7 +42,6 @@ env/
 *.swo
 *~
 .DS_Store
-CLAUDE.md
 
 # Environment
 .env
