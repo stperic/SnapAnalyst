@@ -82,28 +82,38 @@ def generate_simple_summary(
     Returns:
         Simple summary string
     """
+    def format_number(value):
+        """Format number with commas for readability."""
+        try:
+            if isinstance(value, (int, float)):
+                return f"{value:,}"
+            return value
+        except (ValueError, TypeError):
+            return value
+
     filter_text = f" (filtered by {filters})" if filters else ""
 
     if row_count == 1:
         if results and len(results[0]) == 1:
             value = list(results[0].values())[0]
+            formatted_value = format_number(value)
             return SIMPLE_SUMMARY_TEMPLATES["single_result"].format(
-                value=value, filter_text=filter_text
+                value=formatted_value, filter_text=filter_text
             )
         return SIMPLE_SUMMARY_TEMPLATES["few_results"].format(
-            count=1, filter_text=filter_text
+            count=format_number(1), filter_text=filter_text
         )
     elif row_count <= 10:
         return SIMPLE_SUMMARY_TEMPLATES["few_results"].format(
-            count=row_count, filter_text=filter_text
+            count=format_number(row_count), filter_text=filter_text
         )
     elif row_count <= 100:
         return SIMPLE_SUMMARY_TEMPLATES["medium_results"].format(
-            count=row_count, filter_text=filter_text
+            count=format_number(row_count), filter_text=filter_text
         )
     else:
         return SIMPLE_SUMMARY_TEMPLATES["large_results"].format(
-            count=row_count, filter_text=filter_text
+            count=format_number(row_count), filter_text=filter_text
         )
 
 

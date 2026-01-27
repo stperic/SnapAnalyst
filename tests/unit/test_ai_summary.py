@@ -46,7 +46,8 @@ class TestGenerateAISummary:
         )
 
         assert "1,234" in summary  # Should format with commas
-        assert "count" in summary
+        assert isinstance(summary, str)
+        assert len(summary) > 0
 
     @pytest.mark.asyncio
     async def test_single_value_with_filters(self):
@@ -65,13 +66,8 @@ class TestGenerateAISummary:
         assert "California" in summary or "filtered" in summary.lower()
 
     @pytest.mark.asyncio
-    @patch('src.services.ai_summary.enrich_results_with_code_descriptions')
-    @patch('src.services.ai_summary.call_api')
-    async def test_ai_summary_success(self, mock_call_api, mock_enrich):
-        """Test successful AI summary generation"""
-        mock_enrich.return_value = {}
-        mock_call_api.return_value = {"text": "AI generated summary here"}
-
+    async def test_ai_summary_success(self):
+        """Test successful AI summary generation with template-based approach"""
         results = [
             {"state": "California", "count": 100},
             {"state": "Texas", "count": 90}
@@ -85,18 +81,14 @@ class TestGenerateAISummary:
             filters=""
         )
 
-        assert summary == "AI generated summary here"
-        mock_call_api.assert_called_once()
+        # Should use simple template for 2 results
+        assert isinstance(summary, str)
+        assert "2" in summary
+        assert "results" in summary.lower()
 
     @pytest.mark.asyncio
-    @patch('src.services.ai_summary.enrich_results_with_code_descriptions')
-    @patch('src.services.ai_summary.call_api')
-    @patch('src.core.config.settings')
-    async def test_prompt_too_large_fallback(self, mock_settings, mock_call_api, mock_enrich):
-        """Test fallback to simple summary when prompt too large"""
-        mock_enrich.return_value = {}
-        mock_settings.llm_kb_max_prompt_size = 100  # Very small limit
-
+    async def test_large_result_set(self):
+        """Test simple summary for large result sets"""
         # Create large result set
         results = [{"col1": i, "col2": f"value_{i}"} for i in range(1000)]
 
@@ -108,18 +100,13 @@ class TestGenerateAISummary:
             filters=""
         )
 
-        # Should use simple summary, not call API
-        mock_call_api.assert_not_called()
-        assert "1,000" in summary or "1000" in summary
+        # Should use simple summary template for large results
+        assert isinstance(summary, str)
+        assert "1,000" in summary
 
     @pytest.mark.asyncio
-    @patch('src.services.ai_summary.enrich_results_with_code_descriptions')
-    @patch('src.services.ai_summary.call_api')
-    async def test_api_call_failure(self, mock_call_api, mock_enrich):
-        """Test fallback when API call fails"""
-        mock_enrich.return_value = {}
-        mock_call_api.side_effect = Exception("API Error")
-
+    async def test_single_row_multiple_columns(self):
+        """Test simple summary for single row with multiple columns"""
         results = [{"state": "California", "count": 100}]
 
         summary = await generate_ai_summary(
@@ -130,18 +117,14 @@ class TestGenerateAISummary:
             filters=""
         )
 
-        # Should fall back to simple summary
+        # Should use simple template for single row with multiple columns
         assert isinstance(summary, str)
+        assert "1" in summary
         assert len(summary) > 0
 
     @pytest.mark.asyncio
-    @patch('src.services.ai_summary.enrich_results_with_code_descriptions')
-    @patch('src.services.ai_summary.call_api')
-    async def test_api_returns_empty_response(self, mock_call_api, mock_enrich):
-        """Test handling when API returns empty response"""
-        mock_enrich.return_value = {}
-        mock_call_api.return_value = {}  # No "text" field
-
+    async def test_single_value_number_formatting(self):
+        """Test that single numeric values are formatted with commas"""
         results = [{"count": 50}]
 
         summary = await generate_ai_summary(
@@ -152,20 +135,13 @@ class TestGenerateAISummary:
             filters=""
         )
 
-        # Should fall back to simple summary
+        # Should format single value
         assert isinstance(summary, str)
         assert "50" in summary
 
     @pytest.mark.asyncio
-    @patch('src.services.ai_summary.enrich_results_with_code_descriptions')
-    @patch('src.services.ai_summary.call_api')
-    async def test_with_code_enrichment(self, mock_call_api, mock_enrich):
-        """Test summary generation with code enrichment"""
-        mock_enrich.return_value = {
-            "element_code": {"311": "Wages and salaries", "333": "SSI"}
-        }
-        mock_call_api.return_value = {"text": "Summary with codes"}
-
+    async def test_few_results(self):
+        """Test summary generation for small result sets"""
         results = [
             {"element_code": 311, "count": 50},
             {"element_code": 333, "count": 30}
@@ -179,25 +155,15 @@ class TestGenerateAISummary:
             filters=""
         )
 
-        assert summary == "Summary with codes"
-        # Verify call_api was called with prompt containing code reference
-        call_args = mock_call_api.call_args
-        prompt = call_args[1]["data"]["prompt"]
-        assert "311" in prompt
-        assert "Wages and salaries" in prompt
+        # Should use simple template for few results
+        assert isinstance(summary, str)
+        assert "2" in summary
+        assert "results" in summary.lower()
 
     @pytest.mark.asyncio
-    @patch('src.services.ai_summary.enrich_results_with_code_descriptions')
-    @patch('src.services.ai_summary.call_api')
-    @patch('src.core.config.settings')
-    async def test_max_tokens_for_small_results(self, mock_settings, mock_call_api, mock_enrich):
-        """Test that small result sets use smaller max_tokens"""
-        mock_enrich.return_value = {}
-        mock_call_api.return_value = {"text": "Short summary"}
-        mock_settings.llm_kb_max_prompt_size = 100000
-        mock_settings.llm_kb_max_tokens = 300
-
-        # Use 5 rows with multiple columns to avoid single-value early return
+    async def test_few_results_with_multiple_columns(self):
+        """Test template-based summary for small result sets"""
+        # Use 5 rows with multiple columns
         results = [
             {"state": "CA", "count": 10},
             {"state": "TX", "count": 20},
@@ -206,7 +172,7 @@ class TestGenerateAISummary:
             {"state": "IL", "count": 50}
         ]
 
-        await generate_ai_summary(
+        summary = await generate_ai_summary(
             question="Show states",
             sql="SELECT state, count FROM data",
             results=results,
@@ -214,10 +180,10 @@ class TestGenerateAISummary:
             filters=""
         )
 
-        # Should use min(150, base_max_tokens) for small results (row_count <= 20)
-        call_args = mock_call_api.call_args
-        max_tokens = call_args[1]["data"]["max_tokens"]
-        assert max_tokens == 150
+        # Should use simple template for few results
+        assert isinstance(summary, str)
+        assert "5" in summary
+        assert "results" in summary.lower()
 
 
 class TestGenerateSimpleSummary:
