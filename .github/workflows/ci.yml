@@ -35,6 +35,9 @@ jobs:
       with:
         python-version: '3.11'
         cache: 'pip'
+        cache-dependency-path: |
+          requirements/base.txt
+          requirements/test.txt
 
     - name: Install dependencies
       run: |
@@ -52,6 +55,12 @@ jobs:
         SECRET_KEY: test-secret-key
         ENVIRONMENT: test
         LLM_PROVIDER: ollama
+        # ONNX Runtime optimization (prevent pthread errors in CI)
+        OMP_NUM_THREADS: "4"
+        ORT_DISABLE_CPU_EP_AFFINITY: "1"
+        ORT_DISABLE_THREAD_AFFINITY: "1"
+        OMP_WAIT_POLICY: "PASSIVE"
+        OMP_PROC_BIND: "false"
       run: |
         pytest tests/unit/ --cov=src --cov-report=term -v
 
