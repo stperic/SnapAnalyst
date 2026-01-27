@@ -50,8 +50,9 @@ def _generate_sql_sync(question: str, dataset: str | None = None, user_id: str |
     This function:
     1. Retrieves the Vanna 0.x instance (with ChromaDB DDL storage)
     2. Gets user's custom SQL prompt (or default)
-    3. Calls vn.generate_sql() which performs RAG retrieval of relevant DDL
-    4. Returns the generated SQL query
+    3. Stores prompt in thread-local storage (THREAD-SAFE for multi-user)
+    4. Calls vn.generate_sql() which performs RAG retrieval of relevant DDL
+    5. Returns the generated SQL query
 
     Args:
         question: Natural language question
@@ -69,7 +70,7 @@ def _generate_sql_sync(question: str, dataset: str | None = None, user_id: str |
 
     from src.core.prompts import VANNA_SQL_SYSTEM_PROMPT
     from src.database.prompt_manager import get_user_prompt
-    from src.services.llm_providers import _get_vanna_instance
+    from src.services.llm_providers import _get_vanna_instance, set_request_custom_prompt
 
     vn = _get_vanna_instance()
 
@@ -85,17 +86,22 @@ def _generate_sql_sync(question: str, dataset: str | None = None, user_id: str |
         logger.info("No user_id provided, using default SQL prompt")
         system_prompt = VANNA_SQL_SYSTEM_PROMPT
 
-    # Set custom prompt as attribute (used by overridden system_message method)
-    vn._custom_system_prompt = system_prompt
-    logger.debug(f"Set custom system prompt on Vanna instance (length: {len(system_prompt)} chars)")
+    # THREAD-SAFE: Store prompt in thread-local storage instead of on shared instance
+    # This prevents cross-user contamination in multi-user environments
+    set_request_custom_prompt(system_prompt)
+    logger.debug(f"Set custom system prompt in thread-local storage (length: {len(system_prompt)} chars)")
 
-    sql = vn.generate_sql(question)
+    try:
+        sql = vn.generate_sql(question)
 
-    if not sql:
-        raise ValueError("Could not generate SQL. Please rephrase your question.")
+        if not sql:
+            raise ValueError("Could not generate SQL. Please rephrase your question.")
 
-    logger.info(f"Generated SQL: {sql[:100]}...")
-    return sql, f"Query for: {question}"
+        logger.info(f"Generated SQL: {sql[:100]}...")
+        return sql, f"Query for: {question}"
+    finally:
+        # Clean up thread-local storage after request
+        set_request_custom_prompt(None)
 
 
 async def _generate_sql_async(question: str, dataset: str | None = None, user_id: str | None = None) -> tuple[str, str]:

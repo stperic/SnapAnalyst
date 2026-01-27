@@ -16,7 +16,7 @@ from contextlib import asynccontextmanager
 if not os.environ.get('OMP_NUM_THREADS') or os.environ.get('OMP_NUM_THREADS') == '0':
     os.environ['OMP_NUM_THREADS'] = '4'
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.core.config import settings
@@ -78,6 +78,59 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Add user context middleware for multi-user safety
+@app.middleware("http")
+async def add_user_context_middleware(request: Request, call_next):
+    """
+    Middleware to extract and set user context for each request.
+
+    THREAD-SAFE: Uses ContextVar to store user_id per-request.
+    This ensures FilterManager and other services can identify the current user
+    without mixing data between concurrent requests.
+
+    User identification sources (in order of priority):
+    1. X-User-ID header (for API clients with authentication)
+    2. Authorization header parsing (for JWT/Bearer tokens)
+    3. "default" fallback (for unauthenticated requests)
+
+    Args:
+        request: FastAPI Request object
+        call_next: Next middleware/handler in chain
+
+    Returns:
+        Response from downstream handlers
+    """
+    from src.api.dependencies import set_request_user
+
+    # Extract user ID from headers
+    user_id = request.headers.get("X-User-ID")
+
+    if not user_id:
+        # Try to extract from Authorization header (JWT/Bearer token)
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            # TODO: Implement JWT token parsing to extract user_id
+            # For now, use a placeholder
+            token = auth_header.replace("Bearer ", "")
+            user_id = f"token_{token[:8]}"  # Placeholder
+
+    # Fallback to default if no user identification
+    if not user_id:
+        user_id = "default"
+
+    # Set user context for this request
+    set_request_user(user_id)
+    logger.debug(f"Request user context set: {user_id}")
+
+    # Process request with cleanup guarantee
+    try:
+        response = await call_next(request)
+        return response
+    finally:
+        # Clean up context after request completes
+        set_request_user(None)
 
 
 @app.get("/", tags=["Root"])

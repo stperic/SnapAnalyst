@@ -114,7 +114,29 @@ class FilterManager:
     """Simple per-user filter manager with database persistence."""
 
     def _get_user_id(self) -> str:
-        """Get current user ID from Chainlit session."""
+        """
+        Get current user ID from request context.
+
+        THREAD-SAFE: Tries multiple sources in order of preference:
+        1. FastAPI request context (API endpoints)
+        2. Chainlit session (UI)
+        3. Default fallback
+
+        This ensures proper user isolation in multi-user environments.
+
+        Returns:
+            User identifier string
+        """
+        # Try FastAPI request context first (for API endpoints)
+        try:
+            from src.api.dependencies import get_request_user
+            user_id = get_request_user()
+            if user_id:
+                return user_id
+        except Exception:
+            pass
+
+        # Try Chainlit session (for UI)
         try:
             import chainlit as cl
             user = cl.user_session.get("user")

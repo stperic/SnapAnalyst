@@ -58,6 +58,37 @@ logger = get_logger(__name__)
 
 
 # =============================================================================
+# THREAD-LOCAL STORAGE FOR USER CONTEXT (Multi-User Safety)
+# =============================================================================
+
+import threading
+
+_thread_local = threading.local()
+
+
+def set_request_custom_prompt(custom_prompt: str | None):
+    """
+    Set custom prompt for current request thread.
+
+    Thread-safe: Each request gets its own storage, preventing cross-user contamination.
+
+    Args:
+        custom_prompt: Custom system prompt for this request
+    """
+    _thread_local.custom_prompt = custom_prompt
+
+
+def get_request_custom_prompt() -> str | None:
+    """
+    Get custom prompt for current request thread.
+
+    Returns:
+        Custom prompt for this thread, or None if not set
+    """
+    return getattr(_thread_local, 'custom_prompt', None)
+
+
+# =============================================================================
 # SHARED DATABASE CONNECTION POOL
 # =============================================================================
 
@@ -287,10 +318,16 @@ class OpenAIVanna(ChromaDB_VectorStore, OpenAI_Chat):
         OpenAI_Chat.__init__(self, config=config)
 
     def system_message(self, message: str) -> dict:
-        """Override system message method to append custom prompt to Vanna's DDL context."""
-        if hasattr(self, '_custom_system_prompt'):
+        """
+        Override system message method to append custom prompt to Vanna's DDL context.
+
+        THREAD-SAFE: Reads from thread-local storage instead of instance attributes.
+        This prevents cross-user contamination in multi-user environments.
+        """
+        custom_prompt = get_request_custom_prompt()
+        if custom_prompt:
             # Append custom prompt to Vanna's generated context (which includes DDL from ChromaDB)
-            combined = f"{message}\n\n{self._custom_system_prompt}"
+            combined = f"{message}\n\n{custom_prompt}"
             return {"role": "system", "content": combined}
         return {"role": "system", "content": message}
 
@@ -301,6 +338,20 @@ class AnthropicVanna(ChromaDB_VectorStore, Anthropic_Chat):
     def __init__(self, config=None):
         ChromaDB_VectorStore.__init__(self, config=config)
         Anthropic_Chat.__init__(self, config=config)
+
+    def system_message(self, message: str) -> dict:
+        """
+        Override system message method to append custom prompt to Vanna's DDL context.
+
+        THREAD-SAFE: Reads from thread-local storage instead of instance attributes.
+        This prevents cross-user contamination in multi-user environments.
+        """
+        custom_prompt = get_request_custom_prompt()
+        if custom_prompt:
+            # Append custom prompt to Vanna's generated context (which includes DDL from ChromaDB)
+            combined = f"{message}\n\n{custom_prompt}"
+            return {"role": "system", "content": combined}
+        return {"role": "system", "content": message}
 
 
 class AzureOpenAIVanna(ChromaDB_VectorStore, OpenAI_Chat):
@@ -330,10 +381,16 @@ class AzureOpenAIVanna(ChromaDB_VectorStore, OpenAI_Chat):
         self.temperature = None
 
     def system_message(self, message: str) -> dict:
-        """Override system message method to append custom prompt to Vanna's DDL context."""
-        if hasattr(self, '_custom_system_prompt'):
+        """
+        Override system message method to append custom prompt to Vanna's DDL context.
+
+        THREAD-SAFE: Reads from thread-local storage instead of instance attributes.
+        This prevents cross-user contamination in multi-user environments.
+        """
+        custom_prompt = get_request_custom_prompt()
+        if custom_prompt:
             # Append custom prompt to Vanna's generated context (which includes DDL from ChromaDB)
-            combined = f"{message}\n\n{self._custom_system_prompt}"
+            combined = f"{message}\n\n{custom_prompt}"
             return {"role": "system", "content": combined}
         return {"role": "system", "content": message}
 

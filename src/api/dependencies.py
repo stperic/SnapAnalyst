@@ -4,10 +4,37 @@ SnapAnalyst FastAPI Dependencies
 Shared dependencies for API endpoints.
 """
 from collections.abc import Generator
+from contextvars import ContextVar
 
 from sqlalchemy.orm import Session
 
 from src.database.engine import get_db
+
+# Thread-safe request context for user identification
+# ContextVar is preferred over threading.local() for asyncio compatibility
+_request_user_id: ContextVar[str | None] = ContextVar('request_user_id', default=None)
+
+
+def set_request_user(user_id: str) -> None:
+    """
+    Set user ID for current request context.
+
+    Thread-safe: Uses ContextVar which works correctly with asyncio and threads.
+
+    Args:
+        user_id: User identifier for this request
+    """
+    _request_user_id.set(user_id)
+
+
+def get_request_user() -> str | None:
+    """
+    Get user ID from current request context.
+
+    Returns:
+        User ID for this request, or None if not set
+    """
+    return _request_user_id.get()
 
 
 def get_database() -> Generator[Session, None, None]:
