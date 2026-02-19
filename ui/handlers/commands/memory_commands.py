@@ -82,37 +82,23 @@ async def handle_mem_command(args: str | None = None):
 
 async def handle_memreset():
     """Handle /memreset command - reset ChromaDB and re-train."""
-    from ui.handlers.actions import handle_memreset_cancel, handle_memreset_confirm
+    # Store pending operation in session for the top-level callback
+    cl.user_session.set("pending_confirmation", {"operation": "reset_memory"})
 
-    res = await cl.AskActionMessage(
-        content="""### ⚠️ Reset AI Memory (ChromaDB)
+    await cl.Message(
+        content="""### Reset AI Memory (ChromaDB)
 
 **Warning:** This will clear ALL training data and rebuild from scratch!
 
-**What will be deleted:**
-- All vector embeddings
-- User query history (if ongoing training was enabled)
-- Custom documentation added via `/mem add`
+- All vector embeddings, user query history, and custom docs will be deleted
+- Database schema, business context, and query examples will be restored
 
-**What will be restored:**
-- Database schema (DDL)
-- Business context documentation
-- Query examples from configuration
-
-**This action cannot be undone.**
-
-Are you sure you want to continue?""",
+**This action cannot be undone.** Are you sure?""",
         actions=[
-            cl.Action(name="confirm", payload={"confirm": "yes"}, label="⚠️ Yes, Reset Memory"),
-            cl.Action(name="cancel", payload={"confirm": "no"}, label="❌ Cancel"),
+            cl.Action(name="confirm_action", payload={"confirm": "yes"}, label="Yes, Reset Memory"),
+            cl.Action(name="confirm_action", payload={"confirm": "no"}, label="Cancel"),
         ],
-        timeout=120,
     ).send()
-
-    if res and res.get("payload", {}).get("confirm") == "yes":
-        await handle_memreset_confirm()
-    else:
-        await handle_memreset_cancel()
 
 
 async def handle_memadd(args: str | None = None):

@@ -383,18 +383,15 @@ async def reset_memory():
 
     def _do_reset():
         try:
-            llm_service = get_llm_service()
-            if not llm_service._initialized:
-                initialize_llm_service()
-                llm_service = get_llm_service()
+            from src.services.llm_providers import _get_vanna_instance, train_vanna_with_ddl
 
             deleted_count = 0
             collections_cleared = []
 
+            # Clear KB ChromaDB
             try:
                 import chromadb
                 kb_path = f"{settings.vanna_chromadb_path}/kb"
-                # Create ChromaDB client with telemetry explicitly disabled
                 client_settings = chromadb.config.Settings(
                     anonymized_telemetry=False,
                     allow_reset=True
@@ -414,9 +411,11 @@ async def reset_memory():
             except Exception as e:
                 logger.warning(f"Could not access KB ChromaDB: {e}")
 
+            # Clear Vanna DDL ChromaDB via the actual vanna instance
             try:
-                if hasattr(llm_service.vanna, 'chroma_client') and llm_service.vanna.chroma_client:
-                    for collection in llm_service.vanna.chroma_client.list_collections():
+                vn = _get_vanna_instance()
+                if hasattr(vn, 'chroma_client') and vn.chroma_client:
+                    for collection in vn.chroma_client.list_collections():
                         try:
                             results = collection.get()
                             ids = results.get('ids', [])
@@ -429,13 +428,28 @@ async def reset_memory():
             except Exception as e:
                 logger.warning(f"Could not access Vanna ChromaDB: {e}")
 
+            logger.info(f"Cleared {deleted_count} docs from: {collections_cleared}")
+
             start_time = time.time()
             initialize_llm_service(force_retrain=True)
-
-            from src.services.llm_providers import train_vanna_with_ddl
             train_vanna_with_ddl(force_retrain=True)
+            training_time = time.time() - start_time
 
-            return deleted_count, collections_cleared, time.time() - start_time
+            # Get actual entries count from Vanna's ChromaDB
+            entries_trained = 0
+            try:
+                vn = _get_vanna_instance()
+                if hasattr(vn, 'chroma_client') and vn.chroma_client:
+                    for collection in vn.chroma_client.list_collections():
+                        count = collection.count()
+                        logger.info(f"  Collection '{collection.name}': {count} entries")
+                        entries_trained += count
+            except Exception as e:
+                logger.warning(f"Could not count Vanna entries: {e}")
+
+            logger.info(f"Training complete: {entries_trained} entries in {training_time:.1f}s")
+
+            return deleted_count, collections_cleared, training_time, entries_trained
 
         except Exception as e:
             logger.error(f"Reset error: {e}")
@@ -443,15 +457,7 @@ async def reset_memory():
 
     try:
         loop = asyncio.get_event_loop()
-        deleted_count, collections_cleared, training_time = await loop.run_in_executor(None, _do_reset)
-
-        entries_trained = 30
-        try:
-            llm_service = get_llm_service()
-            if hasattr(llm_service, 'vanna') and llm_service.vanna and hasattr(llm_service.vanna, 'chroma_client'):
-                entries_trained = sum(c.count() for c in llm_service.vanna.chroma_client.list_collections())
-        except Exception:
-            pass
+        deleted_count, collections_cleared, training_time, entries_trained = await loop.run_in_executor(None, _do_reset)
 
         return MemoryResetResponse(
             success=True,

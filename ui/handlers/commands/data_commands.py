@@ -203,29 +203,17 @@ async def handle_upload():
 
 async def handle_reset():
     """Handle /reset command - reset the database."""
-    from ui.handlers.actions import handle_reset_cancel, handle_reset_confirm
+    # Store pending operation in session for the top-level callback
+    cl.user_session.set("pending_confirmation", {"operation": "reset_database"})
 
-    res = await cl.AskActionMessage(
-        content="""### ⚠️ Reset Database
+    await cl.Message(
+        content="""### Reset Database
 
-**Warning:** This will delete ALL data from the database!
+**Warning:** This will delete ALL data (households, members, QC errors, load history).
 
-- All households
-- All household members
-- All QC errors
-- All load history
-
-**This action cannot be undone.**
-
-Are you sure you want to continue?""",
+**This action cannot be undone.** Are you sure?""",
         actions=[
-            cl.Action(name="confirm", payload={"confirm": "yes"}, label="⚠️ Yes, Reset Database"),
-            cl.Action(name="cancel", payload={"confirm": "no"}, label="❌ Cancel"),
+            cl.Action(name="confirm_action", payload={"confirm": "yes"}, label="Yes, Reset Database"),
+            cl.Action(name="confirm_action", payload={"confirm": "no"}, label="Cancel"),
         ],
-        timeout=120,
     ).send()
-
-    if res and res.get("payload", {}).get("confirm") == "yes":
-        await handle_reset_confirm()
-    else:
-        await handle_reset_cancel()

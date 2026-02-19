@@ -401,6 +401,51 @@ async def on_feedback_negative(action: cl.Action):
     await handle_feedback_negative(action.payload.get("response_id"))
 
 
+# =============================================================================
+# CONFIRMATION ACTION CALLBACKS
+# Reliable pattern: cl.Message + actions + top-level @cl.action_callback
+# (cl.AskActionMessage has known bugs causing buttons to become unresponsive)
+# =============================================================================
+
+@cl.action_callback("confirm_action")
+async def on_confirm_action(action: cl.Action):
+    """Handle confirmation for destructive operations (reset, memreset, prompt update)."""
+    from ui.handlers.actions import (
+        handle_memreset_cancel,
+        handle_memreset_confirm,
+        handle_reset_cancel,
+        handle_reset_confirm,
+    )
+    from ui.handlers.commands.prompt_commands import handle_prompt_confirmation
+
+    # Remove buttons immediately to prevent double-clicks
+    await action.remove()
+
+    pending = cl.user_session.get("pending_confirmation")
+    if not pending:
+        return
+
+    confirmed = action.payload.get("confirm") == "yes"
+    operation = pending.get("operation")
+
+    # Clear pending state
+    cl.user_session.set("pending_confirmation", None)
+
+    if operation == "reset_database":
+        if confirmed:
+            await handle_reset_confirm()
+        else:
+            await handle_reset_cancel()
+    elif operation == "reset_memory":
+        if confirmed:
+            await handle_memreset_confirm()
+        else:
+            await handle_memreset_cancel()
+    elif operation == "update_prompt":
+        if confirmed:
+            await handle_prompt_confirmation("yes")
+        else:
+            await handle_prompt_confirmation("no")
 
 
 # =============================================================================

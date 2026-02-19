@@ -109,13 +109,34 @@ async def handle_database():
                 stats = stats_response.json()
 
             summary = stats.get('summary', {})
-            content += f"- **Households:** {summary.get('total_households', 0):,}\n"
-            content += f"- **Household Members:** {summary.get('total_members', 0):,}\n"
-            content += f"- **QC Errors:** {summary.get('total_qc_errors', 0):,}\n"
-            content += f"- **Data Loads:** {len(stats.get('by_fiscal_year', [])):,}\n\n"
 
+            # FNS SNAP Data section
+            content += "**FNS SNAP Data**\n"
             if summary.get('fiscal_years'):
-                content += f"**Fiscal Years:** {', '.join(map(str, summary['fiscal_years']))}\n\n"
+                content += f"- Fiscal Years: {', '.join(map(str, summary['fiscal_years']))}\n"
+            content += f"- Households: {summary.get('total_households', 0):,}\n"
+            content += f"- Household Members: {summary.get('total_members', 0):,}\n"
+            content += f"- QC Errors: {summary.get('total_qc_errors', 0):,}\n"
+            content += f"- Data Loads: {len(stats.get('by_fiscal_year', []))}\n\n"
+
+            # SNAP Tables section
+            ref_count = summary.get('reference_tables', 0)
+            views_count = summary.get('views', 0)
+            content += "**SNAP Tables**\n"
+            content += "- Core: households, household_members, qc_errors\n"
+            content += f"- Reference Tables: {ref_count}\n"
+            if views_count:
+                content += f"- Views: {views_count}\n"
+            content += "\n"
+
+            # Custom Tables section
+            custom_count = summary.get('custom_tables', 0)
+            custom_names = summary.get('custom_table_names', [])
+            if custom_count:
+                content += f"**Custom Tables** ({custom_count})\n"
+                for name in custom_names:
+                    content += f"- {name}\n"
+                content += "\n"
 
             if stats.get('last_load'):
                 content += f"**Last Load:** {stats['last_load']}\n"

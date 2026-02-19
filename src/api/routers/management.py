@@ -253,6 +253,26 @@ async def get_statistics():
                     "households": households,
                 })
 
+            # Count discovered tables and views (same config-driven logic as DDL training)
+            table_counts = {}
+            try:
+                from src.database.ddl_extractor import discover_tables_and_views
+                tables, views = discover_tables_and_views()
+                core_snap_tables = {"households", "household_members", "qc_errors"}
+                ref_tables = [t for t in tables if t.startswith('ref_')]
+                core_tables = [t for t in tables if t in core_snap_tables]
+                custom_tables = [t for t in tables if t not in core_snap_tables and not t.startswith('ref_')]
+                table_counts = {
+                    "total_tables": len(tables),
+                    "core_tables": len(core_tables),
+                    "reference_tables": len(ref_tables),
+                    "custom_tables": len(custom_tables),
+                    "custom_table_names": sorted(custom_tables),
+                    "views": len(views),
+                }
+            except Exception as e:
+                logger.warning(f"Could not count tables: {e}")
+
             return {
                 "summary": {
                     "total_households": total_households,
@@ -261,6 +281,7 @@ async def get_statistics():
                     "households_with_errors": households_with_errors,
                     "households_without_errors": households_without_errors,
                     "fiscal_years": fiscal_years,
+                    **table_counts,
                 },
                 "by_fiscal_year": by_year,
                 "last_load": None,  # TODO: Track last load timestamp

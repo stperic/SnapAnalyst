@@ -176,6 +176,9 @@ async def handle_prompt_upload_from_text(prompt_type: str, prompt_text: str):
         "source": "inline"
     })
 
+    # Store pending operation for top-level callback
+    cl.user_session.set("pending_confirmation", {"operation": "update_prompt"})
+
     prompt_name = "SQL Generation" if prompt_type == "sql" else "KB Insight"
     preview, truncated = _get_prompt_preview(prompt_text)
 
@@ -189,19 +192,13 @@ async def handle_prompt_upload_from_text(prompt_type: str, prompt_text: str):
 
 Replace your current prompt with this text?"""
 
-    res = await cl.AskActionMessage(
+    await cl.Message(
         content=content,
         actions=[
-            cl.Action(name="confirm", payload={"confirm": "yes"}, label="✅ Yes, Update Prompt"),
-            cl.Action(name="cancel", payload={"confirm": "no"}, label="❌ Cancel"),
+            cl.Action(name="confirm_action", payload={"confirm": "yes"}, label="Yes, Update Prompt"),
+            cl.Action(name="confirm_action", payload={"confirm": "no"}, label="Cancel"),
         ],
-        timeout=120,
     ).send()
-
-    if res and res.get("payload", {}).get("confirm") == "yes":
-        await handle_prompt_confirmation("yes")
-    else:
-        await handle_prompt_confirmation("no")
 
 
 async def handle_prompt_upload_from_file(prompt_type: str, files):
@@ -246,6 +243,9 @@ async def handle_prompt_upload_from_file(prompt_type: str, files):
         "filename": filename
     })
 
+    # Store pending operation for top-level callback
+    cl.user_session.set("pending_confirmation", {"operation": "update_prompt"})
+
     prompt_name = "SQL Generation" if prompt_type == "sql" else "KB Insight"
     preview, truncated = _get_prompt_preview(prompt_text)
 
@@ -261,19 +261,13 @@ async def handle_prompt_upload_from_file(prompt_type: str, files):
 
 Replace your current prompt with this file content?"""
 
-    res = await cl.AskActionMessage(
+    await cl.Message(
         content=content,
         actions=[
-            cl.Action(name="confirm", payload={"confirm": "yes"}, label="✅ Yes, Update Prompt"),
-            cl.Action(name="cancel", payload={"confirm": "no"}, label="❌ Cancel"),
+            cl.Action(name="confirm_action", payload={"confirm": "yes"}, label="Yes, Update Prompt"),
+            cl.Action(name="confirm_action", payload={"confirm": "no"}, label="Cancel"),
         ],
-        timeout=120,
     ).send()
-
-    if res and res.get("payload", {}).get("confirm") == "yes":
-        await handle_prompt_confirmation("yes")
-    else:
-        await handle_prompt_confirmation("no")
 
 
 async def handle_prompt_confirmation(user_input: str):
