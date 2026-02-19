@@ -86,11 +86,11 @@ class TestCSVReaderChunks:
         """Test reading CSV in chunks"""
         reader = CSVReader(str(test_csv_path))
 
-        chunk_size = 5000
+        chunk_size = 500
         chunks = list(reader.read_in_chunks(chunk_size=chunk_size))
 
         # Should have multiple chunks
-        assert len(chunks) > 0
+        assert len(chunks) > 1
 
         # First chunk should have chunk_size rows
         assert len(chunks[0]) == chunk_size

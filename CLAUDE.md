@@ -24,6 +24,7 @@ docker-compose logs -f data-loader      # Data initialization logs
 # Setup
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements/base.txt
+pip install -r requirements/dev.txt   # adds pytest, ruff, mypy
 cp .env.example .env
 
 # Start PostgreSQL via Docker
@@ -40,30 +41,35 @@ chainlit run chainlit_app.py --port 8001     # Terminal 2: UI on :8001
 ./stop_all.sh
 ```
 
-### Testing
+### Testing & Linting
 ```bash
 pytest tests/                              # All tests
 pytest tests/unit/                         # Unit tests only
 pytest tests/integration/                  # Integration tests
-pytest tests/unit/test_transformer.py -v  # Single test file
-ruff check .                               # Linting
+pytest tests/unit/test_transformer.py -v   # Single test file
+ruff check .                               # Lint
+ruff format .                              # Format
+mypy src/                                  # Type check
 ```
 
 **Always run tests before committing. Use conventional commit format (e.g., `feat:`, `fix:`, `docs:`, `refactor:`, `test:`).**
+
+**Code style**: Line length 120 (configured in `pyproject.toml`). Ruff selects E/W/F/I/B/C4/UP/ARG/SIM rules.
 
 ## Architecture
 
 ### Three-Layer Architecture
 
 1. **Chainlit UI Layer** (`chainlit_app.py`, `ui/`)
-   - Thin UI layer - `chainlit_app.py` contains only Chainlit decorators and routing
+   - Thin UI layer - `chainlit_app.py` contains only Chainlit decorators and ONNX runtime config; routing is the only logic
    - Business logic lives in `ui/handlers/` and `ui/services/`
+   - Persona/messaging templates in `ui/responses.py`; HTML formatting in `ui/formatters.py`
    - Communicates with backend via `src/clients/api_client.py`
 
 2. **FastAPI Backend** (`src/api/`)
    - REST API at `:8000` with routers in `src/api/routers/`
-   - Key routers: `chatbot.py` (LLM queries), `query.py` (SQL execution), `filter.py`, `schema.py`
-   - All database queries are read-only for safety
+   - Key routers: `chatbot.py` (LLM queries), `query.py` (SQL execution), `filter.py`, `schema.py`, `llm.py` (provider management), `data_export.py`, `data_loading.py`
+   - All database queries are read-only for safety; only SELECT/WITH statements are permitted
 
 3. **Services & Data** (`src/services/`, `src/database/`)
    - `llm_service.py`: Main entry point for SQL generation (wraps Vanna)
@@ -83,15 +89,27 @@ Key classes in `llm_providers.py`:
 - `OpenAIVanna`, `AnthropicVanna`, `OllamaVanna`, `AzureOpenAIVanna` - Provider-specific implementations
 - `LegacyVannaAdapter` bridges 0.x instances to 2.x Agent compatibility
 - DDL is trained once and stored in ChromaDB at `./chromadb/vanna_ddl`
+- Training data source: `datasets/snap/query_examples.json` (question/SQL pairs for RAG) and DDL extracted via `src/database/ddl_extractor.py`
+- **Table discovery is config-driven** via `datasets/snap/config.yaml`: `include_table_prefixes: ["*"]` includes all tables by default; `exclude_tables` and `exclude_table_prefixes` filter out Chainlit/system tables. To restrict training to specific prefixes, change to e.g. `["ref_", "md_"]`.
 
 ### Database Schema
 
 Normalized from 1,200+ column CSV into:
+
+**public schema** (SNAP data):
 - `households`: Core case data (composite PK: case_id + fiscal_year)
 - `household_members`: Person-level data (FK to households)
 - `qc_errors`: Quality control findings (FK to households)
-- `ref_*` tables (20+): Code lookup/reference tables
-- `user_prompts`: Custom LLM prompts per user (app schema)
+- `ref_*` tables (25+): Code lookup/reference tables
+- `state_error_rates`, `fns_error_rates_historical`: Error rate data
+- `md_*` tables: Maryland-specific error analysis data
+
+**app schema** (application state):
+- `user_prompts`: Custom LLM prompts per user
+- `data_load_history`: ETL job tracking
+- `users`: Authentication (managed by Chainlit data layer)
+
+Database migrations managed by Alembic (`migrations/`).
 
 ### Data Flow for Queries
 
@@ -112,8 +130,15 @@ Environment variables in `.env`:
 - `LLM_SQL_MODEL`: Model for SQL generation (e.g., `gpt-4.1`)
 - `LLM_KB_MODEL`: Model for summaries/insights (e.g., `gpt-3.5-turbo`)
 - `DATABASE_URL`: PostgreSQL connection string
+- `VANNA_STORE_USER_QUERIES`: Toggle for continuous learning (stores queries in ChromaDB)
 
-Settings loaded via pydantic in `src/core/config.py` - use `settings.property_name` to access.
+Settings loaded via pydantic in `src/core/config.py` - use `settings.property_name` to access. The config exposes computed properties `settings.sql_model` and `settings.kb_model` with provider-specific fallback defaults.
+
+Dataset configuration in `datasets/snap/config.yaml`:
+- `data_files`: Per-year download URLs (single source of truth for fiscal years)
+- `include_table_prefixes`: Controls which tables Vanna trains on (`["*"]` = all, default)
+- `exclude_tables`: Tables always excluded from Vanna training (Chainlit internals, etc.)
+- `exclude_table_prefixes`: Prefixes always excluded (`pg_`, `sql_`, `information_`)
 
 ## Chat Commands
 
@@ -126,15 +151,17 @@ The UI supports slash commands routed through `ui/handlers/commands/router.py`:
 
 ## Important Patterns
 
-- **Prompts**: Centralized in `src/core/prompts.py` - update here for system prompts, personas, message templates
+- **Prompts**: Centralized in `src/core/prompts.py` - update here for system prompts, personas, message templates. Includes USDA error rate formulas and SNAP business rules embedded as domain context.
 - **Filter Manager**: `src/core/filter_manager.py` handles state/year filtering across queries
 - **Code Enrichment**: `src/services/code_enrichment.py` translates numeric codes to descriptions
-- **Async/Sync Bridge**: `llm_service.py` has both sync (`generate_sql`) and async (`generate_sql_async`) methods - async wraps sync in thread pool
+- **Async/Sync Bridge**: `llm_service.py` has both sync (`generate_sql`) and async (`generate_sql_async`) methods - async wraps sync via `asyncio.to_thread()` to avoid blocking the event loop
 - **Singleton Pattern**: `get_llm_service()`, `get_settings()` return cached instances
+- **Multi-User Thread Safety**: `ContextVar` for user_id per request (middleware in `main.py`); thread-local storage for custom prompts in `llm_providers.py`
 
 ## File Locations
 
 - Custom system prompts: `src/core/prompts.py` (`VANNA_SQL_SYSTEM_PROMPT`, `AI_SUMMARY_PROMPT`)
 - Database DDL extraction: `src/database/ddl_extractor.py`
-- ETL pipeline: `src/etl/` (reader, transformer, writer, loader)
+- ETL pipeline: `src/etl/` (reader, transformer, validator, writer, loader)
 - Dataset config: `datasets/snap/` (data_mapping.json, query_examples.json)
+- CI/CD workflows: `.github/workflows/` (ci.yml, codeql.yml)

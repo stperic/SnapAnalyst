@@ -31,6 +31,8 @@ import time
 import zipfile
 from pathlib import Path
 
+import yaml
+
 # Add project root to path
 sys.path.insert(0, '/app')
 
@@ -38,25 +40,30 @@ sys.path.insert(0, '/app')
 DATA_DIR = Path(os.environ.get('SNAPDATA_PATH', '/data'))
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
-# Available fiscal years and their download URLs
-# Data source: https://snapqcdata.net/data
-DATA_FILES = {
-    2023: {
-        'zip_filename': 'qcfy2023_csv.zip',
-        'csv_pattern': 'qc_pub_fy2023*.csv',  # Pattern to match extracted CSV
-        'url': 'https://snapqcdata.net/sites/default/files/2025-03/qcfy2023_csv.zip'
-    },
-    2022: {
-        'zip_filename': 'qcfy2022_csv.zip',
-        'csv_pattern': 'qc_pub_fy2022*.csv',
-        'url': 'https://snapqcdata.net/sites/default/files/2024-05/qcfy2022_csv.zip'
-    },
-    2021: {
-        'zip_filename': 'qcfy2021_csv.zip',
-        'csv_pattern': 'qc_pub_fy2021*.csv',
-        'url': 'https://snapqcdata.net/sites/default/files/2024-05/qcfy2021_csv.zip'
-    },
-}
+
+def load_data_files_config() -> dict[int, dict[str, str]]:
+    """Load data file URLs from config.yaml and derive zip/csv patterns."""
+    # Resolve config path: /app/datasets/snap/config.yaml (Docker) or relative
+    config_path = Path('/app/datasets/snap/config.yaml')
+    if not config_path.exists():
+        config_path = Path(__file__).resolve().parent.parent / 'datasets' / 'snap' / 'config.yaml'
+
+    with open(config_path) as f:
+        config = yaml.safe_load(f)
+
+    data_files = {}
+    for year, url in config.get('data_files', {}).items():
+        year = int(year)
+        data_files[year] = {
+            'zip_filename': f'qcfy{year}_csv.zip',
+            'csv_pattern': f'qc_pub_fy{year}*.csv',
+            'url': url,
+        }
+    return data_files
+
+
+# Available fiscal years and their download URLs (loaded from config.yaml)
+DATA_FILES = load_data_files_config()
 
 
 def wait_for_database(max_retries=30, delay=2):

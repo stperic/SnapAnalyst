@@ -4,6 +4,13 @@ DDL Extractor - Query PostgreSQL Schema for Vanna Training
 This module extracts the actual DDL from the PostgreSQL database,
 making the database itself the single source of truth for schema.
 
+TABLE DISCOVERY:
+Table inclusion/exclusion is config-driven via datasets/snap/config.yaml:
+- include_table_prefixes: ["*"] includes all tables (default), or specify
+  prefixes like ["ref_", "md_"] to filter by prefix
+- exclude_tables: Always excluded (Chainlit internals, migrations, etc.)
+- exclude_table_prefixes: Always excluded (pg_, sql_, information_)
+
 SCHEMA ORGANIZATION:
 - public: SNAP QC domain data (households, members, errors, reference tables)
 - app: Application/system data (user prompts, load history) - NOT trained
@@ -32,6 +39,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import yaml
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
@@ -40,46 +48,37 @@ from src.database.engine import engine
 
 logger = get_logger(__name__)
 
-# Path to data mapping configuration (source of truth for column formats)
+# Path to dataset configuration files
+_DATASET_CONFIG_PATH = Path(__file__).parent.parent.parent / "datasets" / "snap" / "config.yaml"
 DATA_MAPPING_PATH = Path(__file__).parent.parent.parent / "datasets" / "snap" / "data_mapping.json"
 
-# =============================================================================
-# NAMING CONVENTIONS FOR CUSTOM DATA
-# =============================================================================
-# Users can extend SnapAnalyst by following these naming conventions:
-#
-# Tables:
-#   ref_*  - Reference/lookup tables (e.g., ref_state, ref_status)
-#   snap_* - Custom SNAP-related tables (e.g., snap_my_analysis)
-#   Core tables (households, household_members, qc_errors) - backwards compatibility
-#
-# Views:
-#   v_*      - System and custom views (e.g., v_households_enriched)
-#   snap_v_* - Alternative custom view prefix (e.g., snap_v_summary)
-#
-# Tables/views following these conventions are automatically discovered and
-# included in Vanna AI training.
-# =============================================================================
 
-# Core SNAP QC tables (for backwards compatibility)
-CORE_SNAP_TABLES = [
-    "households",
-    "household_members",
-    "qc_errors",
-]
+def _load_table_discovery_config() -> dict:
+    """
+    Load table discovery filters from config.yaml.
 
-# Tables to exclude from training (internal/metadata tables)
-EXCLUDED_TABLES = [
-    "data_load_history",  # App metadata
-    "alembic_version",    # Migration history
-]
-
-# Table name prefixes to exclude (system tables)
-EXCLUDED_TABLE_PREFIXES = [
-    "pg_",           # PostgreSQL system tables
-    "sql_",          # SQL standard tables
-    "information_",  # Information schema tables
-]
+    Returns dict with keys:
+        include_table_prefixes: list[str] - prefixes to include (["*"] = all)
+        exclude_tables: list[str] - table names to always exclude
+        exclude_table_prefixes: list[str] - prefixes to always exclude
+    """
+    defaults = {
+        "include_table_prefixes": ["*"],
+        "exclude_tables": ["alembic_version", "data_load_history"],
+        "exclude_table_prefixes": ["pg_", "sql_", "information_"],
+    }
+    try:
+        if _DATASET_CONFIG_PATH.exists():
+            with open(_DATASET_CONFIG_PATH) as f:
+                config = yaml.safe_load(f)
+            return {
+                "include_table_prefixes": config.get("include_table_prefixes", defaults["include_table_prefixes"]),
+                "exclude_tables": config.get("exclude_tables", defaults["exclude_tables"]),
+                "exclude_table_prefixes": config.get("exclude_table_prefixes", defaults["exclude_table_prefixes"]),
+            }
+    except Exception as e:
+        logger.warning(f"Could not load table discovery config: {e}, using defaults")
+    return defaults
 
 
 # System schemas to exclude from dataset discovery
@@ -95,12 +94,15 @@ SYSTEM_SCHEMAS = [
 
 def discover_tables_and_views(schema_name: str = 'public', db_engine: Engine = None) -> tuple[list[str], list[str]]:
     """
-    Dynamically discover all user tables and views following naming conventions.
+    Dynamically discover tables and views using config-driven filters.
 
-    Discovery Rules:
-    - Tables: Include tables matching ref_*, snap_*, or core tables (households, etc.)
-    - Views: Include views matching v_* or snap_v_*
-    - Exclude: Tables in EXCLUDED_TABLES list or matching EXCLUDED_TABLE_PREFIXES
+    Filters are loaded from datasets/snap/config.yaml:
+    - include_table_prefixes: ["*"] includes all tables, or list specific
+      prefixes like ["ref_", "md_"] to restrict inclusion
+    - exclude_tables: Table names always excluded (Chainlit, migrations)
+    - exclude_table_prefixes: Prefixes always excluded (pg_, sql_)
+
+    Tables are sorted with ref_* first (for FK dependency ordering).
 
     Args:
         schema_name: PostgreSQL schema name (default: 'public')
@@ -112,55 +114,56 @@ def discover_tables_and_views(schema_name: str = 'public', db_engine: Engine = N
     if db_engine is None:
         db_engine = engine
 
+    config = _load_table_discovery_config()
+    include_prefixes = config["include_table_prefixes"]
+    exclude_tables = config["exclude_tables"]
+    exclude_prefixes = config["exclude_table_prefixes"]
+    include_all = "*" in include_prefixes
+
     with db_engine.connect() as conn:
-        # Discover tables following naming conventions
+        # Fetch all base tables in the schema
         tables_query = text("""
             SELECT table_name
             FROM information_schema.tables
             WHERE table_schema = :schema
               AND table_type = 'BASE TABLE'
-              AND (
-                  table_name LIKE 'ref_%'         -- Reference tables
-                  OR table_name LIKE 'snap_%'     -- Custom SNAP tables
-                  OR table_name IN :core_tables   -- Core tables (backwards compat)
-              )
-              AND table_name NOT IN :excluded_tables
-            ORDER BY
-                CASE
-                    WHEN table_name LIKE 'ref_%' THEN 1  -- Reference tables first
-                    ELSE 2                               -- Then others
-                END,
-                table_name
+            ORDER BY table_name
         """)
+        result = conn.execute(tables_query, {"schema": schema_name})
+        all_tables = [row[0] for row in result]
 
-        result = conn.execute(tables_query, {
-            "schema": schema_name,
-            "core_tables": tuple(CORE_SNAP_TABLES),
-            "excluded_tables": tuple(EXCLUDED_TABLES)
-        })
-        tables = [row[0] for row in result]
+        # Apply exclude filters
+        tables = [
+            t for t in all_tables
+            if t not in exclude_tables
+            and not any(t.startswith(prefix) for prefix in exclude_prefixes)
+        ]
 
-        # Filter out tables with excluded prefixes
-        tables = [t for t in tables
-                  if not any(t.startswith(prefix) for prefix in EXCLUDED_TABLE_PREFIXES)]
+        # Apply include prefix filter (skip if wildcard)
+        if not include_all:
+            tables = [
+                t for t in tables
+                if any(t.startswith(prefix) for prefix in include_prefixes)
+            ]
 
-        # Discover views following naming conventions
+        # Sort: ref_* tables first (FK dependency ordering), then alphabetical
+        tables.sort(key=lambda t: (0 if t.startswith('ref_') else 1, t))
+
+        # Discover views (include all non-system views in the schema)
         views_query = text("""
             SELECT table_name
             FROM information_schema.views
             WHERE table_schema = :schema
-              AND (
-                  table_name LIKE 'v_%'        -- Standard view prefix
-                  OR table_name LIKE 'snap_v_%' -- Custom SNAP view prefix
-              )
             ORDER BY table_name
         """)
-
         result = conn.execute(views_query, {"schema": schema_name})
         views = [row[0] for row in result]
 
-    logger.info(f"Discovered in schema '{schema_name}': {len(tables)} tables, {len(views)} views")
-    logger.debug(f"  Tables: {tables[:5]}{'...' if len(tables) > 5 else ''}")
+    logger.info(
+        f"Discovered in schema '{schema_name}': {len(tables)} tables, {len(views)} views"
+        f" (include={'*' if include_all else include_prefixes}, exclude={len(exclude_tables)} tables)"
+    )
+    logger.debug(f"  Tables: {tables}")
     logger.debug(f"  Views: {views}")
 
     return tables, views

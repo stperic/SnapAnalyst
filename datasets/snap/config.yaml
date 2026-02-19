@@ -26,7 +26,14 @@ source:
   url: "https://snapqcdata.net/data"
   original_source: "https://www.fns.usda.gov/snap/quality-control-data"
 
-# Available fiscal years
+# Available fiscal years and download URLs
+# To add a new year, add an entry to data_files below.
+# fiscal_years is derived from data_files keys automatically.
+data_files:
+  2023: "https://snapqcdata.net/sites/default/files/2025-03/qcfy2023_csv.zip"
+  2022: "https://snapqcdata.net/sites/default/files/2024-05/qcfy2022_csv.zip"
+  2021: "https://snapqcdata.net/sites/default/files/2024-05/qcfy2021_csv.zip"
+
 fiscal_years:
   - 2021
   - 2022
@@ -72,6 +79,42 @@ reference_tables:
   - ref_reporting_system
   - ref_action_type
   - ref_allotment_adjustment
+
+# =============================================================================
+# Vanna AI Training - Table Discovery Filters
+# =============================================================================
+# Controls which tables are included in DDL extraction for Vanna AI training.
+# Vanna needs table DDL to generate accurate SQL from natural language.
+#
+# include_table_prefixes:
+#   ["*"]                   - Include ALL tables (default, recommended)
+#   ["ref_", "md_", "snap_"] - Only tables matching these prefixes
+#   Prefix matching is case-sensitive and uses SQL LIKE (prefix%).
+#
+# exclude_tables:
+#   Tables to always exclude from training (Chainlit internals, migrations, etc.)
+#   These are excluded regardless of include_table_prefixes.
+#
+# exclude_table_prefixes:
+#   Table name prefixes to always exclude (system/internal tables).
+
+include_table_prefixes:
+  - "*"
+
+exclude_tables:
+  - alembic_version
+  - data_load_history
+  # Chainlit data persistence tables
+  - elements
+  - feedbacks
+  - steps
+  - threads
+  - users
+
+exclude_table_prefixes:
+  - pg_
+  - sql_
+  - information_
 
 # Key relationships
 relationships:

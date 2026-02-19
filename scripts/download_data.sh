@@ -27,17 +27,38 @@ PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
 # Default data directory (can be overridden for Docker)
 DATA_DIR="${DATA_DIR:-$PROJECT_ROOT/datasets/snap/data}"
 
-# SNAP QC Data URLs
-# Note: These URLs may change. Check https://snapqcdata.net for updates.
+# SNAP QC Data URLs (loaded from config.yaml)
+# Note: These URLs may change. Update datasets/snap/config.yaml when they do.
 # Data Source: https://snapqcdata.net/data
 
-# Available fiscal years and their download URLs
-# These are publicly available SNAP QC files (ZIP format)
-declare -A DATA_URLS=(
-    ["2023"]="https://snapqcdata.net/sites/default/files/2025-03/qcfy2023_csv.zip"
-    ["2022"]="https://snapqcdata.net/sites/default/files/2024-05/qcfy2022_csv.zip"
-    ["2021"]="https://snapqcdata.net/sites/default/files/2024-05/qcfy2021_csv.zip"
-)
+CONFIG_FILE="$PROJECT_ROOT/datasets/snap/config.yaml"
+
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo -e "${RED}Error: Config file not found: $CONFIG_FILE${NC}"
+    exit 1
+fi
+
+# Parse data_files from config.yaml using Python (requires PyYAML: pip install pyyaml)
+if ! python3 -c "import yaml" 2>/dev/null; then
+    echo -e "${RED}Error: PyYAML is required. Install with: pip install pyyaml${NC}"
+    exit 1
+fi
+
+declare -A DATA_URLS
+while IFS='=' read -r year url; do
+    DATA_URLS["$year"]="$url"
+done < <(python3 -c "
+import yaml, sys
+with open('$CONFIG_FILE') as f:
+    config = yaml.safe_load(f)
+for year, url in config.get('data_files', {}).items():
+    print(f'{year}={url}')
+")
+
+if [ ${#DATA_URLS[@]} -eq 0 ]; then
+    echo -e "${RED}Error: No data_files found in $CONFIG_FILE${NC}"
+    exit 1
+fi
 
 # Note: Each ZIP file is approximately 200-300MB and contains CSV files
 

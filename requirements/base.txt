@@ -23,6 +23,7 @@ pydantic==2.10.5  # Latest Pydantic v2
 pydantic-core==2.27.2
 pydantic-settings==2.10.1  # Required by Chainlit 2.9.5 (>=2.10.1)
 python-dotenv==1.0.1
+pyyaml==6.0.2  # YAML config parsing (datasets/snap/config.yaml)
 
 # Security & Authentication
 python-jose[cryptography]==3.3.0

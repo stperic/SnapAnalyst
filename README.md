@@ -522,28 +522,21 @@ SnapAnalyst automatically discovers and trains Vanna.AI on custom tables and vie
 
 #### Naming Conventions
 
-To ensure your custom data is automatically discovered and included in Vanna AI training:
+All public schema tables are included in Vanna AI training by default (unless excluded in config). However, using consistent prefixes is recommended for organization:
 
 **Custom Tables**: Use `snap_*` prefix
 ```sql
--- Examples:
 CREATE TABLE snap_state_analysis (
     state_code VARCHAR(2),
     metric_value DECIMAL,
-    analysis_year INT,
-    ...
-);
-
-CREATE TABLE snap_california_demographics (
-    case_id VARCHAR(50),
-    county_code VARCHAR(3),
-    ...
+    analysis_year INT
 );
 ```
 
-**Reference Tables**: Use `ref_*` prefix
+**Reference/Lookup Tables**: Use `ref_*` prefix
 ```sql
--- Examples:
+-- ref_* tables with a 'description' column get sample data
+-- automatically extracted for AI training
 CREATE TABLE ref_county_codes (
     code VARCHAR(3) PRIMARY KEY,
     description VARCHAR(200),
@@ -551,24 +544,83 @@ CREATE TABLE ref_county_codes (
 );
 ```
 
+**State-Specific Tables**: Use `md_*`, `ca_*`, etc. prefix
+```sql
+-- State-prefixed tables are automatically included
+CREATE TABLE md_error_cases (
+    fiscal_year INT,
+    jurisdiction VARCHAR(100),
+    review_finding VARCHAR(50),
+    ...
+);
+```
+
 **Custom Views**: Use `v_*` or `snap_v_*` prefix
 ```sql
--- Examples:
-CREATE VIEW v_monthly_summary AS
-SELECT ...;
-
-CREATE VIEW snap_v_state_comparison AS
-SELECT ...;
+CREATE VIEW v_monthly_summary AS SELECT ...;
+CREATE VIEW snap_v_state_comparison AS SELECT ...;
 ```
+
+If you later want to restrict AI training to only certain prefixes, update `include_table_prefixes` in `datasets/snap/config.yaml`.
 
 #### Discovery Rules
 
-SnapAnalyst automatically includes:
-- ✓ Tables matching `ref_*`, `snap_*`
-- ✓ Core tables: `households`, `household_members`, `qc_errors`
-- ✓ Views matching `v_*`, `snap_v_*`
-- ✗ System tables (`pg_*`, `information_*`, etc.)
-- ✗ Metadata tables (`data_load_history`, `alembic_version`)
+Table discovery is config-driven via `datasets/snap/config.yaml`:
+
+```yaml
+# Default: include ALL tables except excluded ones
+include_table_prefixes:
+  - "*"
+
+# Tables always excluded from AI training
+exclude_tables:
+  - alembic_version
+  - data_load_history
+  - elements        # Chainlit internal
+  - feedbacks       # Chainlit internal
+  - steps           # Chainlit internal
+  - threads         # Chainlit internal
+  - users           # Chainlit internal
+
+exclude_table_prefixes:
+  - pg_
+  - sql_
+  - information_
+```
+
+By default, **all** public schema tables are included in AI training except the excluded ones above. To restrict training to specific prefixes, change `include_table_prefixes` (e.g., `["ref_", "md_", "snap_"]`).
+
+#### Best Practices: Table & Column Comments
+
+PostgreSQL `COMMENT ON` statements are the **most important way** to help the AI understand your schema. When Vanna extracts DDL, comments are included and directly influence SQL generation quality.
+
+**Table comments** should include:
+- A one-line description of what the table contains
+- JOIN instructions (what tables to join with and on which keys)
+- 3-5 example queries showing common usage patterns
+
+```sql
+-- Table comment with description and example queries
+COMMENT ON TABLE state_error_rates IS
+'State-level SNAP QC error rates by fiscal year with rankings and liability status.
+Use state_name to join with households.state_name for cross-referencing.
+
+COMMON QUERIES:
+- Error rates by state: SELECT state_name, error_rate FROM state_error_rates WHERE fiscal_year = 2023 ORDER BY error_rate DESC
+- States above national average: SELECT * FROM state_error_rates WHERE error_rate > (SELECT error_rate FROM state_error_rates WHERE state_name = ''U.S. TOTAL (National Average)'' AND fiscal_year = 2023) AND fiscal_year = 2023
+- Liability states: SELECT state_name, error_rate FROM state_error_rates WHERE liability_status IS NOT NULL';
+```
+
+**Column comments** clarify ambiguous or coded columns:
+
+```sql
+COMMENT ON COLUMN state_error_rates.liability_status IS 'Whether the state faces fiscal liability for high error rates (NULL = no liability)';
+COMMENT ON COLUMN state_error_rates.error_rate IS 'Combined payment error rate as a decimal (e.g., 11.54 = 11.54%)';
+```
+
+**Reference tables** with a `description` column get sample data extracted automatically (e.g., `ref_status`: `1 = 'Amount correct', 2 = 'Overissuance'`). Adding a table comment on top of that further improves AI accuracy.
+
+See the existing comments on `households`, `household_members`, and `qc_errors` for examples of well-documented tables.
 
 #### Applying Changes
 
@@ -581,6 +633,13 @@ After adding custom tables or views:
 
    -- Create your tables/views
    CREATE TABLE snap_my_analysis (...);
+
+   -- Add comments to help the AI (strongly recommended)
+   COMMENT ON TABLE snap_my_analysis IS
+   'Description of what this table contains.
+
+   COMMON QUERIES:
+   - Example: SELECT ... FROM snap_my_analysis WHERE ...';
    ```
 
 2. **Retrain Vanna.AI**:
@@ -588,7 +647,7 @@ After adding custom tables or views:
    /mem reset
    ```
 
-   The `/mem reset` command clears AI training data and re-extracts the complete database schema, automatically discovering your new tables/views.
+   The `/mem reset` command clears AI training data and re-extracts the complete database schema, automatically discovering your new tables and their comments.
 
 **Note**: `/mem reset` will clear custom documentation added via `/mem add`, but will restore all database schema definitions and business context from the live database.
 

@@ -203,13 +203,10 @@ async def handle_upload():
 
 async def handle_reset():
     """Handle /reset command - reset the database."""
-    actions = [
-        cl.Action(name="confirm_reset", payload={"confirm": "yes"}, label="⚠️ Yes, Reset Database"),
-        cl.Action(name="cancel_reset", payload={"confirm": "no"}, label="❌ Cancel")
-    ]
+    from ui.handlers.actions import handle_reset_cancel, handle_reset_confirm
 
-    await send_message(
-        """### ⚠️ Reset Database
+    res = await cl.AskActionMessage(
+        content="""### ⚠️ Reset Database
 
 **Warning:** This will delete ALL data from the database!
 
@@ -221,5 +218,14 @@ async def handle_reset():
 **This action cannot be undone.**
 
 Are you sure you want to continue?""",
-        actions=actions
-    )
+        actions=[
+            cl.Action(name="confirm", payload={"confirm": "yes"}, label="⚠️ Yes, Reset Database"),
+            cl.Action(name="cancel", payload={"confirm": "no"}, label="❌ Cancel"),
+        ],
+        timeout=120,
+    ).send()
+
+    if res and res.get("payload", {}).get("confirm") == "yes":
+        await handle_reset_confirm()
+    else:
+        await handle_reset_cancel()

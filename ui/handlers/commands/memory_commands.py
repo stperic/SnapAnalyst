@@ -82,13 +82,10 @@ async def handle_mem_command(args: str | None = None):
 
 async def handle_memreset():
     """Handle /memreset command - reset ChromaDB and re-train."""
-    actions = [
-        cl.Action(name="confirm_memreset", payload={"confirm": "yes"}, label="⚠️ Yes, Reset Memory"),
-        cl.Action(name="cancel_memreset", payload={"confirm": "no"}, label="❌ Cancel")
-    ]
+    from ui.handlers.actions import handle_memreset_cancel, handle_memreset_confirm
 
-    await send_message(
-        """### ⚠️ Reset AI Memory (ChromaDB)
+    res = await cl.AskActionMessage(
+        content="""### ⚠️ Reset AI Memory (ChromaDB)
 
 **Warning:** This will clear ALL training data and rebuild from scratch!
 
@@ -105,8 +102,17 @@ async def handle_memreset():
 **This action cannot be undone.**
 
 Are you sure you want to continue?""",
-        actions=actions
-    )
+        actions=[
+            cl.Action(name="confirm", payload={"confirm": "yes"}, label="⚠️ Yes, Reset Memory"),
+            cl.Action(name="cancel", payload={"confirm": "no"}, label="❌ Cancel"),
+        ],
+        timeout=120,
+    ).send()
+
+    if res and res.get("payload", {}).get("confirm") == "yes":
+        await handle_memreset_confirm()
+    else:
+        await handle_memreset_cancel()
 
 
 async def handle_memadd(args: str | None = None):

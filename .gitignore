@@ -73,6 +73,7 @@ snapdata/*.csv
 !snapdata/.gitkeep
 backups/
 *.csv
+!tests/data/test.csv
 *.xlsx
 *.xls
 

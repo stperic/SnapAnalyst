@@ -226,12 +226,22 @@ class SnapDatasetConfig(DatasetConfig):
     # =========================================================================
 
     def get_fiscal_years(self) -> list[int]:
-        """Get available fiscal years (from data_mapping metadata)."""
+        """Get available fiscal years (from config.yaml data_files keys, with data_mapping fallback)."""
         try:
+            config_path = self.base_path / "config.yaml"
+            if config_path.exists():
+                import yaml
+
+                with open(config_path) as f:
+                    config = yaml.safe_load(f)
+                data_files = config.get("data_files", {})
+                if data_files:
+                    return sorted(int(y) for y in data_files)
+            # Fall back to data_mapping metadata
             mapping = self.load_data_mapping()
             return mapping.get("database", {}).get("fiscal_years_available", [])
         except Exception:
-            return [2021, 2022, 2023]  # Default
+            return []
 
 
 # Singleton instance for easy access

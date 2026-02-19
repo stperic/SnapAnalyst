@@ -189,12 +189,19 @@ async def handle_prompt_upload_from_text(prompt_type: str, prompt_text: str):
 
 Replace your current prompt with this text?"""
 
-    actions = [
-        cl.Action(name="confirm_prompt_update", payload={"confirm": "yes"}, label="✅ Yes, Update Prompt"),
-        cl.Action(name="cancel_prompt_update", payload={"confirm": "no"}, label="❌ Cancel"),
-    ]
+    res = await cl.AskActionMessage(
+        content=content,
+        actions=[
+            cl.Action(name="confirm", payload={"confirm": "yes"}, label="✅ Yes, Update Prompt"),
+            cl.Action(name="cancel", payload={"confirm": "no"}, label="❌ Cancel"),
+        ],
+        timeout=120,
+    ).send()
 
-    await send_message(content, actions=actions)
+    if res and res.get("payload", {}).get("confirm") == "yes":
+        await handle_prompt_confirmation("yes")
+    else:
+        await handle_prompt_confirmation("no")
 
 
 async def handle_prompt_upload_from_file(prompt_type: str, files):
@@ -254,12 +261,19 @@ async def handle_prompt_upload_from_file(prompt_type: str, files):
 
 Replace your current prompt with this file content?"""
 
-    actions = [
-        cl.Action(name="confirm_prompt_update", payload={"confirm": "yes"}, label="✅ Yes, Update Prompt"),
-        cl.Action(name="cancel_prompt_update", payload={"confirm": "no"}, label="❌ Cancel"),
-    ]
+    res = await cl.AskActionMessage(
+        content=content,
+        actions=[
+            cl.Action(name="confirm", payload={"confirm": "yes"}, label="✅ Yes, Update Prompt"),
+            cl.Action(name="cancel", payload={"confirm": "no"}, label="❌ Cancel"),
+        ],
+        timeout=120,
+    ).send()
 
-    await send_message(content, actions=actions)
+    if res and res.get("payload", {}).get("confirm") == "yes":
+        await handle_prompt_confirmation("yes")
+    else:
+        await handle_prompt_confirmation("no")
 
 
 async def handle_prompt_confirmation(user_input: str):

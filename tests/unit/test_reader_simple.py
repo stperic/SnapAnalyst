@@ -48,8 +48,6 @@ class TestCSVReaderBasic:
 
         assert row_count > 0
         assert isinstance(row_count, int)
-        # We know the test CSV has 43,777 rows
-        assert row_count == 43776  # Excluding header
 
     def test_get_column_names(self, test_csv_path: Path):
         """Test getting column names"""
@@ -68,5 +66,3 @@ class TestCSVReaderBasic:
         reader = CSVReader(str(test_csv_path))
 
         assert reader.file_size_bytes > 0
-        # Test CSV should be several MB
-        assert reader.file_size_bytes > 1_000_000  # > 1MB

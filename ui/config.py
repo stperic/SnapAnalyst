@@ -8,6 +8,10 @@ For API configuration, see src/core/config.py
 For API client, see src/clients/api_client.py
 """
 
+from pathlib import Path
+
+import yaml
+
 # =============================================================================
 # PERSONA CONFIGURATION
 # =============================================================================
@@ -29,8 +33,22 @@ MAX_DISPLAY_ROWS = 50
 # FILE CONFIGURATION (UI-specific defaults)
 # =============================================================================
 
-# Supported fiscal years for display/validation
-SUPPORTED_FISCAL_YEARS = [2021, 2022, 2023]
+# Supported fiscal years for display/validation (loaded from config.yaml)
+def _load_fiscal_years() -> list[int]:
+    """Load fiscal years from datasets/snap/config.yaml."""
+    config_path = Path(__file__).resolve().parent.parent / "datasets" / "snap" / "config.yaml"
+    try:
+        with open(config_path) as f:
+            config = yaml.safe_load(f)
+        data_files = config.get("data_files", {})
+        if data_files:
+            return sorted(int(y) for y in data_files)
+    except Exception:
+        pass
+    return []
+
+
+SUPPORTED_FISCAL_YEARS = _load_fiscal_years()
 
 # Default fiscal year when not detected from filename
 DEFAULT_FISCAL_YEAR = 2023

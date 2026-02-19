@@ -207,8 +207,6 @@ from ui.handlers.actions import (
     handle_file_load,
     handle_followup,
     handle_refresh_database,
-    handle_reset_cancel,
-    handle_reset_confirm,
 )
 from ui.handlers.commands import handle_command
 from ui.handlers.queries import handle_chat_query, handle_insight_request
@@ -378,17 +376,6 @@ async def on_followup(action: cl.Action):
     await handle_followup(action.payload.get("question"))
 
 
-@cl.action_callback("confirm_reset")
-async def on_confirm_reset(action: cl.Action):
-    """Handle database reset confirmation."""
-    await handle_reset_confirm()
-
-
-@cl.action_callback("cancel_reset")
-async def on_cancel_reset(action: cl.Action):
-    """Cancel database reset."""
-    await handle_reset_cancel()
-
 
 @cl.action_callback("load_*")
 async def on_load_file(action: cl.Action):
@@ -414,32 +401,6 @@ async def on_feedback_negative(action: cl.Action):
     await handle_feedback_negative(action.payload.get("response_id"))
 
 
-@cl.action_callback("confirm_memreset")
-async def on_confirm_memreset(action: cl.Action):
-    """Handle memory reset confirmation."""
-    from ui.handlers.actions import handle_memreset_confirm
-    await handle_memreset_confirm()
-
-
-@cl.action_callback("cancel_memreset")
-async def on_cancel_memreset(action: cl.Action):
-    """Cancel memory reset."""
-    from ui.handlers.actions import handle_memreset_cancel
-    await handle_memreset_cancel()
-
-
-@cl.action_callback("confirm_prompt_update")
-async def on_confirm_prompt_update(action: cl.Action):
-    """Handle prompt update confirmation."""
-    from ui.handlers.commands.prompt_commands import handle_prompt_confirmation
-    await handle_prompt_confirmation("yes")
-
-
-@cl.action_callback("cancel_prompt_update")
-async def on_cancel_prompt_update(action: cl.Action):
-    """Cancel prompt update."""
-    from ui.handlers.commands.prompt_commands import handle_prompt_confirmation
-    await handle_prompt_confirmation("no")
 
 
 # =============================================================================
