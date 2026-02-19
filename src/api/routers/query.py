@@ -178,12 +178,21 @@ def _get_database_schema(inspector) -> dict:
     """
     Query database for actual schema structure.
 
+    Uses the same table discovery config (datasets/snap/config.yaml) as Vanna training
+    to exclude Chainlit internals, migration tables, and system prefixes.
+
     Args:
         inspector: SQLAlchemy inspector
 
     Returns:
         Dictionary with tables, columns, types, and constraints
     """
+    from src.database.ddl_extractor import _load_table_discovery_config
+
+    config = _load_table_discovery_config()
+    exclude_tables = set(config["exclude_tables"])
+    exclude_prefixes = tuple(config["exclude_table_prefixes"])
+
     schema = {
         "tables": {},
         "relationships": {},
@@ -198,8 +207,8 @@ def _get_database_schema(inspector) -> dict:
     table_names = inspector.get_table_names()
 
     for table_name in table_names:
-        # Skip internal tables
-        if table_name.startswith('_') or table_name == 'alembic_version':
+        # Skip internal/excluded tables using shared config
+        if table_name.startswith('_') or table_name in exclude_tables or table_name.startswith(exclude_prefixes):
             continue
 
         table_info = {
@@ -451,8 +460,9 @@ async def get_example_queries():
         List of example queries with descriptions
     """
     try:
-        # Query examples now in datasets/snap/
-        examples_path = Path(__file__).parent.parent.parent.parent / "datasets" / "snap" / "query_examples.json"
+        # Query examples in the training data folder
+        from src.core.config import settings
+        examples_path = Path(settings.sql_training_data_path) / "query_examples.json"
 
         if not examples_path.exists():
             # Return default examples if file doesn't exist yet

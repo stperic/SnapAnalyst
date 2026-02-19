@@ -1,0 +1,375 @@
+{
+  "example_queries": [
+    {
+      "question": "What is the average income by state?",
+      "sql": "SELECT state_name, SUM(gross_income * household_weight) / NULLIF(SUM(household_weight), 0) AS avg_gross_income, SUM(net_income * household_weight) / NULLIF(SUM(household_weight), 0) AS avg_net_income FROM households WHERE gross_income IS NOT NULL GROUP BY state_name ORDER BY state_name",
+      "explanation": "Weighted average for population-level income estimates; gross_income is before deductions, net_income is after; always weight with household_weight for state/national estimates"
+    },
+    {
+      "question": "Which states have the highest household income?",
+      "sql": "SELECT state_name, SUM(gross_income * household_weight) / NULLIF(SUM(household_weight), 0) AS avg_income FROM households WHERE gross_income IS NOT NULL GROUP BY state_name ORDER BY avg_income DESC LIMIT 10",
+      "explanation": "Top-N ranking with weighted average; use household_weight to project QC sample to population-level estimates"
+    },
+    {
+      "question": "Show errors by type with descriptions",
+      "sql": "SELECT re.description AS error_type, re.category, COUNT(*) AS sample_count FROM qc_errors e JOIN ref_element re ON e.element_code = re.code GROUP BY re.description, re.category ORDER BY sample_count DESC",
+      "explanation": "Error type distribution in the QC sample; ref_element.category groups into eligibility, assets, earned_income, unearned_income, deductions, income_totals, computation"
+    },
+    {
+      "question": "What are the most common errors caused by the agency?",
+      "sql": "SELECT re.description AS error_type, ra.description AS cause, COUNT(*) AS count FROM qc_errors e JOIN ref_element re ON e.element_code = re.code JOIN ref_agency_responsibility ra ON e.responsible_agency = ra.code WHERE ra.responsibility_type = 'agency' GROUP BY re.description, ra.description ORDER BY count DESC",
+      "explanation": "Agency-caused errors include policy mistakes, data entry errors, computer errors; filter responsibility_type = 'agency'"
+    },
+    {
+      "question": "How do client errors compare to agency errors in dollar terms?",
+      "sql": "SELECT ra.responsibility_type, COUNT(*) AS error_count, SUM(e.error_amount) AS total_sample_amount FROM qc_errors e JOIN ref_agency_responsibility ra ON e.responsible_agency = ra.code GROUP BY ra.responsibility_type",
+      "explanation": "Error attribution analysis; responsibility_type is 'client', 'agency', or 'other'; qc_errors.error_amount is always positive (absolute value)"
+    },
+    {
+      "question": "What types of income errors occur most often?",
+      "sql": "SELECT re.description AS error_type, re.category, COUNT(*) AS count FROM qc_errors e JOIN ref_element re ON e.element_code = re.code WHERE re.category IN ('earned_income', 'unearned_income') GROUP BY re.description, re.category ORDER BY count DESC",
+      "explanation": "Income error breakdown; earned_income includes wages/self-employment, unearned_income includes SSI/RSDI/TANF/child support"
+    },
+    {
+      "question": "Show overissuance cases by state with totals",
+      "sql": "SELECT h.state_name, COUNT(*) AS sample_count, SUM(h.amount_error * h.household_weight) AS weighted_total_overpayment FROM households h JOIN ref_status rs ON h.status = rs.code WHERE rs.description = 'Overissuance' GROUP BY h.state_name ORDER BY weighted_total_overpayment DESC",
+      "explanation": "Overpayment geographic analysis with weighted dollar totals; amount_error is positive for overissuance; weight for population estimates"
+    },
+    {
+      "question": "List overissuance cases with details",
+      "sql": "SELECT h.case_id, h.state_name, rs.description AS status, h.snap_benefit, h.amount_error FROM households h JOIN ref_status rs ON h.status = rs.code WHERE rs.description = 'Overissuance' LIMIT 100",
+      "explanation": "Row-level case listing — no weighting needed for individual case details; always use LIMIT 100 for non-aggregate queries"
+    },
+    {
+      "question": "How many underpayment cases exist?",
+      "sql": "SELECT COUNT(*) AS sample_count, SUM(household_weight) AS estimated_population_count FROM households h JOIN ref_status rs ON h.status = rs.code WHERE rs.description = 'Underissuance'",
+      "explanation": "Underissuance = household received less than entitled; show both sample count and weighted population estimate"
+    },
+    {
+      "question": "What are the root causes of errors?",
+      "sql": "SELECT rn.category AS cause_category, rn.description AS error_nature, COUNT(*) AS count FROM qc_errors e JOIN ref_nature rn ON e.nature_code = rn.code GROUP BY rn.category, rn.description ORDER BY count DESC",
+      "explanation": "Root cause analysis; ref_nature.category groups into income, composition, deduction, resources, computation, reporting, benefits"
+    },
+    {
+      "question": "Was the error from unreported income or a computation mistake?",
+      "sql": "SELECT rn.description AS error_nature, rn.category, COUNT(*) AS count FROM qc_errors e JOIN ref_nature rn ON e.nature_code = rn.code WHERE rn.category IN ('income', 'computation') GROUP BY rn.description, rn.category ORDER BY count DESC",
+      "explanation": "Compare income-related causes vs arithmetic/rounding errors using ref_nature.category filter"
+    },
+    {
+      "question": "Show the error summary by state including finding type",
+      "sql": "SELECT h.state_name, re.description AS error_type, rf.description AS finding, COUNT(*) AS count FROM qc_errors e JOIN households h ON e.case_id = h.case_id AND e.fiscal_year = h.fiscal_year JOIN ref_element re ON e.element_code = re.code JOIN ref_error_finding rf ON e.error_finding = rf.code GROUP BY h.state_name, re.description, rf.description ORDER BY h.state_name, count DESC",
+      "explanation": "Multi-table JOIN pattern; composite key (case_id, fiscal_year) required; ref_error_finding shows Overissuance, Underissuance, or Ineligible"
+    },
+    {
+      "question": "Find all wage-related errors",
+      "sql": "SELECT e.case_id, h.state_name, re.description AS error_type, e.error_amount FROM qc_errors e JOIN households h ON e.case_id = h.case_id AND e.fiscal_year = h.fiscal_year JOIN ref_element re ON e.element_code = re.code WHERE re.description ILIKE '%wages%' LIMIT 100",
+      "explanation": "Text search pattern for specific error types; ILIKE for case-insensitive matching on ref_element.description"
+    },
+    {
+      "question": "Where are income-related errors concentrated geographically?",
+      "sql": "SELECT h.state_name, re.description AS error_type, COUNT(*) AS income_error_count FROM qc_errors e JOIN households h ON e.case_id = h.case_id AND e.fiscal_year = h.fiscal_year JOIN ref_element re ON e.element_code = re.code WHERE re.category IN ('earned_income', 'unearned_income') GROUP BY h.state_name, re.description ORDER BY income_error_count DESC",
+      "explanation": "Geographic error concentration; filter by ref_element.category for earned/unearned income domains"
+    },
+    {
+      "question": "Which states have the most shelter and medical deduction mistakes?",
+      "sql": "SELECT h.state_name, re.description AS error_type, COUNT(*) AS deduction_error_count FROM qc_errors e JOIN households h ON e.case_id = h.case_id AND e.fiscal_year = h.fiscal_year JOIN ref_element re ON e.element_code = re.code WHERE re.category = 'deductions' GROUP BY h.state_name, re.description ORDER BY deduction_error_count DESC",
+      "explanation": "Deduction errors include shelter, dependent care, medical, earned income deduction, standard deduction; category = 'deductions'"
+    },
+    {
+      "question": "What eligibility determination errors occur?",
+      "sql": "SELECT re.description AS error_type, COUNT(*) AS count, AVG(e.error_amount) AS avg_error FROM qc_errors e JOIN ref_element re ON e.element_code = re.code WHERE re.category = 'eligibility' GROUP BY re.description ORDER BY count DESC",
+      "explanation": "Eligibility errors include certification period, residency, citizenship, work registration; category = 'eligibility'"
+    },
+    {
+      "question": "Show households with elderly or disabled members",
+      "sql": "SELECT case_id, state_name, num_elderly, num_disabled, certified_household_size, snap_benefit FROM households WHERE num_elderly > 0 OR num_disabled > 0 LIMIT 100",
+      "explanation": "Elderly = age 60+ (SNAP threshold, not 65); disabled tracked separately; both affect deduction eligibility"
+    },
+    {
+      "question": "Find households receiving expedited service",
+      "sql": "SELECT case_id, state_name, num_children, snap_benefit, expedited_service FROM households WHERE expedited_service IN (1, 2) LIMIT 100",
+      "explanation": "Expedited SNAP benefits for emergency need; 1=received on time, 2=entitled but late delivery"
+    },
+    {
+      "question": "Show ineligible household members",
+      "sql": "SELECT m.case_id, m.member_number, m.age, ra.description AS affiliation_status FROM household_members m JOIN ref_snap_affiliation ra ON m.snap_affiliation_code = ra.code WHERE m.snap_affiliation_code NOT IN (1, 2) LIMIT 100",
+      "explanation": "SNAP affiliation codes 1-2 are eligible participants; all other codes represent various ineligibility reasons"
+    },
+    {
+      "question": "Find categorically eligible households including BBCE",
+      "sql": "SELECT case_id, state_name, gross_income, categorical_eligibility FROM households WHERE categorical_eligibility IN (1, 2) LIMIT 100",
+      "explanation": "categorical_eligibility 1=categorically eligible (exempt from income/asset tests), 2=Broad-Based Categorical Eligibility (BBCE)"
+    },
+    {
+      "question": "What is the average error dollar amount by error cause?",
+      "sql": "SELECT rn.description AS error_nature, rn.category, AVG(e.error_amount) AS avg_error, COUNT(*) AS count FROM qc_errors e JOIN ref_nature rn ON e.nature_code = rn.code GROUP BY rn.description, rn.category ORDER BY avg_error DESC",
+      "explanation": "Error severity analysis by root cause; error_amount in qc_errors is always positive (absolute value)"
+    },
+    {
+      "question": "Show asset-related errors with state breakdown",
+      "sql": "SELECT h.state_name, re.description AS error_type, COUNT(*) AS asset_errors, SUM(e.error_amount) AS total_error FROM qc_errors e JOIN households h ON e.case_id = h.case_id AND e.fiscal_year = h.fiscal_year JOIN ref_element re ON e.element_code = re.code WHERE re.category = 'assets' GROUP BY h.state_name, re.description ORDER BY asset_errors DESC",
+      "explanation": "Asset errors include countable assets, vehicles, resources; category = 'assets'"
+    },
+    {
+      "question": "Find members receiving SSI benefits",
+      "sql": "SELECT m.case_id, h.state_name, m.member_number, m.ssi FROM household_members m JOIN households h ON m.case_id = h.case_id AND m.fiscal_year = h.fiscal_year WHERE m.ssi > 0 LIMIT 100",
+      "explanation": "SSI (Supplemental Security Income) tracked at member level in household_members; composite key join required"
+    },
+    {
+      "question": "Total weighted error dollars by state",
+      "sql": "SELECT h.state_name, SUM(e.error_amount * h.household_weight) AS weighted_total_error, COUNT(*) AS sample_error_count FROM qc_errors e JOIN households h ON e.case_id = h.case_id AND e.fiscal_year = h.fiscal_year GROUP BY h.state_name ORDER BY weighted_total_error DESC",
+      "explanation": "Weighted error dollar totals for population-level estimates; multiply error_amount by household_weight to project from sample"
+    },
+    {
+      "question": "What is the gender breakdown of SNAP recipients?",
+      "sql": "SELECT rs.description AS sex, SUM(h.household_weight) AS estimated_count FROM household_members m JOIN ref_sex rs ON m.sex = rs.code JOIN households h ON m.case_id = h.case_id AND m.fiscal_year = h.fiscal_year GROUP BY rs.description",
+      "explanation": "Weighted demographics for population estimates; JOIN to households for household_weight; use SUM(household_weight) not COUNT(*) for population projections"
+    },
+    {
+      "question": "Break down arithmetic and calculation errors by location",
+      "sql": "SELECT h.state_name, re.description AS error_type, COUNT(*) AS computation_errors FROM qc_errors e JOIN households h ON e.case_id = h.case_id AND e.fiscal_year = h.fiscal_year JOIN ref_element re ON e.element_code = re.code WHERE re.category = 'computation' GROUP BY h.state_name, re.description ORDER BY computation_errors DESC",
+      "explanation": "Computation errors include arithmetic, transitional benefits, reporting systems; category = 'computation'"
+    },
+    {
+      "question": "How does the SNAP benefit vary by family size?",
+      "sql": "SELECT certified_household_size, SUM(snap_benefit * household_weight) / NULLIF(SUM(household_weight), 0) AS weighted_avg_benefit, COUNT(*) AS sample_count FROM households WHERE snap_benefit IS NOT NULL GROUP BY certified_household_size ORDER BY certified_household_size",
+      "explanation": "Weighted average benefit by household size for population-level estimate; certified_household_size is the SNAP unit size"
+    },
+    {
+      "question": "Compare the original benefit to the corrected benefit by state",
+      "sql": "SELECT state_name, SUM(raw_benefit * household_weight) / NULLIF(SUM(household_weight), 0) AS avg_original_benefit, SUM(snap_benefit * household_weight) / NULLIF(SUM(household_weight), 0) AS avg_corrected_benefit, SUM(amount_error * household_weight) / NULLIF(SUM(household_weight), 0) AS avg_error FROM households WHERE amount_error != 0 GROUP BY state_name ORDER BY avg_error DESC",
+      "explanation": "Benefit accuracy with weighted averages; raw_benefit is agency-issued, snap_benefit is QC-corrected, amount_error is the signed difference"
+    },
+    {
+      "question": "Show error trends by fiscal year and category",
+      "sql": "SELECT h.fiscal_year, re.category AS error_category, COUNT(*) AS sample_count, SUM(e.error_amount * h.household_weight) AS weighted_total_error FROM qc_errors e JOIN households h ON e.case_id = h.case_id AND e.fiscal_year = h.fiscal_year JOIN ref_element re ON e.element_code = re.code GROUP BY h.fiscal_year, re.category ORDER BY h.fiscal_year, weighted_total_error DESC",
+      "explanation": "Year-over-year trend; weighted error totals for population-level dollar impact by error domain"
+    },
+    {
+      "question": "What are the top 10 states by total SNAP benefits?",
+      "sql": "SELECT state_name, SUM(snap_benefit * household_weight) AS total_weighted_benefits, COUNT(*) AS sample_cases FROM households GROUP BY state_name ORDER BY total_weighted_benefits DESC LIMIT 10",
+      "explanation": "Weighted population-level estimates; multiply by household_weight to project from QC sample to full population"
+    },
+    {
+      "question": "What is the age distribution of SNAP household members?",
+      "sql": "SELECT CASE WHEN age < 18 THEN 'Under 18' WHEN age BETWEEN 18 AND 59 THEN '18-59' WHEN age >= 60 THEN '60 and older' END AS age_group, SUM(h.household_weight) AS estimated_count FROM household_members m JOIN households h ON m.case_id = h.case_id AND m.fiscal_year = h.fiscal_year GROUP BY age_group ORDER BY age_group",
+      "explanation": "Weighted demographic profile; age 60+ is SNAP elderly threshold; JOIN households for household_weight"
+    },
+    {
+      "question": "Which cases were found ineligible?",
+      "sql": "SELECT e.case_id, h.state_name, h.snap_benefit AS full_benefit_as_error, re.description AS error_type, rn.description AS error_cause FROM qc_errors e JOIN households h ON e.case_id = h.case_id AND e.fiscal_year = h.fiscal_year JOIN ref_element re ON e.element_code = re.code JOIN ref_nature rn ON e.nature_code = rn.code JOIN ref_error_finding rf ON e.error_finding = rf.code WHERE rf.description = 'Ineligible' LIMIT 100",
+      "explanation": "Ineligible cases should not have received any benefits; entire snap_benefit is the error; error_finding = 'Ineligible'"
+    },
+    {
+      "question": "Show household composition errors — who was wrongly included or excluded?",
+      "sql": "SELECT rn.description AS error_nature, COUNT(*) AS count FROM qc_errors e JOIN ref_nature rn ON e.nature_code = rn.code WHERE rn.category = 'composition' GROUP BY rn.description ORDER BY count DESC",
+      "explanation": "Composition errors involve persons incorrectly included/excluded from the SNAP unit; ref_nature.category = 'composition'"
+    },
+    {
+      "question": "What percentage of sampled cases have errors by fiscal year?",
+      "sql": "SELECT fiscal_year, COUNT(*) AS total_cases, COUNT(*) FILTER (WHERE status != 1) AS error_cases, ROUND((COUNT(*) FILTER (WHERE status != 1)::NUMERIC / COUNT(*)::NUMERIC) * 100, 2) AS error_percentage FROM households WHERE case_classification = 1 GROUP BY fiscal_year ORDER BY fiscal_year",
+      "explanation": "Sample-level case error percentage; unweighted COUNT is correct here since we are counting sample cases not estimating population; case_classification = 1 required"
+    },
+    {
+      "question": "Which states have error rates above the national average?",
+      "sql": "WITH national_avg AS (SELECT (SUM(CASE WHEN ABS(amount_error) > 54 THEN ABS(amount_error) * household_weight ELSE 0 END) / NULLIF(SUM(snap_benefit * household_weight), 0)) * 100 AS avg_rate FROM households WHERE case_classification = 1 AND fiscal_year = 2023), state_rates AS (SELECT state_name, (SUM(CASE WHEN ABS(amount_error) > 54 THEN ABS(amount_error) * household_weight ELSE 0 END) / NULLIF(SUM(snap_benefit * household_weight), 0)) * 100 AS state_rate FROM households WHERE case_classification = 1 AND fiscal_year = 2023 GROUP BY state_name) SELECT s.state_name, ROUND(s.state_rate, 2) AS state_error_rate, ROUND(n.avg_rate, 2) AS national_avg_rate FROM state_rates s CROSS JOIN national_avg n WHERE s.state_rate > n.avg_rate ORDER BY s.state_rate DESC",
+      "explanation": "CTE (WITH clause) pattern for comparative analysis; first CTE computes weighted national average, second per-state, then filter above average"
+    },
+    {
+      "question": "Which states have more than 50 error cases in the sample?",
+      "sql": "SELECT h.state_name, COUNT(*) AS error_count FROM qc_errors e JOIN households h ON e.case_id = h.case_id AND e.fiscal_year = h.fiscal_year GROUP BY h.state_name HAVING COUNT(*) > 50 ORDER BY error_count DESC",
+      "explanation": "HAVING clause to filter aggregated results; this is a sample count (unweighted) — use for sample adequacy, not population estimates"
+    },
+    {
+      "question": "What share of the SNAP population is categorically eligible versus income-tested?",
+      "sql": "SELECT CASE WHEN categorical_eligibility = 1 THEN 'Categorically Eligible' WHEN categorical_eligibility = 2 THEN 'BBCE' ELSE 'Income Tested' END AS eligibility_type, SUM(household_weight) AS estimated_households, ROUND((SUM(household_weight) / SUM(SUM(household_weight)) OVER ()) * 100, 2) AS percentage FROM households GROUP BY eligibility_type ORDER BY estimated_households DESC",
+      "explanation": "Weighted population shares using window function SUM() OVER(); categorical_eligibility 1=exempt, 2=BBCE; use household_weight for population projection"
+    },
+    {
+      "question": "What is the error rate for households with disabled members versus without?",
+      "sql": "SELECT CASE WHEN num_disabled > 0 THEN 'Has Disabled Members' ELSE 'No Disabled Members' END AS disability_status, (SUM(CASE WHEN ABS(amount_error) > 54 THEN ABS(amount_error) * household_weight ELSE 0 END) / NULLIF(SUM(snap_benefit * household_weight), 0)) * 100 AS payment_error_rate FROM households WHERE case_classification = 1 AND fiscal_year = 2023 GROUP BY disability_status",
+      "explanation": "Demographic cross-tabulation with official weighted payment error rate formula; compare error rates across population segments"
+    },
+    {
+      "question": "What is the payment error rate for FY2023?",
+      "sql": "SELECT (SUM(CASE WHEN ABS(amount_error) > 54 THEN ABS(amount_error) * household_weight ELSE 0 END) / NULLIF(SUM(snap_benefit * household_weight), 0)) * 100 AS payment_error_rate FROM households WHERE case_classification = 1 AND fiscal_year = 2023",
+      "explanation": "Official USDA payment error rate formula; $54 is FY2023 tolerance threshold; must use case_classification = 1 and household_weight"
+    },
+    {
+      "question": "What is the overpayment rate by state for FY2023?",
+      "sql": "SELECT state_name, (SUM(CASE WHEN amount_error > 54 THEN amount_error * household_weight ELSE 0 END) / NULLIF(SUM(snap_benefit * household_weight), 0)) * 100 AS overpayment_rate FROM households WHERE case_classification = 1 AND fiscal_year = 2023 GROUP BY state_name ORDER BY overpayment_rate DESC",
+      "explanation": "Overpayment-only rate; amount_error > 0 means overpaid; only count errors exceeding $54 threshold for FY2023"
+    },
+    {
+      "question": "Compare payment error rates across all fiscal years",
+      "sql": "SELECT fiscal_year, (SUM(CASE WHEN ABS(amount_error) > CASE WHEN fiscal_year = 2021 THEN 39 WHEN fiscal_year = 2022 THEN 48 WHEN fiscal_year = 2023 THEN 54 ELSE 54 END THEN ABS(amount_error) * household_weight ELSE 0 END) / NULLIF(SUM(snap_benefit * household_weight), 0)) * 100 AS payment_error_rate FROM households WHERE case_classification = 1 GROUP BY fiscal_year ORDER BY fiscal_year",
+      "explanation": "Cross-year error rate comparison; CASE expression applies correct tolerance per year: FY2021=$39, FY2022=$48, FY2023=$54"
+    },
+    {
+      "question": "What is the case error rate for FY2023?",
+      "sql": "SELECT (COUNT(*) FILTER (WHERE status != 1 AND ABS(amount_error) > 54)::NUMERIC / NULLIF(COUNT(*)::NUMERIC, 0)) * 100 AS case_error_rate FROM households WHERE case_classification = 1 AND fiscal_year = 2023",
+      "explanation": "Case-level error rate (count-based, unweighted); percentage of sample cases with errors exceeding tolerance"
+    },
+    {
+      "question": "What is the underpayment error rate for FY2023?",
+      "sql": "SELECT (SUM(CASE WHEN amount_error < -54 THEN ABS(amount_error) * household_weight ELSE 0 END) / NULLIF(SUM(snap_benefit * household_weight), 0)) * 100 AS underpayment_rate FROM households WHERE case_classification = 1 AND fiscal_year = 2023",
+      "explanation": "Underpayment rate; amount_error < 0 means household received too little; threshold comparison on negative side: < -54"
+    },
+    {
+      "question": "Show average benefits by household size and state",
+      "sql": "SELECT state_name, certified_household_size, SUM(snap_benefit * household_weight) / NULLIF(SUM(household_weight), 0) AS weighted_avg_benefit, COUNT(*) AS sample_cases FROM households WHERE snap_benefit IS NOT NULL GROUP BY state_name, certified_household_size ORDER BY state_name, certified_household_size",
+      "explanation": "Multi-dimension GROUP BY with weighted averages; cross-tabulate state and household size for benefit adequacy analysis"
+    },
+    {
+      "question": "Which error elements drive the most overpayment dollars?",
+      "sql": "SELECT re.description AS error_type, re.category, SUM(e.error_amount * h.household_weight) AS weighted_error_dollars, COUNT(*) AS sample_count FROM qc_errors e JOIN households h ON e.case_id = h.case_id AND e.fiscal_year = h.fiscal_year JOIN ref_element re ON e.element_code = re.code JOIN ref_error_finding rf ON e.error_finding = rf.code WHERE rf.description = 'Overissuance' GROUP BY re.description, re.category ORDER BY weighted_error_dollars DESC",
+      "explanation": "Corrective action prioritization; rank error elements by weighted dollar impact to identify which errors to target first for reducing overpayment rate"
+    },
+    {
+      "question": "Rank the top error elements by their contribution to the overpayment rate with cumulative impact",
+      "sql": "WITH error_impact AS (SELECT re.description AS error_type, re.category, SUM(e.error_amount * h.household_weight) AS weighted_error_dollars FROM qc_errors e JOIN households h ON e.case_id = h.case_id AND e.fiscal_year = h.fiscal_year JOIN ref_element re ON e.element_code = re.code JOIN ref_error_finding rf ON e.error_finding = rf.code WHERE rf.description = 'Overissuance' AND h.case_classification = 1 AND h.fiscal_year = 2023 GROUP BY re.description, re.category), total AS (SELECT SUM(snap_benefit * household_weight) AS total_weighted_benefits FROM households WHERE case_classification = 1 AND fiscal_year = 2023) SELECT ei.error_type, ei.category, ROUND((ei.weighted_error_dollars / NULLIF(t.total_weighted_benefits, 0)) * 100, 4) AS contribution_to_error_rate, ROUND(SUM(ei.weighted_error_dollars) OVER (ORDER BY ei.weighted_error_dollars DESC) / NULLIF(t.total_weighted_benefits, 0) * 100, 4) AS cumulative_error_rate FROM error_impact ei CROSS JOIN total t ORDER BY ei.weighted_error_dollars DESC",
+      "explanation": "Corrective action planning with cumulative impact; shows which errors to fix first to maximize error rate reduction; uses CTE + window function for running total"
+    },
+    {
+      "question": "What is the 2-year rolling payment error rate for FY2022-2023?",
+      "sql": "SELECT (SUM(CASE WHEN ABS(amount_error) > CASE WHEN fiscal_year = 2022 THEN 48 WHEN fiscal_year = 2023 THEN 54 ELSE 54 END THEN ABS(amount_error) * household_weight ELSE 0 END) / NULLIF(SUM(snap_benefit * household_weight), 0)) * 100 AS rolling_2yr_error_rate FROM households WHERE case_classification = 1 AND fiscal_year IN (2022, 2023)",
+      "explanation": "FNS uses 2-year rolling error rates for liability determination; combine two fiscal years with per-year tolerance thresholds; case_classification = 1 required"
+    },
+    {
+      "question": "What is the expedited service timeliness rate?",
+      "sql": "SELECT fiscal_year, COUNT(*) FILTER (WHERE expedited_service IN (1, 2)) AS entitled_cases, COUNT(*) FILTER (WHERE expedited_service = 1) AS on_time_cases, COUNT(*) FILTER (WHERE expedited_service = 2) AS late_cases, ROUND((COUNT(*) FILTER (WHERE expedited_service = 2)::NUMERIC / NULLIF(COUNT(*) FILTER (WHERE expedited_service IN (1, 2))::NUMERIC, 0)) * 100, 2) AS late_percentage FROM households GROUP BY fiscal_year ORDER BY fiscal_year",
+      "explanation": "Expedited service compliance; 1=on time, 2=entitled but late; percentage of late deliveries is an FNS reporting metric"
+    },
+    {
+      "question": "Show ABAWD work requirement status for household members",
+      "sql": "SELECT ra.description AS abawd_status, COUNT(*) AS member_count FROM household_members m JOIN ref_abawd_status ra ON m.abawd_status = ra.code GROUP BY ra.description ORDER BY member_count DESC",
+      "explanation": "ABAWD = Able-Bodied Adults Without Dependents; subject to work requirements; JOIN ref_abawd_status for human-readable descriptions"
+    },
+    {
+      "question": "How many ABAWDs are meeting work requirements versus exempt?",
+      "sql": "SELECT ra.description AS abawd_status, COUNT(*) AS member_count, SUM(h.household_weight) AS estimated_population FROM household_members m JOIN ref_abawd_status ra ON m.abawd_status = ra.code JOIN households h ON m.case_id = h.case_id AND m.fiscal_year = h.fiscal_year WHERE m.abawd_status != 1 GROUP BY ra.description ORDER BY estimated_population DESC",
+      "explanation": "ABAWD compliance analysis; code 1 = not ABAWD, exclude to focus on actual ABAWDs; weighted for population estimates"
+    },
+
+    {
+      "question": "What is the payment error rate by state for FY2023?",
+      "sql": "SELECT state_name, payment_error_rate, overpayment_rate, underpayment_rate, case_error_rate, total_sample_cases FROM mv_state_error_rates WHERE fiscal_year = 2023 ORDER BY payment_error_rate DESC",
+      "explanation": "Pre-computed error rates from mv_state_error_rates materialized view; no need to re-derive the formula; includes all four rate types"
+    },
+    {
+      "question": "Which states improved their error rate from FY2022 to FY2023?",
+      "sql": "SELECT r23.state_name, r22.payment_error_rate AS fy2022_rate, r23.payment_error_rate AS fy2023_rate, ROUND(r23.payment_error_rate - r22.payment_error_rate, 4) AS rate_change FROM mv_state_error_rates r23 JOIN mv_state_error_rates r22 ON r23.state_name = r22.state_name AND r22.fiscal_year = 2022 WHERE r23.fiscal_year = 2023 AND r23.payment_error_rate < r22.payment_error_rate ORDER BY rate_change ASC",
+      "explanation": "Year-over-year improvement analysis using self-join on mv_state_error_rates; negative rate_change means improvement"
+    },
+    {
+      "question": "Show states with error rates above the national average using the pre-computed view",
+      "sql": "WITH national AS (SELECT SUM(total_weighted_error_dollars) / NULLIF(SUM(total_weighted_benefits), 0) * 100 AS national_rate FROM mv_state_error_rates WHERE fiscal_year = 2023) SELECT s.state_name, s.payment_error_rate, ROUND(n.national_rate, 4) AS national_rate FROM mv_state_error_rates s CROSS JOIN national n WHERE s.fiscal_year = 2023 AND s.payment_error_rate > n.national_rate ORDER BY s.payment_error_rate DESC",
+      "explanation": "National average computed from weighted totals across all states; compare each state against it"
+    },
+    {
+      "question": "What is the tolerance threshold for each fiscal year?",
+      "sql": "SELECT fiscal_year, threshold_amount FROM ref_tolerance_threshold ORDER BY fiscal_year",
+      "explanation": "Lookup table for USDA tolerance thresholds; errors below threshold excluded from official Payment Error Rate"
+    },
+    {
+      "question": "Calculate the payment error rate for all fiscal years using dynamic thresholds",
+      "sql": "SELECT h.fiscal_year, t.threshold_amount, ROUND((SUM(CASE WHEN ABS(h.amount_error) > t.threshold_amount THEN ABS(h.amount_error) * h.household_weight ELSE 0 END) / NULLIF(SUM(h.snap_benefit * h.household_weight), 0)) * 100, 4) AS payment_error_rate FROM households h JOIN ref_tolerance_threshold t ON h.fiscal_year = t.fiscal_year WHERE h.case_classification = 1 GROUP BY h.fiscal_year, t.threshold_amount ORDER BY h.fiscal_year",
+      "explanation": "Multi-year error rate using ref_tolerance_threshold JOIN instead of hardcoded thresholds; automatically adapts when new fiscal years are added"
+    },
+    {
+      "question": "What are the top error elements driving overpayment in my state?",
+      "sql": "SELECT element_description, element_category, SUM(weighted_error_dollars) AS total_weighted_dollars, SUM(sample_error_count) AS total_errors FROM mv_error_element_rollup WHERE fiscal_year = 2023 AND finding_type = 'Overissuance' GROUP BY element_description, element_category ORDER BY total_weighted_dollars DESC LIMIT 10",
+      "explanation": "Corrective action prioritization from mv_error_element_rollup; rank by weighted dollars to find highest-impact errors to target"
+    },
+    {
+      "question": "Which error categories are caused by the agency versus the client?",
+      "sql": "SELECT responsibility_type, element_category, SUM(weighted_error_dollars) AS total_weighted_dollars, SUM(sample_error_count) AS error_count FROM mv_error_element_rollup WHERE fiscal_year = 2023 GROUP BY responsibility_type, element_category ORDER BY responsibility_type, total_weighted_dollars DESC",
+      "explanation": "Error attribution by domain using pre-aggregated view; shows dollar impact of client vs agency errors by error category"
+    },
+    {
+      "question": "What is the racial and ethnic breakdown of SNAP participants?",
+      "sql": "SELECT race_ethnicity, SUM(estimated_member_count) AS estimated_participants FROM mv_demographic_profile WHERE fiscal_year = 2023 GROUP BY race_ethnicity ORDER BY estimated_participants DESC",
+      "explanation": "Weighted demographic profile from mv_demographic_profile; race/ethnicity required for FNS civil rights reporting and equity analysis"
+    },
+    {
+      "question": "What percentage of SNAP members are working?",
+      "sql": "SELECT working_status, SUM(estimated_member_count) AS estimated_count, ROUND(SUM(estimated_member_count) / SUM(SUM(estimated_member_count)) OVER () * 100, 2) AS percentage FROM mv_demographic_profile WHERE fiscal_year = 2023 GROUP BY working_status",
+      "explanation": "Employment status of SNAP participants; weighted population percentages using window function for total"
+    },
+    {
+      "question": "What is the education level of SNAP household members?",
+      "sql": "SELECT education_level, SUM(estimated_member_count) AS estimated_count FROM mv_demographic_profile WHERE fiscal_year = 2023 GROUP BY education_level ORDER BY estimated_count DESC",
+      "explanation": "Education demographics from pre-aggregated view; useful for workforce development and employment/training program planning"
+    },
+    {
+      "question": "How many elderly-only households are there by state?",
+      "sql": "SELECT state_name, SUM(household_weight) AS estimated_count FROM v_household_summary WHERE fiscal_year = 2023 AND household_type = 'Elderly Only' GROUP BY state_name ORDER BY estimated_count DESC",
+      "explanation": "Household segmentation using v_household_summary pre-classified types; Elderly Only = all members age 60+"
+    },
+    {
+      "question": "What is the error rate by household type?",
+      "sql": "SELECT household_type, COUNT(*) FILTER (WHERE error_classification LIKE '%Above Tolerance%') AS error_cases, COUNT(*) AS total_cases, ROUND(COUNT(*) FILTER (WHERE error_classification LIKE '%Above Tolerance%')::NUMERIC / COUNT(*)::NUMERIC * 100, 2) AS error_rate FROM v_household_summary WHERE fiscal_year = 2023 AND case_classification = 1 GROUP BY household_type ORDER BY error_rate DESC",
+      "explanation": "Case error rate segmented by household type; v_household_summary pre-classifies into Elderly Only, With Children, Single Adult, etc."
+    },
+    {
+      "question": "Show the income category breakdown for error cases",
+      "sql": "SELECT income_category, error_classification, COUNT(*) AS sample_count, SUM(household_weight) AS estimated_count FROM v_household_summary WHERE fiscal_year = 2023 AND status != 1 GROUP BY income_category, error_classification ORDER BY estimated_count DESC",
+      "explanation": "Income source analysis of error cases; income_category distinguishes Earned Only, Unearned Only, Mixed, Zero Income"
+    },
+    {
+      "question": "How does our computed rate compare to the official FNS rate?",
+      "sql": "SELECT m.state_name, m.fiscal_year, m.payment_error_rate AS computed_rate, f.payment_error_rate AS official_rate, ROUND(m.payment_error_rate - f.payment_error_rate, 4) AS difference FROM mv_state_error_rates m LEFT JOIN fns_error_rates_historical f ON m.fiscal_year = f.fiscal_year AND m.state_name = f.state_name WHERE m.fiscal_year = 2023 ORDER BY ABS(m.payment_error_rate - COALESCE(f.payment_error_rate, 0)) DESC",
+      "explanation": "Compare QC sample-computed rates (mv_state_error_rates) against official FNS published rates (fns_error_rates_historical)"
+    },
+    {
+      "question": "What is the racial breakdown of SNAP recipients by state?",
+      "sql": "SELECT rre.description AS race_ethnicity, h.state_name, SUM(h.household_weight) AS estimated_count FROM household_members m JOIN ref_race_ethnicity rre ON m.race_ethnicity = rre.code JOIN households h ON m.case_id = h.case_id AND m.fiscal_year = h.fiscal_year WHERE m.snap_affiliation_code IN (1, 2) AND h.fiscal_year = 2023 GROUP BY rre.description, h.state_name ORDER BY h.state_name, estimated_count DESC",
+      "explanation": "Race/ethnicity demographics by state; JOIN ref_race_ethnicity for descriptions; weight for population estimates; filter eligible members only"
+    },
+    {
+      "question": "How many noncitizen members are in the SNAP caseload?",
+      "sql": "SELECT rcs.description AS citizenship_status, SUM(h.household_weight) AS estimated_count FROM household_members m JOIN ref_citizenship_status rcs ON m.citizenship_status = rcs.code JOIN households h ON m.case_id = h.case_id AND m.fiscal_year = h.fiscal_year WHERE m.citizenship_status NOT IN (1, 2) AND h.fiscal_year = 2023 GROUP BY rcs.description ORDER BY estimated_count DESC",
+      "explanation": "Noncitizen analysis; citizenship_status 1-2 are US citizens, others are noncitizen categories; JOIN ref_citizenship_status for descriptions"
+    },
+    {
+      "question": "What is the family structure of SNAP households?",
+      "sql": "SELECT rr.description AS relationship, SUM(h.household_weight) AS estimated_count FROM household_members m JOIN ref_relationship rr ON m.relationship_to_head = rr.code JOIN households h ON m.case_id = h.case_id AND m.fiscal_year = h.fiscal_year WHERE h.fiscal_year = 2023 GROUP BY rr.description ORDER BY estimated_count DESC",
+      "explanation": "Family composition analysis; relationship_to_head shows head, spouse, child, parent, etc.; JOIN ref_relationship for descriptions"
+    },
+    {
+      "question": "What is the employment status of SNAP members?",
+      "sql": "SELECT ret.description AS employment_status, SUM(h.household_weight) AS estimated_count FROM household_members m JOIN ref_employment_status_type ret ON m.employment_status_a = ret.code JOIN households h ON m.case_id = h.case_id AND m.fiscal_year = h.fiscal_year WHERE h.fiscal_year = 2023 GROUP BY ret.description ORDER BY estimated_count DESC",
+      "explanation": "Detailed employment status beyond working/not working; self-employed, farm workers, looking for work, not in labor force; JOIN ref_employment_status_type"
+    },
+    {
+      "question": "How many SNAP members are work registrants versus exempt?",
+      "sql": "SELECT rw.description AS work_registration, SUM(h.household_weight) AS estimated_count FROM household_members m JOIN ref_work_registration rw ON m.work_registration_status = rw.code JOIN households h ON m.case_id = h.case_id AND m.fiscal_year = h.fiscal_year WHERE h.fiscal_year = 2023 GROUP BY rw.description ORDER BY estimated_count DESC",
+      "explanation": "Work registration compliance; exempt reasons include disabled, caring for child under 6, working 30+ hours; JOIN ref_work_registration"
+    },
+    {
+      "question": "How are errors most commonly discovered?",
+      "sql": "SELECT rd.description AS discovery_method, COUNT(*) AS error_count, SUM(e.error_amount) AS total_error_dollars FROM qc_errors e JOIN ref_discovery rd ON e.discovery_method = rd.code GROUP BY rd.description ORDER BY error_count DESC",
+      "explanation": "QC methodology effectiveness; discovery methods include case record, interview, employer verification, government match; JOIN ref_discovery"
+    },
+    {
+      "question": "What share of SNAP households are below 50% of the poverty level?",
+      "sql": "SELECT CASE WHEN poverty_level <= 50 THEN 'Below 50% FPL' WHEN poverty_level BETWEEN 51 AND 100 THEN '50-100% FPL' WHEN poverty_level BETWEEN 101 AND 130 THEN '100-130% FPL' WHEN poverty_level > 130 THEN 'Above 130% FPL' END AS poverty_bracket, SUM(household_weight) AS estimated_households FROM households WHERE fiscal_year = 2023 AND poverty_level IS NOT NULL GROUP BY poverty_bracket ORDER BY poverty_bracket",
+      "explanation": "Income adequacy analysis using poverty_level column (gross income as % of Federal Poverty Level); 130% FPL is the SNAP gross income limit"
+    },
+    {
+      "question": "How many SNAP households are working poor?",
+      "sql": "SELECT fiscal_year, SUM(household_weight) FILTER (WHERE working_poor_indicator = true) AS working_poor_households, SUM(household_weight) AS total_households, ROUND(SUM(household_weight) FILTER (WHERE working_poor_indicator = true) / NULLIF(SUM(household_weight), 0) * 100, 2) AS working_poor_pct FROM households GROUP BY fiscal_year ORDER BY fiscal_year",
+      "explanation": "Working poor analysis; working_poor_indicator flags households with earned income but still eligible for SNAP"
+    },
+    {
+      "question": "How many SNAP households also receive TANF?",
+      "sql": "SELECT fiscal_year, SUM(household_weight) FILTER (WHERE tanf_indicator = true) AS tanf_households, SUM(household_weight) AS total_households, ROUND(SUM(household_weight) FILTER (WHERE tanf_indicator = true) / NULLIF(SUM(household_weight), 0) * 100, 2) AS tanf_pct FROM households GROUP BY fiscal_year ORDER BY fiscal_year",
+      "explanation": "Cross-program overlap; TANF = Temporary Assistance for Needy Families (welfare/cash assistance); tanf_indicator flags dual-program households"
+    },
+    {
+      "question": "Do error rates differ by race/ethnicity?",
+      "sql": "SELECT rre.description AS race_ethnicity, COUNT(*) AS total_hoh, COUNT(*) FILTER (WHERE h.status != 1) AS error_hoh, ROUND(COUNT(*) FILTER (WHERE h.status != 1)::NUMERIC / COUNT(*)::NUMERIC * 100, 2) AS sample_error_pct FROM household_members m JOIN ref_race_ethnicity rre ON m.race_ethnicity = rre.code JOIN households h ON m.case_id = h.case_id AND m.fiscal_year = h.fiscal_year WHERE m.member_number = 1 AND h.case_classification = 1 AND h.fiscal_year = 2023 GROUP BY rre.description ORDER BY sample_error_pct DESC",
+      "explanation": "Equity/disparate impact analysis; member_number = 1 is head of household; compare error rates across racial/ethnic groups; FNS civil rights requirement"
+    }
+  ]
+}

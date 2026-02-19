@@ -26,6 +26,9 @@ from .info_commands import (
 from .memory_commands import (
     handle_mem_command,
 )
+from .memsql_commands import (
+    handle_memsql_command,
+)
 from .prompt_commands import (
     handle_prompt_command,
 )
@@ -68,6 +71,9 @@ async def handle_command(command: str, args: str | None = None):
 
         # Memory commands
         "/mem": lambda: handle_mem_command(args),
+
+        # Vanna SQL training commands
+        "/memsql": lambda: handle_memsql_command(args),
 
         # Prompt commands
         "/prompt": lambda: handle_prompt_command(args),

@@ -267,3 +267,44 @@ The AI has been re-trained with:
 async def handle_memreset_cancel():
     """Handle memory reset cancellation."""
     await send_message("❌ Memory reset cancelled. No changes made.")
+
+
+# =============================================================================
+# VANNA SQL TRAINING ACTION HANDLERS
+# =============================================================================
+
+async def handle_vanna_reset_confirm():
+    """Handle Vanna SQL training reset confirmation (always reloads training data)."""
+    try:
+        await send_message("Resetting Vanna SQL training... This may take a moment.")
+
+        result = await call_api(
+            "/llm/vanna/reset", method="POST", data={"reload_training_data": True}, timeout=120.0
+        )
+
+        counts = result.get("counts", {})
+        training_time = result.get("training_time_seconds", 0)
+
+        await send_message(
+            f"""**Vanna SQL Training Reset Complete!**
+
+**Training Time:** {training_time:.1f} seconds
+
+**Training Data:**
+| Type | Count |
+|------|-------|
+| DDL (schema) | {counts.get('ddl', 0)} |
+| Documentation | {counts.get('documentation', 0)} |
+| SQL (question-SQL pairs) | {counts.get('sql', 0)} |
+| **Total** | **{sum(counts.values())}** |
+
+Use `/memsql stats` to verify."""
+        )
+
+    except Exception as e:
+        await send_error(f"Error resetting Vanna: {str(e)}")
+
+
+async def handle_vanna_reset_cancel():
+    """Handle Vanna reset cancellation."""
+    await send_message("Vanna reset cancelled. No changes made.")

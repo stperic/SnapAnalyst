@@ -25,6 +25,7 @@ if not os.environ.get('OMP_WAIT_POLICY'):
 if not os.environ.get('OMP_PROC_BIND'):
     os.environ['OMP_PROC_BIND'] = 'false'
 
+import logging
 import subprocess
 import sys
 import time
@@ -32,6 +33,9 @@ import zipfile
 from pathlib import Path
 
 import yaml
+
+# Suppress SQLAlchemy SQL statement logging (INSERT/SELECT/etc.)
+logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
 
 # Add project root to path
 sys.path.insert(0, '/app')
@@ -65,17 +69,29 @@ def load_data_files_config() -> dict[int, dict[str, str]]:
 # Available fiscal years and their download URLs (loaded from config.yaml)
 DATA_FILES = load_data_files_config()
 
+# Shared engine for all database operations (NullPool = no connection pooling, one-shot use)
+_db_engine = None
+
+
+def _get_engine():
+    """Get or create the shared SQLAlchemy engine."""
+    global _db_engine
+    if _db_engine is None:
+        from sqlalchemy import create_engine
+        from sqlalchemy.pool import NullPool
+        _db_engine = create_engine(DATABASE_URL, poolclass=NullPool)
+    return _db_engine
+
 
 def wait_for_database(max_retries=30, delay=2):
     """Wait for PostgreSQL to be ready."""
     print("Waiting for PostgreSQL to be ready...")
 
-    from sqlalchemy import create_engine, text
+    from sqlalchemy import text
 
     for attempt in range(max_retries):
         try:
-            engine = create_engine(DATABASE_URL)
-            with engine.connect() as conn:
+            with _get_engine().connect() as conn:
                 conn.execute(text("SELECT 1"))
             print("PostgreSQL is ready!")
             return True
@@ -179,10 +195,9 @@ def download_and_extract_file(year: int, file_info: dict) -> tuple[bool, str]:
 def check_data_loaded(year: int) -> bool:
     """Check if data for a fiscal year is already in the database."""
     try:
-        from sqlalchemy import create_engine, text
-        engine = create_engine(DATABASE_URL)
+        from sqlalchemy import text
 
-        with engine.connect() as conn:
+        with _get_engine().connect() as conn:
             result = conn.execute(
                 text("SELECT COUNT(*) FROM households WHERE fiscal_year = :year"),
                 {"year": year}
@@ -221,6 +236,37 @@ def load_data_file(year: int, filename: str) -> bool:
         import traceback
         traceback.print_exc()
         return False
+
+
+def refresh_materialized_views():
+    """Refresh all materialized views after data load."""
+    print()
+    print("Step 3b: Refreshing materialized views...")
+    print("-" * 40)
+
+    views = [
+        'mv_state_error_rates',
+        'mv_error_element_rollup',
+        'mv_demographic_profile',
+    ]
+
+    try:
+        from sqlalchemy import text
+
+        with _get_engine().connect() as conn:
+            for view in views:
+                try:
+                    conn.execute(text(f"REFRESH MATERIALIZED VIEW {view}"))
+                    conn.commit()
+                    print(f"  ✓ {view}")
+                except Exception as e:
+                    conn.rollback()
+                    print(f"  ✗ {view}: {e}")
+
+        print("  ✓ All materialized views refreshed!")
+    except Exception as e:
+        print(f"  WARNING: Could not refresh materialized views: {e}")
+        print("  Run manually: REFRESH MATERIALIZED VIEW <view_name>")
 
 
 def train_ai_model():
@@ -333,6 +379,10 @@ def main():
 
         if load_data_file(year, filename):
             loaded_count += 1
+
+    # Refresh materialized views after data load
+    if loaded_count > 0:
+        refresh_materialized_views()
 
     # Initialize AI model
     train_ai_model()

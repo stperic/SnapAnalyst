@@ -454,6 +454,14 @@ if (document.body) {
 }
 
 // =============================================================================
+// Sidebar Panel Interaction
+// Panels now use Chainlit CustomElement (JSX) with built-in callAction().
+// No event delegation needed — all interactivity is handled in JSX components:
+//   public/elements/MemPanel.jsx
+//   public/elements/MemsqlPanel.jsx
+// =============================================================================
+
+// =============================================================================
 // Loading Indicator
 // Note: Chainlit has its own loading indicator (white dot with shading)
 // =============================================================================

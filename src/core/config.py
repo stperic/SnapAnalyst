@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from pydantic import Field, PostgresDsn
+from pydantic import Field, PostgresDsn, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -55,8 +55,15 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
 
-    # CORS
-    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:8000"]
+    # CORS — set CORS_ORIGINS env var as comma-separated URLs, or "*" to allow all
+    cors_origins: list[str] = ["*"]
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v):
+        if isinstance(v, str):
+            return [origin.strip() for origin in v.split(",") if origin.strip()]
+        return v
 
     # Rate Limiting
     rate_limit_enabled: bool = True
@@ -119,10 +126,12 @@ class Settings(BaseSettings):
 
     vanna_store_user_queries: bool = False  # Enable continuous learning (DEFAULT: OFF)
 
-    # Paths are dataset-relative (see datasets/snap/)
-    vanna_training_data_path: str = "./datasets/snap/query_examples.json"
-    vanna_schema_path: str = "./datasets/snap/data_mapping.json"
+    # SQL training data folder — all .md/.txt loaded as documentation, all .json as question/SQL pairs
+    sql_training_data_path: str = "./datasets/snap/training"
     vanna_chromadb_path: str = "./chromadb"  # ChromaDB vector store location
+
+    # System prompts folder — sql_system_prompt.txt, kb_system_prompt.txt
+    system_prompts_path: str = "./datasets/snap/prompts"
 
     # Multi-Dataset Configuration
     # Supports multiple datasets with different schemas (e.g., public SNAP + state private data)

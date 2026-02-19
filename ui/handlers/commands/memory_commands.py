@@ -1,12 +1,14 @@
 """
 Memory Commands Module
 
-Handles AI memory/ChromaDB management commands:
-- /mem stats: Show ChromaDB statistics
-- /mem list: List all documentation entries
-- /mem add [category]: Add documentation to knowledge base
-- /mem delete <id>: Delete a documentation entry
-- /mem reset: Reset ChromaDB and re-train
+Handles /mem command — opens a self-contained sidebar panel with:
+- Stats (status, document count, size)
+- Document list with inline delete buttons
+- File upload form (category + tags)
+- Reset button
+
+Subcommands (stats, list, add, delete, reset) are still supported for
+backward compatibility but the primary UX is the sidebar panel.
 """
 
 import logging
@@ -35,26 +37,7 @@ async def handle_mem_command(args: str | None = None):
         /mem reset - Reset ChromaDB and re-train
     """
     if not args or not args.strip():
-        await send_message(
-            """### AI Memory Management
-
-**Usage:** `/mem <command>`
-
-**Commands:**
-- `/mem stats` - Show ChromaDB statistics
-- `/mem list` - List all documentation in knowledge base
-- `/mem add [category]` - Add custom documentation (attach .md/.txt files)
-- `/mem delete <id>` - Remove documentation entry
-- `/mem reset` - Clear and rebuild AI memory
-
-**Examples:**
-```
-/mem stats
-/mem list
-/mem add business-rules #SNAP #eligibility
-/mem delete doc-12345
-```"""
-        )
+        await handle_mem_panel()
         return
 
     # Parse subcommand and remaining args
@@ -78,6 +61,37 @@ async def handle_mem_command(args: str | None = None):
             "Valid subcommands: `stats`, `list`, `add`, `delete`, `reset`\n\n"
             "Type `/mem` for help."
         )
+
+
+async def handle_mem_panel():
+    """Open the ElementSidebar panel with Knowledge Base overview."""
+    try:
+        stats = await call_api("/llm/memory/stats")
+        data_list = await call_api("/llm/memory/list")
+
+        from src.clients.api_client import get_api_external_url, get_api_prefix
+        api_url = get_api_external_url() + get_api_prefix()
+
+        user = cl.user_session.get("user")
+        user_id = user.identifier if user else "default"
+
+        element = cl.CustomElement(
+            name="MemPanel",
+            props={
+                "stats": stats,
+                "entries": data_list.get("entries", []),
+                "total_entries": data_list.get("total_entries", 0),
+                "apiUrl": api_url,
+                "userId": user_id,
+            },
+            display="side",
+        )
+        cl.user_session.set("mem_panel_element", element)
+        await cl.ElementSidebar.set_title("Knowledge Base")
+        await cl.ElementSidebar.set_elements([element])
+
+    except Exception as e:
+        await send_error(f"Error opening Knowledge Base panel: {e}")
 
 
 async def handle_memreset():

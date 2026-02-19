@@ -58,6 +58,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
 
     # Shutdown
     logger.info("Shutting down SnapAnalyst...")
+    from src.database.engine import dispose_engines
+    dispose_engines()
 
 
 # Create FastAPI application

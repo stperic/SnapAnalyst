@@ -7,9 +7,13 @@ DATASET STRUCTURE:
     datasets/snap/
     ├── __init__.py           # This file - dataset configuration
     ├── config.yaml           # Dataset metadata
-    ├── data_mapping.json     # Code lookups for Vanna training
-    ├── query_examples.json   # Example queries for Vanna training
-    ├── reference.txt         # Source documentation (FNS codebook)
+    ├── data_mapping.json     # Code lookups for enrichment (numeric codes → descriptions)
+    ├── training/             # Training data (configurable via SQL_TRAINING_DATA_PATH)
+    │   ├── business_context.md   # Business terms, query patterns, table relationships
+    │   └── query_examples.json   # Example question/SQL pairs ({example_queries: [...]})
+    ├── prompts/              # System prompts (configurable via SYSTEM_PROMPTS_PATH)
+    │   ├── sql_system_prompt.txt # SQL generation system prompt (domain-specific)
+    │   └── kb_system_prompt.txt  # KB insight system prompt (domain-specific)
     └── data/                 # CSV data files
         └── qc_pub_fy2023.csv
 
@@ -134,9 +138,22 @@ class SnapDatasetConfig(DatasetConfig):
     # =========================================================================
 
     def get_business_context(self) -> str:
-        """Get SNAP business context from existing prompts module."""
-        from src.core.prompts import BUSINESS_CONTEXT_DOCUMENTATION
-        return BUSINESS_CONTEXT_DOCUMENTATION
+        """Get SNAP business context from the training data folder."""
+        doc_path = self.base_path / "training" / "business_context.md"
+        if doc_path.exists():
+            return doc_path.read_text(encoding="utf-8")
+        raise FileNotFoundError(f"Business context not found: {doc_path}")
+
+    def get_documentation_files(self) -> list[Path]:
+        """
+        Get all documentation files for Vanna training.
+
+        Scans the training/ subfolder for .md and .txt files.
+        """
+        training_dir = self.base_path / "training"
+        if not training_dir.exists():
+            return []
+        return sorted(training_dir.glob("*.md")) + sorted(training_dir.glob("*.txt"))
 
     def get_data_mapping_path(self) -> Path:
         """
@@ -160,17 +177,17 @@ class SnapDatasetConfig(DatasetConfig):
         """
         Get path to query_examples.json.
 
-        Checks dataset-specific location first, falls back to root.
+        Checks training/ subfolder first, then dataset root, then project root.
         """
-        # Check dataset-specific location
+        # Check training subfolder first (new canonical location)
+        training_path = self.base_path / "training" / "query_examples.json"
+        if training_path.exists():
+            return training_path
+
+        # Fall back to dataset root (backward compatibility)
         dataset_path = self.base_path / "query_examples.json"
         if dataset_path.exists():
             return dataset_path
-
-        # Fall back to root level
-        root_path = Path("query_examples.json")
-        if root_path.exists():
-            return root_path
 
         raise FileNotFoundError("query_examples.json not found")
 
@@ -199,15 +216,6 @@ class SnapDatasetConfig(DatasetConfig):
             Path to datasets/snap/data/
         """
         return self.base_path / "data"
-
-    def get_reference_doc_path(self) -> Path:
-        """
-        Get path to reference documentation (FNS codebook).
-
-        Returns:
-            Path to datasets/snap/reference.txt
-        """
-        return self.base_path / "reference.txt"
 
     def list_data_files(self) -> list[Path]:
         """

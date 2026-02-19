@@ -159,6 +159,69 @@ class TrainingStatusResponse(BaseModel):
 
 
 # ============================================================================
+# Error Classification
+# ============================================================================
+
+
+def _classify_llm_error(exc: Exception) -> str:
+    """Turn raw LLM/provider exceptions into user-friendly error messages."""
+    from src.core.config import settings
+
+    err = str(exc).lower()
+    exc_type = type(exc).__name__
+
+    # Authentication / API key errors
+    if exc_type in ("AuthenticationError", "PermissionDeniedError") or "authentication" in err or "invalid api key" in err or "incorrect api key" in err or "401" in err:
+        return (
+            f"LLM authentication failed ({settings.llm_provider.upper()}). "
+            f"Check that your API key is valid in the .env file. "
+            f"(Key variable: {_api_key_var_for_provider(settings.llm_provider)})"
+        )
+
+    # Connection / network errors
+    if exc_type in ("APIConnectionError", "ConnectError", "ConnectionError") or "connection error" in err or "connect" in err and ("refused" in err or "timeout" in err or "failed" in err):
+        return (
+            f"Cannot connect to {settings.llm_provider.upper()} API. "
+            f"Check your network connection and API key. "
+            f"(Provider: {settings.llm_provider}, Model: {settings.sql_model})"
+        )
+
+    # Rate limiting
+    if exc_type == "RateLimitError" or "rate limit" in err or "429" in err or "quota" in err:
+        return (
+            f"LLM rate limit exceeded ({settings.llm_provider.upper()}). "
+            f"Wait a moment and try again, or check your billing/quota."
+        )
+
+    # Model not found
+    if "model" in err and ("not found" in err or "does not exist" in err or "404" in err):
+        return (
+            f"Model '{settings.sql_model}' not found on {settings.llm_provider.upper()}. "
+            f"Check LLM_SQL_MODEL in your .env file."
+        )
+
+    # Timeout
+    if "timeout" in err or exc_type == "Timeout":
+        return (
+            f"LLM request timed out ({settings.llm_provider.upper()}). "
+            f"The model may be overloaded — try again in a moment."
+        )
+
+    # Fallback: include the original error but with context
+    return f"LLM error ({settings.llm_provider.upper()}, {settings.sql_model}): {exc}"
+
+
+def _api_key_var_for_provider(provider: str) -> str:
+    """Return the environment variable name for the given provider's API key."""
+    return {
+        "openai": "OPENAI_API_KEY",
+        "anthropic": "ANTHROPIC_API_KEY",
+        "azure_openai": "AZURE_OPENAI_API_KEY",
+        "ollama": "OLLAMA_BASE_URL",
+    }.get(provider, f"{provider.upper()}_API_KEY")
+
+
+# ============================================================================
 # Endpoints
 # ============================================================================
 
@@ -267,9 +330,10 @@ async def chat_data(request: ChatQueryRequest) -> ChatQueryResponse:
         )
     except Exception as e:
         logger.error(f"Chat query failed: {e}")
+        detail = _classify_llm_error(e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to process question: {str(e)}"
+            detail=detail
         )
 
 
@@ -604,6 +668,11 @@ async def insights_stream(request: StreamKBRequest):
                 chromadb_context = "\n".join(context_parts)
 
                 yield {"event": "sources", "data": json.dumps({"sources": sources_used, "count": len(results)})}
+            elif not request.data_context:
+                # KB-only lookup (/??): no documents and no thread context — stop early
+                yield {"event": "text", "data": json.dumps({"chunk": "No documents found in the Knowledge Base.\n\nUpload documents with `/mem` and try again."})}
+                yield {"event": "done", "data": json.dumps({"status": "complete", "sources": []})}
+                return
 
             # Build prompt
             prompt = build_kb_insight_prompt(

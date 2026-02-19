@@ -105,8 +105,10 @@ CREATE TABLE IF NOT EXISTS ref_error_finding (
     description VARCHAR(200) NOT NULL
 );
 
-COMMENT ON TABLE ref_error_finding IS 'Error finding - impact on benefits.
+COMMENT ON TABLE ref_error_finding IS 'Error finding - impact on benefits. Values: 2=Overissuance (too much paid), 3=Underissuance (too little paid), 4=Ineligible (should not have received any benefits).
 Example queries:
+- Overissuance errors only: SELECT * FROM qc_errors WHERE error_finding = 2
+- Ineligible cases: SELECT * FROM qc_errors WHERE error_finding = 4
 - Errors by finding: SELECT rf.description, COUNT(*) FROM qc_errors e JOIN ref_error_finding rf ON e.error_finding = rf.code GROUP BY rf.description';
 
 -- ----------------------------------------------------------------------------
@@ -180,9 +182,8 @@ CREATE TABLE IF NOT EXISTS ref_state (
     abbreviation VARCHAR(2)
 );
 
-COMMENT ON TABLE ref_state IS 'State and territory reference with FIPS codes.
-Example queries:
-- Cases by state: SELECT state_name, COUNT(*) FROM households GROUP BY state_name';
+COMMENT ON TABLE ref_state IS 'State and territory reference with FIPS codes and 2-letter abbreviations. NOTE: For state-level queries, use households.state_name directly (no JOIN needed). This table is useful only for FIPS code lookups.
+Example: SELECT rs.fips_code, rs.abbreviation, rs.state_name FROM ref_state rs ORDER BY rs.state_name';
 
 -- ----------------------------------------------------------------------------
 -- Additional reference tables
@@ -191,13 +192,13 @@ CREATE TABLE IF NOT EXISTS ref_case_classification (
     code INTEGER PRIMARY KEY,
     description VARCHAR(200) NOT NULL
 );
-COMMENT ON TABLE ref_case_classification IS 'Case classification for error rate calculation. 1=Included, 2=Excluded SSA, 3=Excluded FNS';
+COMMENT ON TABLE ref_case_classification IS 'Case classification for error rate calculation. CRITICAL: Filter WHERE case_classification = 1 for ALL official error rate calculations. Values: 1=Included in official error rates, 2=Excluded by SSA, 3=Excluded by FNS';
 
 CREATE TABLE IF NOT EXISTS ref_abawd_status (
     code INTEGER PRIMARY KEY,
     description VARCHAR(200) NOT NULL
 );
-COMMENT ON TABLE ref_abawd_status IS 'ABAWD (Able-Bodied Adult Without Dependents) work requirement status.';
+COMMENT ON TABLE ref_abawd_status IS 'ABAWD (Able-Bodied Adult Without Dependents) work requirement status. Code 1 = not an ABAWD. Other codes indicate ABAWD status and work requirement compliance. JOIN household_members ON abawd_status.';
 
 CREATE TABLE IF NOT EXISTS ref_citizenship_status (
     code INTEGER PRIMARY KEY,
@@ -391,6 +392,8 @@ COMMENT ON COLUMN households.num_children IS 'Count of members under 18';
 COMMENT ON COLUMN households.certified_household_size IS 'SNAP-certified household size for benefit calculation. Use this for "household size" queries. raw_household_size is before certification adjustments';
 COMMENT ON COLUMN households.categorical_eligibility IS 'Categorical eligibility: 1=Exempt from income/asset tests. JOIN ref_categorical_eligibility';
 COMMENT ON COLUMN households.expedited_service IS 'Expedited service: 1=On time, 2=Late. JOIN ref_expedited_service';
+COMMENT ON COLUMN households.state_code IS '2-letter state abbreviation (e.g., CA, TX). Prefer state_name for GROUP BY and display';
+COMMENT ON COLUMN households.last_certification_date IS 'Last certification date as integer (YYYYMM format from source data). Not a DATE type — requires conversion for date arithmetic';
 
 -- Indexes for common query patterns
 CREATE INDEX IF NOT EXISTS idx_household_state_year ON households(state_name, fiscal_year);
@@ -542,8 +545,8 @@ COMMENT ON COLUMN qc_errors.error_number IS 'Error sequence number for this hous
 COMMENT ON COLUMN qc_errors.element_code IS 'Error element type: 311=Wages, 321=SSI, 211=Assets. JOIN ref_element for description';
 COMMENT ON COLUMN qc_errors.nature_code IS 'Nature of error: 35=Unreported income. JOIN ref_nature for description';
 COMMENT ON COLUMN qc_errors.responsible_agency IS 'Who caused error. JOIN ref_agency_responsibility, use responsibility_type for client vs agency';
-COMMENT ON COLUMN qc_errors.error_amount IS 'Dollar amount of THIS specific error (positive=overissuance). For total household error see households.amount_error';
-COMMENT ON COLUMN qc_errors.error_finding IS 'Error finding. JOIN ref_error_finding for description';
+COMMENT ON COLUMN qc_errors.error_amount IS 'Dollar amount of THIS specific error (always positive/absolute value). Direction (over/under) is in error_finding column. For signed household-level total see households.amount_error';
+COMMENT ON COLUMN qc_errors.error_finding IS 'Error finding: 2=Overissuance, 3=Underissuance, 4=Ineligible. JOIN ref_error_finding for description';
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_error_fiscal_year ON qc_errors(fiscal_year);
@@ -633,6 +636,258 @@ LEFT JOIN ref_error_finding rf ON e.error_finding = rf.code;
 COMMENT ON VIEW v_qc_errors_enriched IS 'QC errors with all reference tables and household info pre-joined.
 Use this view for comprehensive error analysis with human-readable descriptions.
 Example: SELECT element_description, COUNT(*) FROM v_qc_errors_enriched GROUP BY element_description';
+
+
+-- ============================================================================
+-- ANALYTICAL TABLES AND VIEWS
+-- Pre-computed aggregations for common analyst queries
+-- ============================================================================
+
+-- ----------------------------------------------------------------------------
+-- ref_tolerance_threshold: USDA tolerance thresholds by fiscal year
+-- Eliminates hardcoded values in error rate calculations
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS ref_tolerance_threshold (
+    fiscal_year INTEGER PRIMARY KEY,
+    threshold_amount DECIMAL(10,2) NOT NULL,
+    source_note VARCHAR(200)
+);
+
+COMMENT ON TABLE ref_tolerance_threshold IS 'USDA tolerance thresholds by fiscal year for Payment Error Rate calculation.
+Errors with ABS(amount_error) <= threshold are excluded from official error rates.
+Updated annually by USDA/FNS based on Thrifty Food Plan adjustments.
+Example: SELECT threshold_amount FROM ref_tolerance_threshold WHERE fiscal_year = 2023';
+
+INSERT INTO ref_tolerance_threshold (fiscal_year, threshold_amount, source_note) VALUES
+(2021, 39.00, 'FY2021 tolerance threshold based on Thrifty Food Plan'),
+(2022, 48.00, 'FY2022 tolerance threshold based on Thrifty Food Plan'),
+(2023, 54.00, 'FY2023 tolerance threshold based on Thrifty Food Plan')
+ON CONFLICT (fiscal_year) DO NOTHING;
+
+-- ----------------------------------------------------------------------------
+-- fns_error_rates_historical: Official FNS-published error rates
+-- For comparing computed rates to official published rates
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS fns_error_rates_historical (
+    fiscal_year INTEGER NOT NULL,
+    state_name VARCHAR(50) NOT NULL,
+    PRIMARY KEY (fiscal_year, state_name),
+    payment_error_rate DECIMAL(6,4),
+    overpayment_rate DECIMAL(6,4),
+    underpayment_rate DECIMAL(6,4),
+    case_error_rate DECIMAL(6,4),
+    sample_size INTEGER,
+    completion_rate DECIMAL(5,2),
+    source_document VARCHAR(200),
+    notes TEXT
+);
+
+COMMENT ON TABLE fns_error_rates_historical IS 'Official FNS-published SNAP QC error rates from annual reports.
+These are FINAL official rates after FNS arbitration and adjustments.
+Compare with mv_state_error_rates (computed from raw QC sample) to identify differences.
+Use state_name = ''National'' for national-level rates.
+Example: SELECT fiscal_year, payment_error_rate FROM fns_error_rates_historical WHERE state_name = ''National'' ORDER BY fiscal_year';
+
+CREATE INDEX IF NOT EXISTS idx_fns_historical_fy ON fns_error_rates_historical(fiscal_year);
+
+-- ----------------------------------------------------------------------------
+-- mv_state_error_rates: Pre-computed state-level error rates by fiscal year
+-- The #1 most-used analytical query, pre-computed for instant access
+-- ----------------------------------------------------------------------------
+CREATE MATERIALIZED VIEW IF NOT EXISTS mv_state_error_rates AS
+WITH base AS (
+    SELECT
+        h.fiscal_year,
+        h.state_name,
+        h.state_code,
+        COALESCE(t.threshold_amount, 54) AS tolerance_threshold,
+        COUNT(*) AS total_sample_cases,
+        COUNT(*) FILTER (WHERE h.status != 1) AS error_sample_cases,
+        COUNT(*) FILTER (WHERE h.status = 2) AS overissuance_sample_cases,
+        COUNT(*) FILTER (WHERE h.status = 3) AS underissuance_sample_cases,
+        SUM(h.household_weight) AS estimated_total_households,
+        SUM(h.snap_benefit * h.household_weight) AS total_weighted_benefits,
+        SUM(CASE WHEN ABS(h.amount_error) > COALESCE(t.threshold_amount, 54)
+            THEN ABS(h.amount_error) * h.household_weight ELSE 0 END
+        ) AS total_weighted_error_dollars,
+        SUM(CASE WHEN h.amount_error > COALESCE(t.threshold_amount, 54)
+            THEN h.amount_error * h.household_weight ELSE 0 END
+        ) AS weighted_overpayment_dollars,
+        SUM(CASE WHEN h.amount_error < -COALESCE(t.threshold_amount, 54)
+            THEN ABS(h.amount_error) * h.household_weight ELSE 0 END
+        ) AS weighted_underpayment_dollars,
+        SUM(h.snap_benefit * h.household_weight) / NULLIF(SUM(h.household_weight), 0) AS avg_weighted_benefit,
+        SUM(h.gross_income * h.household_weight) / NULLIF(SUM(h.household_weight), 0) AS avg_weighted_gross_income
+    FROM households h
+    LEFT JOIN ref_tolerance_threshold t ON h.fiscal_year = t.fiscal_year
+    WHERE h.case_classification = 1
+    GROUP BY h.fiscal_year, h.state_name, h.state_code, t.threshold_amount
+)
+SELECT
+    fiscal_year,
+    state_name,
+    state_code,
+    tolerance_threshold,
+    total_sample_cases,
+    error_sample_cases,
+    overissuance_sample_cases,
+    underissuance_sample_cases,
+    estimated_total_households,
+    total_weighted_benefits,
+    avg_weighted_benefit,
+    avg_weighted_gross_income,
+    ROUND((total_weighted_error_dollars / NULLIF(total_weighted_benefits, 0)) * 100, 4) AS payment_error_rate,
+    ROUND((weighted_overpayment_dollars / NULLIF(total_weighted_benefits, 0)) * 100, 4) AS overpayment_rate,
+    ROUND((weighted_underpayment_dollars / NULLIF(total_weighted_benefits, 0)) * 100, 4) AS underpayment_rate,
+    ROUND((error_sample_cases::NUMERIC / NULLIF(total_sample_cases::NUMERIC, 0)) * 100, 2) AS case_error_rate,
+    total_weighted_error_dollars,
+    weighted_overpayment_dollars,
+    weighted_underpayment_dollars
+FROM base
+ORDER BY fiscal_year, state_name;
+
+COMMENT ON MATERIALIZED VIEW mv_state_error_rates IS 'Pre-computed state-level SNAP QC error rates by fiscal year. Includes official USDA payment error rate, overpayment rate, underpayment rate, and case error rate. Uses case_classification = 1 and year-specific tolerance thresholds from ref_tolerance_threshold. REFRESH with: REFRESH MATERIALIZED VIEW mv_state_error_rates. Example: SELECT state_name, payment_error_rate FROM mv_state_error_rates WHERE fiscal_year = 2023 ORDER BY payment_error_rate DESC';
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_mv_state_error_rates ON mv_state_error_rates(fiscal_year, state_name);
+
+-- ----------------------------------------------------------------------------
+-- mv_error_element_rollup: Pre-aggregated error analysis for corrective action
+-- ----------------------------------------------------------------------------
+CREATE MATERIALIZED VIEW IF NOT EXISTS mv_error_element_rollup AS
+SELECT
+    h.fiscal_year,
+    h.state_name,
+    re.code AS element_code,
+    re.description AS element_description,
+    re.category AS element_category,
+    rf.description AS finding_type,
+    ra.responsibility_type,
+    COUNT(*) AS sample_error_count,
+    SUM(e.error_amount * h.household_weight) AS weighted_error_dollars,
+    AVG(e.error_amount) AS avg_sample_error_amount
+FROM qc_errors e
+JOIN households h ON e.case_id = h.case_id AND e.fiscal_year = h.fiscal_year
+JOIN ref_element re ON e.element_code = re.code
+LEFT JOIN ref_error_finding rf ON e.error_finding = rf.code
+LEFT JOIN ref_agency_responsibility ra ON e.responsible_agency = ra.code
+WHERE h.case_classification = 1
+GROUP BY h.fiscal_year, h.state_name, re.code, re.description, re.category,
+         rf.description, ra.responsibility_type;
+
+COMMENT ON MATERIALIZED VIEW mv_error_element_rollup IS 'Pre-aggregated error element analysis with weighted dollar impact. Use for corrective action prioritization: which error types drive the most dollars? Includes element category, finding type (over/under/ineligible), and responsibility (client/agency). REFRESH with: REFRESH MATERIALIZED VIEW mv_error_element_rollup. Example: SELECT element_description, SUM(weighted_error_dollars) FROM mv_error_element_rollup WHERE fiscal_year = 2023 AND finding_type = ''Overissuance'' GROUP BY element_description ORDER BY SUM(weighted_error_dollars) DESC';
+
+CREATE INDEX IF NOT EXISTS idx_mv_error_rollup_fy_state ON mv_error_element_rollup(fiscal_year, state_name);
+CREATE INDEX IF NOT EXISTS idx_mv_error_rollup_category ON mv_error_element_rollup(element_category);
+
+-- ----------------------------------------------------------------------------
+-- mv_demographic_profile: Pre-aggregated demographics for equity analysis
+-- ----------------------------------------------------------------------------
+CREATE MATERIALIZED VIEW IF NOT EXISTS mv_demographic_profile AS
+SELECT
+    h.fiscal_year,
+    h.state_name,
+    CASE
+        WHEN m.age < 6 THEN 'Under 6'
+        WHEN m.age BETWEEN 6 AND 17 THEN '6-17'
+        WHEN m.age BETWEEN 18 AND 24 THEN '18-24'
+        WHEN m.age BETWEEN 25 AND 49 THEN '25-49'
+        WHEN m.age BETWEEN 50 AND 59 THEN '50-59'
+        WHEN m.age >= 60 THEN '60+'
+    END AS age_group,
+    rre.description AS race_ethnicity,
+    rcs.description AS citizenship_status,
+    rel.description AS education_level,
+    CASE WHEN m.working_indicator = 1 THEN 'Working' ELSE 'Not Working' END AS working_status,
+    CASE WHEN m.disability_indicator = 1 THEN 'Disabled' ELSE 'Not Disabled' END AS disability_status,
+    COUNT(*) AS sample_member_count,
+    SUM(h.household_weight) AS estimated_member_count
+FROM household_members m
+JOIN households h ON m.case_id = h.case_id AND m.fiscal_year = h.fiscal_year
+LEFT JOIN ref_race_ethnicity rre ON m.race_ethnicity = rre.code
+LEFT JOIN ref_citizenship_status rcs ON m.citizenship_status = rcs.code
+LEFT JOIN ref_education_level rel ON m.years_education = rel.code
+WHERE m.snap_affiliation_code IN (1, 2)
+GROUP BY h.fiscal_year, h.state_name, age_group, rre.description, rcs.description,
+         rel.description, working_status, disability_status;
+
+COMMENT ON MATERIALIZED VIEW mv_demographic_profile IS 'Pre-aggregated demographic profile of eligible SNAP members by state and fiscal year. Covers age, race/ethnicity, citizenship, education, employment, and disability. Only includes eligible members (snap_affiliation_code IN (1,2)). REFRESH with: REFRESH MATERIALIZED VIEW mv_demographic_profile. Example: SELECT race_ethnicity, SUM(estimated_member_count) FROM mv_demographic_profile WHERE fiscal_year = 2023 GROUP BY race_ethnicity ORDER BY SUM(estimated_member_count) DESC';
+
+CREATE INDEX IF NOT EXISTS idx_mv_demo_fy_state ON mv_demographic_profile(fiscal_year, state_name);
+
+-- ----------------------------------------------------------------------------
+-- v_household_summary: Household-level segmentation view
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE VIEW v_household_summary AS
+SELECT
+    h.case_id,
+    h.fiscal_year,
+    h.state_name,
+    h.state_code,
+    h.status,
+    rs.description AS status_description,
+    h.snap_benefit,
+    h.raw_benefit,
+    h.amount_error,
+    h.gross_income,
+    h.net_income,
+    h.earned_income,
+    h.unearned_income,
+    h.total_deductions,
+    h.certified_household_size,
+    h.num_elderly,
+    h.num_children,
+    h.num_disabled,
+    h.num_noncitizens,
+    h.categorical_eligibility,
+    h.expedited_service,
+    h.working_poor_indicator,
+    h.tanf_indicator,
+    h.poverty_level,
+    h.household_weight,
+    h.case_classification,
+    -- Household type classification
+    CASE
+        WHEN h.num_elderly > 0 AND h.num_children = 0 AND h.certified_household_size = h.num_elderly THEN 'Elderly Only'
+        WHEN h.num_children > 0 AND h.num_elderly = 0 THEN 'With Children (No Elderly)'
+        WHEN h.num_elderly > 0 AND h.num_children > 0 THEN 'Elderly and Children'
+        WHEN h.certified_household_size = 1 AND h.num_elderly = 0 THEN 'Single Adult'
+        ELSE 'Other Adult'
+    END AS household_type,
+    -- Income category
+    CASE
+        WHEN h.gross_income = 0 OR h.gross_income IS NULL THEN 'Zero Income'
+        WHEN h.earned_income > 0 AND h.unearned_income = 0 THEN 'Earned Income Only'
+        WHEN h.earned_income = 0 AND h.unearned_income > 0 THEN 'Unearned Income Only'
+        WHEN h.earned_income > 0 AND h.unearned_income > 0 THEN 'Mixed Income'
+        ELSE 'Unknown'
+    END AS income_category,
+    -- Error classification with tolerance
+    CASE
+        WHEN h.status = 1 THEN 'No Error'
+        WHEN h.status = 2 AND ABS(h.amount_error) > COALESCE(t.threshold_amount, 54) THEN 'Overissuance (Above Tolerance)'
+        WHEN h.status = 2 THEN 'Overissuance (Within Tolerance)'
+        WHEN h.status = 3 AND ABS(h.amount_error) > COALESCE(t.threshold_amount, 54) THEN 'Underissuance (Above Tolerance)'
+        WHEN h.status = 3 THEN 'Underissuance (Within Tolerance)'
+        ELSE 'Unknown'
+    END AS error_classification
+FROM households h
+LEFT JOIN ref_status rs ON h.status = rs.code
+LEFT JOIN ref_tolerance_threshold t ON h.fiscal_year = t.fiscal_year;
+
+COMMENT ON VIEW v_household_summary IS 'Household-level summary with pre-computed household type, income category, and error classification.
+Uses ref_tolerance_threshold to distinguish above/below tolerance errors.
+Example: SELECT household_type, COUNT(*), SUM(household_weight) FROM v_household_summary WHERE fiscal_year = 2023 GROUP BY household_type';
+
+-- ----------------------------------------------------------------------------
+-- Additional indexes for common analytical query patterns
+-- ----------------------------------------------------------------------------
+CREATE INDEX IF NOT EXISTS idx_household_case_classification ON households(case_classification);
+CREATE INDEX IF NOT EXISTS idx_household_class_fy ON households(case_classification, fiscal_year);
+CREATE INDEX IF NOT EXISTS idx_member_race_ethnicity ON household_members(race_ethnicity);
+CREATE INDEX IF NOT EXISTS idx_member_citizenship ON household_members(citizenship_status);
+CREATE INDEX IF NOT EXISTS idx_member_work_reg ON household_members(work_registration_status);
+CREATE INDEX IF NOT EXISTS idx_member_working ON household_members(working_indicator);
+CREATE INDEX IF NOT EXISTS idx_member_disability ON household_members(disability_indicator);
 
 
 -- ============================================================================

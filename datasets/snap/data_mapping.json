@@ -480,8 +480,7 @@
             "earned_income": [
                 311,
                 312,
-                314,
-                321
+                314
             ],
             "unearned_income": [
                 331,
@@ -498,6 +497,7 @@
                 350
             ],
             "deductions": [
+                321,
                 323,
                 361,
                 363,
@@ -803,9 +803,9 @@
                 },
                 "amount_error": {
                     "type": "DECIMAL(10,2)",
-                    "description": "Amount of benefit in error",
+                    "description": "Dollar error in benefits (positive=overpaid, negative=underpaid)",
                     "nullable": true,
-                    "range": "0-1265",
+                    "range": "-1265 to 1265",
                     "example": 0.00,
                     "source_field": "AMTERR"
                 },

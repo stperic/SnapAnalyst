@@ -92,7 +92,7 @@ async def handle_chat_query(question: str, use_streaming: bool = False):
     except APIError as e:
         # User-friendly error from the API (e.g., LLM couldn't generate SQL)
         logger.warning(f"API error in chat query: {e.message}")
-        await send_message(e.message)
+        await send_error(e.message)
     except Exception as e:
         logger.error(f"Error in chat query: {e}")
         # Check if it's an httpx error with response detail
@@ -667,13 +667,15 @@ async def _handle_insight_streaming(question: str, user_id: str, scope: str, inc
 
             elif event_type == "sources":
                 sources = data.get("sources", [])
-                count = data.get("count", 0)
                 if sources:
-                    # Build minimal footer for sources (shown at end)
-                    source_names = [s.split(" - ")[-1] if " - " in s else s for s in sources[:3]]
-                    sources_text = f"\n\n---\n*Sources: {', '.join(source_names)}*"
-                    if count > 3:
-                        sources_text = f"\n\n---\n*Sources: {', '.join(source_names)} (+{count - 3} more)*"
+                    # Deduplicate: multiple chunks from the same document should show once
+                    source_names = list(dict.fromkeys(
+                        s.split(" - ")[-1] if " - " in s else s for s in sources
+                    ))
+                    shown = source_names[:3]
+                    sources_text = f"\n\n---\n*Sources: {', '.join(shown)}*"
+                    if len(source_names) > 3:
+                        sources_text = f"\n\n---\n*Sources: {', '.join(shown)} (+{len(source_names) - 3} more)*"
                     msg.content = f"{scope}\n\n💡 **Generating insight...**"
                     await msg.update()
 

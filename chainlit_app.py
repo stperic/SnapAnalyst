@@ -207,6 +207,8 @@ from ui.handlers.actions import (
     handle_file_load,
     handle_followup,
     handle_refresh_database,
+    handle_vanna_reset_cancel,
+    handle_vanna_reset_confirm,
 )
 from ui.handlers.commands import handle_command
 from ui.handlers.queries import handle_chat_query, handle_insight_request
@@ -325,12 +327,6 @@ async def main(message: cl.Message):
         "content": user_input
     })
 
-    # Check for pending prompt confirmation
-    from ui.handlers.commands.prompt_commands import handle_prompt_confirmation
-    is_confirmation = await handle_prompt_confirmation(user_input)
-    if is_confirmation:
-        return
-
     # Handle insight requests (/? or /??)
     if user_input.startswith("/?"):
         await handle_insight_request(user_input)
@@ -416,8 +412,6 @@ async def on_confirm_action(action: cl.Action):
         handle_reset_cancel,
         handle_reset_confirm,
     )
-    from ui.handlers.commands.prompt_commands import handle_prompt_confirmation
-
     # Remove buttons immediately to prevent double-clicks
     await action.remove()
 
@@ -441,11 +435,36 @@ async def on_confirm_action(action: cl.Action):
             await handle_memreset_confirm()
         else:
             await handle_memreset_cancel()
-    elif operation == "update_prompt":
+    elif operation == "reset_vanna":
         if confirmed:
-            await handle_prompt_confirmation("yes")
+            await handle_vanna_reset_confirm()
         else:
-            await handle_prompt_confirmation("no")
+            await handle_vanna_reset_cancel()
+
+
+# =============================================================================
+# PANEL ACTION CALLBACK (CustomElement JSX → Python via callAction)
+# =============================================================================
+
+@cl.action_callback("panel_action")
+async def on_panel_action(action: cl.Action):
+    """Handle actions from sidebar CustomElement panels (MemPanel, MemsqlPanel).
+
+    The JSX components call callAction({name: 'panel_action', payload: {...}})
+    after performing API operations (delete, reset, upload) via fetch().
+    This callback refreshes the panel with fresh data.
+    """
+    payload = action.payload or {}
+    panel_type = payload.get("type")
+    panel_action = payload.get("action")
+
+    if panel_type == "memsql" and panel_action == "refresh":
+        from ui.handlers.commands.memsql_commands import handle_memsql_panel
+        await handle_memsql_panel()
+
+    elif panel_type == "mem" and panel_action == "refresh":
+        from ui.handlers.commands.memory_commands import handle_mem_panel
+        await handle_mem_panel()
 
 
 # =============================================================================

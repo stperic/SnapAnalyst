@@ -66,8 +66,8 @@ def _create_engine(schema_name: str | None = None) -> Engine:
         "pool_recycle": settings.database_pool_recycle,
 
         # Performance optimizations
-        "pool_pre_ping": False,  # Skip connection health checks for speed
-        "echo": settings.debug,  # Only log SQL in debug mode
+        "pool_pre_ping": True,  # Verify connections on checkout (handles DB restarts)
+        "echo": False,  # Never echo SQL to stdout; use sqlalchemy.engine logger instead
 
         # PostgreSQL-specific optimizations for bulk inserts
         "executemany_mode": "values_plus_batch",  # Use fast batch mode for executemany
@@ -197,6 +197,16 @@ def init_db() -> None:
     logger.info("Initializing database tables...")
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables created successfully")
+
+
+def dispose_engines() -> None:
+    """Dispose all SQLAlchemy engines and release connection pools."""
+    global _dataset_engines
+    engine.dispose()
+    for ds_engine in _dataset_engines.values():
+        ds_engine.dispose()
+    _dataset_engines.clear()
+    logger.info("All database engines disposed")
 
 
 def drop_all_tables() -> None:

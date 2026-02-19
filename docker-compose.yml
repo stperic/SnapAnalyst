@@ -84,7 +84,8 @@ services:
       MAX_RESULT_COLUMNS: ${MAX_RESULT_COLUMNS:-10}
       
       # Vanna Configuration
-      VANNA_TRAINING_ENABLED: ${VANNA_TRAINING_ENABLED:-false}
+      SQL_TRAINING_DATA_PATH: ${SQL_TRAINING_DATA_PATH:-./datasets/snap/training}
+      SYSTEM_PROMPTS_PATH: ${SYSTEM_PROMPTS_PATH:-./datasets/snap/prompts}
       VANNA_CHROMADB_PATH: /app/chromadb
 
       # Disable ChromaDB telemetry (reduces log noise)
@@ -111,7 +112,8 @@ services:
     networks:
       - network
     restart: unless-stopped
-    command: uvicorn src.api.main:app --host 0.0.0.0 --port 8000
+    stop_grace_period: 10s
+    command: ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
@@ -167,10 +169,13 @@ services:
     depends_on:
       backend-server:
         condition: service_healthy
+      data-loader:
+        condition: service_completed_successfully
     networks:
       - network
     restart: unless-stopped
-    command: chainlit run chainlit_app.py --host 0.0.0.0 --port 8001
+    stop_grace_period: 10s
+    command: ["chainlit", "run", "chainlit_app.py", "--host", "0.0.0.0", "--port", "8001"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/"]
       interval: 10s

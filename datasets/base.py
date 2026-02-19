@@ -100,14 +100,14 @@ class DatasetConfig(ABC):
 
     def get_query_examples_path(self) -> Path:
         """Get path to query_examples.json file."""
-        # Check dataset-specific location first
+        # Check training subfolder first (new canonical location)
+        training_path = self.base_path / "training" / "query_examples.json"
+        if training_path.exists():
+            return training_path
+        # Fall back to dataset root (backward compatibility)
         dataset_path = self.base_path / "query_examples.json"
         if dataset_path.exists():
             return dataset_path
-        # Fall back to root level
-        root_path = Path("query_examples.json")
-        if root_path.exists():
-            return root_path
         raise FileNotFoundError(f"query_examples.json not found for dataset {self.name}")
 
     def load_query_examples(self) -> list[dict[str, str]]:
@@ -272,10 +272,13 @@ class DatasetConfigFromYAML(DatasetConfig):
             return DataTransformer
 
     def get_business_context(self) -> str:
-        import importlib
-        try:
-            prompts_module = importlib.import_module(f"datasets.{self.name}.prompts")
-            return prompts_module.BUSINESS_CONTEXT_DOCUMENTATION
-        except ImportError:
-            from src.core.prompts import BUSINESS_CONTEXT_DOCUMENTATION
-            return BUSINESS_CONTEXT_DOCUMENTATION
+        """Load business context from datasets/<name>/training/business_context.md."""
+        # Check training subfolder first (new canonical location)
+        training_path = self.base_path / "training" / "business_context.md"
+        if training_path.exists():
+            return training_path.read_text(encoding="utf-8")
+        # Backward compatibility
+        doc_path = self.base_path / "business_context.md"
+        if doc_path.exists():
+            return doc_path.read_text(encoding="utf-8")
+        raise FileNotFoundError(f"Business context not found: {training_path}")

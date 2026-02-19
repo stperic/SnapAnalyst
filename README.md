@@ -160,6 +160,8 @@ On first run, Docker will automatically:
 | `/clear` | Clear chat history |
 | `/?` | Full thread insight with conversation context |
 | `/??` | Knowledge base lookup only |
+| `/mem` | Manage AI knowledge base (insights/docs) |
+| `/memsql` | Manage Vanna SQL training data |
 
 ### Advanced Insight Commands
 
@@ -176,6 +178,128 @@ Query the knowledge base directly without thread context:
 /?? What does status code 2 mean?
 /?? Explain element code 311
 ```
+
+### AI Memory Commands
+
+SnapAnalyst has two separate AI memory stores, each managed through a self-contained sidebar panel:
+
+**Knowledge Base (`/mem`)** — Powers `/??` insights and documentation lookups
+
+Type `/mem` to open the sidebar panel where you can:
+- View statistics (status, document count, size)
+- Browse and delete individual documents
+- Upload `.md` / `.txt` files with optional category and tags
+- Reset the entire knowledge base
+
+**SQL Training (`/memsql`)** — Powers natural language to SQL generation via Vanna.AI
+
+Type `/memsql` to open the sidebar panel where you can:
+- View statistics (DDL, documentation, SQL pairs)
+- Browse and delete individual training entries
+- Upload training files (`.md`/`.txt` for docs, `.json` for question-SQL pairs)
+- Reset training data with option to reload from training folder
+- View and update the SQL system prompt
+
+**Upload file formats for `/memsql`:**
+- `.md` / `.txt` — Added as documentation context for SQL generation
+- `.json` — Must contain `{"example_queries": [{"question": "...", "sql": "..."}]}`
+
+**Reset (available in the `/memsql` panel):**
+The Reset button clears all Vanna training data (DDL, docs, SQL pairs) and retrains DDL from the database schema. A **"Reload SNAP training data"** checkbox (checked by default) controls whether documentation and query examples from the training folder (`datasets/snap/training/`) are also reloaded automatically. Uncheck it to start with DDL only and add training data manually via Upload.
+
+### Training Data & System Prompts (Advanced)
+
+Vanna AI's behavior is driven by two configurable folders:
+
+1. **Training data** (`SQL_TRAINING_DATA_PATH`) — Documentation and query examples for RAG
+2. **System prompts** (`SYSTEM_PROMPTS_PATH`) — LLM system prompts that set persona and domain rules
+
+```
+datasets/snap/
+├── training/                     # Training data (SQL_TRAINING_DATA_PATH)
+│   ├── business_context.md       # Domain knowledge & business rules
+│   └── query_examples.json       # Example question/SQL pairs
+└── prompts/                      # System prompts (SYSTEM_PROMPTS_PATH)
+    ├── sql_system_prompt.txt     # SQL generation system prompt
+    └── kb_system_prompt.txt      # Knowledge base insight prompt
+```
+
+#### Training Data Folder
+
+The system scans the training folder at startup. No naming conventions required — all files are loaded by extension:
+
+| Extension | Purpose | Format |
+|-----------|---------|--------|
+| `.md`, `.txt` | Documentation — chunked and stored in ChromaDB for RAG retrieval during SQL generation | Plain text or Markdown |
+| `.json` | Question/SQL pairs — taught to Vanna as examples | `{"example_queries": [{"question": "...", "sql": "...", "explanation": "..."}]}` |
+
+The optional `explanation` field in query examples is appended to the question during training, giving Vanna richer context for RAG matching (e.g., "Show errors by type (JOIN ref_element for human-readable descriptions)").
+
+#### System Prompts Folder
+
+| File | Purpose | Fallback if missing |
+|------|---------|---------------------|
+| `sql_system_prompt.txt` | System prompt sent to the LLM for SQL generation. Include domain-specific calculations, business rules, field naming conventions, and SQL guidelines. | Generic "expert data analyst and PostgreSQL specialist" prompt |
+| `kb_system_prompt.txt` | System prompt for `/??` knowledge base insights. Sets the LLM's persona and response style. | Generic "data analyst" prompt |
+
+#### Customizing System Prompts
+
+The system prompts are the most important files for SQL generation quality. The SNAP dataset includes a `sql_system_prompt.txt` with domain-specific formulas (error rate calculations, tolerance thresholds, business rules). When replacing the dataset, write your own prompts with your domain knowledge.
+
+**Example `sql_system_prompt.txt` for a custom dataset:**
+```
+You are an expert healthcare data analyst and PostgreSQL specialist.
+Generate accurate, executable SQL queries based on natural language questions.
+
+### Domain Rules
+- Patient IDs use composite key (patient_id, encounter_date)
+- Diagnosis codes follow ICD-10 format (e.g., 'E11.65')
+- Always filter WHERE status = 'active' unless user asks for all records
+- Use encounter_date for time-based queries (YYYY-MM-DD format)
+
+### SQL Guidelines
+- Dialect: PostgreSQL
+- Apply LIMIT 100 for non-aggregate queries
+- Use ILIKE for case-insensitive text search
+
+Return only the SQL query without markdown formatting.
+```
+
+#### Replacing the SNAP Dataset
+
+To use SnapAnalyst with your own data:
+
+1. **Create your folders:**
+   ```bash
+   mkdir -p datasets/mydata/training datasets/mydata/prompts
+   ```
+
+2. **Add training files:**
+   - Any `.md`/`.txt` files — Business context, documentation
+   - Any `.json` files — Example question/SQL pairs in the format above
+
+3. **Add prompt files:**
+   - `sql_system_prompt.txt` — Your domain-specific SQL prompt
+   - `kb_system_prompt.txt` — Your KB insight persona (optional)
+
+4. **Point to your folders** in `.env`:
+   ```bash
+   SQL_TRAINING_DATA_PATH=./datasets/mydata/training
+   SYSTEM_PROMPTS_PATH=./datasets/mydata/prompts
+   ```
+
+5. **Load your data** into PostgreSQL and retrain via `/memsql` → Reset Full
+
+If you omit the prompt files or the prompts folder, generic defaults are used — the system never assumes SNAP-specific terminology.
+
+#### Runtime Prompt Customization
+
+Users can override prompts per-user without editing files, using the sidebar panels:
+- `/memsql` panel → **System Prompt** section — Upload a `.txt` file to override the SQL generation prompt, or reset to default
+- `/mem` panel → **System Prompt** section — Upload a `.txt` file to override the KB insight prompt, or reset to default
+- `/prompt sql` or `/prompt kb` — View the current prompt (custom or default)
+
+Custom prompts are stored in the database per user and take priority over the prompts folder files.
 
 ### Data Export Commands
 
@@ -263,6 +387,8 @@ Configuration is managed through a `.env` file in the project root (or environme
 | `API_PORT` | API port mapping | `8000` |
 | `CHAINLIT_PORT` | UI port mapping | `8001` |
 | `POSTGRES_PORT` | PostgreSQL port mapping | `5432` |
+| `SQL_TRAINING_DATA_PATH` | Training data folder (docs, query examples) | `./datasets/snap/training` |
+| `SYSTEM_PROMPTS_PATH` | System prompts folder (SQL & KB prompts) | `./datasets/snap/prompts` |
 
 **Note**: Set `ENVIRONMENT=development` to enable API documentation at `/docs` and `/redoc`
 
@@ -642,14 +768,7 @@ After adding custom tables or views:
    - Example: SELECT ... FROM snap_my_analysis WHERE ...';
    ```
 
-2. **Retrain Vanna.AI**:
-   ```
-   /mem reset
-   ```
-
-   The `/mem reset` command clears AI training data and re-extracts the complete database schema, automatically discovering your new tables and their comments.
-
-**Note**: `/mem reset` will clear custom documentation added via `/mem add`, but will restore all database schema definitions and business context from the live database.
+2. **Retrain Vanna.AI**: Open the `/memsql` panel and click **Reset**. This clears Vanna's SQL training data and re-extracts DDL from the database schema, automatically discovering your new tables and their comments. With the "Reload SNAP training data" checkbox checked (default), documentation and query examples from the training folder are also reloaded.
 
 #### Example: Adding State-Specific Analysis
 
@@ -677,7 +796,7 @@ GROUP BY error_category;
 COPY snap_california_errors FROM '/path/to/data.csv' CSV HEADER;
 ```
 
-Then in the chat interface, run `/mem reset` and ask:
+Then in the chat interface, open `/memsql` and click **Reset**, then ask:
 - "What are the most common error categories in California?"
 - "Show me cases with high severity scores"
 - "Compare California error patterns to national trends"

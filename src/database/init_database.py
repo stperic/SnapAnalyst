@@ -97,7 +97,19 @@ def create_all_tables(drop_existing: bool = False) -> None:
     if drop_existing:
         logger.warning("Dropping all existing tables...")
         # Drop tables in reverse dependency order
+        # Drop in dependency order: materialized views → views → tables
         drop_sql = """
+            DROP MATERIALIZED VIEW IF EXISTS mv_state_error_rates CASCADE;
+            DROP MATERIALIZED VIEW IF EXISTS mv_error_element_rollup CASCADE;
+            DROP MATERIALIZED VIEW IF EXISTS mv_demographic_profile CASCADE;
+            DROP VIEW IF EXISTS v_household_summary CASCADE;
+            DROP VIEW IF EXISTS v_households_enriched CASCADE;
+            DROP VIEW IF EXISTS v_qc_errors_enriched CASCADE;
+            DROP VIEW IF EXISTS v_members_enriched CASCADE;
+            DROP VIEW IF EXISTS v_error_summary_by_type CASCADE;
+            DROP VIEW IF EXISTS v_error_summary_by_responsibility CASCADE;
+            DROP TABLE IF EXISTS fns_error_rates_historical CASCADE;
+            DROP TABLE IF EXISTS ref_tolerance_threshold CASCADE;
             DROP TABLE IF EXISTS app.data_load_history CASCADE;
             DROP TABLE IF EXISTS app.user_prompts CASCADE;
             DROP TABLE IF EXISTS qc_errors CASCADE;
@@ -141,8 +153,10 @@ def create_all_tables(drop_existing: bool = False) -> None:
     with open(schema_file) as f:
         schema_sql = f.read()
 
-    with Session(engine) as session:
-        # Split by semicolon and execute each statement
+    # Execute each statement in its own transaction so one failure
+    # doesn't abort subsequent statements (PostgreSQL aborts the whole
+    # transaction on error).
+    with engine.connect() as conn:
         for statement in schema_sql.split(';'):
             stmt = statement.strip()
             if not stmt:
@@ -168,12 +182,12 @@ def create_all_tables(drop_existing: bool = False) -> None:
                 continue
 
             try:
-                session.execute(text(clean_stmt))
+                conn.execute(text(clean_stmt))
+                conn.commit()
             except Exception as e:
-                # Ignore "already exists" errors for IF NOT EXISTS statements
+                conn.rollback()
                 if "already exists" not in str(e).lower():
-                    logger.debug(f"Statement skipped: {str(e)[:100]}")
-        session.commit()
+                    logger.warning(f"Schema statement failed: {str(e)[:200]}")
 
     logger.info("All tables created from schema.sql")
 
@@ -183,45 +197,9 @@ def create_enriched_views() -> None:
     Create SQL views that JOIN main tables with reference tables
     for convenient querying with human-readable labels.
     """
+    # Only views NOT already defined in schema.sql
+    # v_qc_errors_enriched and v_households_enriched are in schema.sql (single source of truth)
     views = {
-        # Enriched errors view - includes all human-readable labels
-        # Match schema.sql definition exactly to avoid column rename conflicts
-        "v_qc_errors_enriched": """
-            CREATE OR REPLACE VIEW v_qc_errors_enriched AS
-            SELECT
-                e.*,
-                h.state_name,
-                h.state_code,
-                h.status AS household_status,
-                re.description AS element_description,
-                re.category AS element_category,
-                rn.description AS nature_description,
-                rn.category AS nature_category,
-                ra.description AS agency_description,
-                ra.responsibility_type,
-                rf.description AS finding_description
-            FROM qc_errors e
-            JOIN households h ON e.case_id = h.case_id AND e.fiscal_year = h.fiscal_year
-            LEFT JOIN ref_element re ON e.element_code = re.code
-            LEFT JOIN ref_nature rn ON e.nature_code = rn.code
-            LEFT JOIN ref_agency_responsibility ra ON e.responsible_agency = ra.code
-            LEFT JOIN ref_error_finding rf ON e.error_finding = rf.code
-        """,
-
-        # Enriched households view - includes status descriptions
-        "v_households_enriched": """
-            CREATE OR REPLACE VIEW v_households_enriched AS
-            SELECT
-                h.*,
-                rs.description AS status_description,
-                rce.description AS categorical_eligibility_description,
-                res.description AS expedited_service_description
-            FROM households h
-            LEFT JOIN ref_status rs ON h.status = rs.code
-            LEFT JOIN ref_categorical_eligibility rce ON h.categorical_eligibility = rce.code
-            LEFT JOIN ref_expedited_service res ON h.expedited_service = res.code
-        """,
-
         # Enriched members view - includes demographic descriptions
         "v_members_enriched": """
             CREATE OR REPLACE VIEW v_members_enriched AS

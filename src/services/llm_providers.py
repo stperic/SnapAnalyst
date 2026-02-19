@@ -580,14 +580,39 @@ def train_vanna_with_ddl(force_retrain: bool = False):
                 except Exception as e:
                     logger.warning(f"Failed to train DDL {i+1}: {e}")
 
-        # Add business documentation
-        from src.core.prompts import BUSINESS_CONTEXT_DOCUMENTATION
-        try:
+        # Add all documentation files from datasets/snap/
+        from src.services.kb_chromadb import _chunk_text
+        from src.services.llm_training import get_documentation_files
+        for doc_path in get_documentation_files():
+            try:
+                doc_text = doc_path.read_text(encoding="utf-8")
+                chunks = _chunk_text(doc_text, filename=doc_path.name)
+                with redirect_stdout(StringIO()):
+                    for chunk in chunks:
+                        vn.train(documentation=chunk)
+                logger.info(f"Trained with {doc_path.name} ({len(chunks)} chunks)")
+            except Exception as e:
+                logger.warning(f"Failed to train {doc_path.name}: {e}")
+
+        # Add query examples from query_examples.json
+        from src.services.llm_training import load_training_examples
+        examples = load_training_examples()
+        if examples:
+            trained_count = 0
             with redirect_stdout(StringIO()):
-                vn.train(documentation=BUSINESS_CONTEXT_DOCUMENTATION)
-            logger.info("Trained with business documentation")
-        except Exception as e:
-            logger.warning(f"Failed to train documentation: {e}")
+                for ex in examples:
+                    question = ex.get("question", "")
+                    sql = ex.get("sql", "")
+                    explanation = ex.get("explanation", "")
+                    if question and sql:
+                        # Append explanation to question for richer RAG matching
+                        train_question = f"{question} ({explanation})" if explanation else question
+                        try:
+                            vn.train(question=train_question, sql=sql)
+                            trained_count += 1
+                        except Exception as e:
+                            logger.warning(f"Failed to train example '{question[:50]}': {e}")
+            logger.info(f"Trained with {trained_count}/{len(examples)} query examples")
 
         _vanna_trained = True
         logger.info("Vanna training complete - DDL stored in ChromaDB")
@@ -595,6 +620,96 @@ def train_vanna_with_ddl(force_retrain: bool = False):
     except Exception as e:
         logger.error(f"Failed to train Vanna: {e}")
         raise
+
+
+def train_vanna(force_retrain: bool = False, reload_training_data: bool = False) -> dict:
+    """
+    Reset and retrain Vanna with DDL from the database.
+
+    Clears all existing training data, then retrains with DDL extracted from
+    PostgreSQL. Optionally reloads documentation and query examples from the
+    training data folder (datasets/snap/training/).
+
+    Args:
+        force_retrain: If True, re-train even if DDL already exists
+        reload_training_data: If True, also reload docs + query examples from training folder
+
+    Returns:
+        Dict with counts: {"ddl": N, "documentation": N, "sql": N}
+    """
+    global _vanna_trained
+
+    vn = _get_vanna_instance()
+    counts = {"ddl": 0, "documentation": 0, "sql": 0}
+
+    # Clear existing training data to prevent duplicate accumulation
+    try:
+        existing_data = vn.get_training_data()
+        if not existing_data.empty:
+            ids_to_remove = existing_data["id"].tolist()
+            logger.info(f"Clearing {len(ids_to_remove)} existing training entries")
+            with redirect_stdout(StringIO()):
+                for training_id in ids_to_remove:
+                    try:
+                        vn.remove_training_data(id=training_id)
+                    except Exception as e:
+                        logger.debug(f"Could not remove training data {training_id}: {e}")
+    except Exception as e:
+        logger.warning(f"Could not clear existing training data: {e}")
+
+    # Determine which tables to train on
+    from src.database.ddl_extractor import get_all_ddl_statements
+
+    # Full mode: all tables DDL
+    ddl_statements = get_all_ddl_statements(include_samples=True)
+    logger.info(f"Training with {len(ddl_statements)} DDL statements")
+
+    with redirect_stdout(StringIO()):
+        for i, ddl in enumerate(ddl_statements):
+            try:
+                vn.train(ddl=ddl)
+                counts["ddl"] += 1
+            except Exception as e:
+                logger.warning(f"Failed to train DDL {i+1}: {e}")
+
+    # Optionally reload training data from the training folder
+    if reload_training_data:
+        from src.services.kb_chromadb import _chunk_text
+        from src.services.llm_training import get_documentation_files, load_training_examples
+
+        # Load documentation files (.md, .txt)
+        for doc_path in get_documentation_files():
+            try:
+                doc_text = doc_path.read_text(encoding="utf-8")
+                chunks = _chunk_text(doc_text, filename=doc_path.name)
+                with redirect_stdout(StringIO()):
+                    for chunk in chunks:
+                        vn.train(documentation=chunk)
+                counts["documentation"] += len(chunks)
+                logger.info(f"Trained with {doc_path.name} ({len(chunks)} chunks)")
+            except Exception as e:
+                logger.warning(f"Failed to train {doc_path.name}: {e}")
+
+        # Load query examples (.json)
+        examples = load_training_examples()
+        if examples:
+            with redirect_stdout(StringIO()):
+                for ex in examples:
+                    question = ex.get("question", "")
+                    sql = ex.get("sql", "")
+                    explanation = ex.get("explanation", "")
+                    if question and sql:
+                        train_question = f"{question} ({explanation})" if explanation else question
+                        try:
+                            vn.train(question=train_question, sql=sql)
+                            counts["sql"] += 1
+                        except Exception as e:
+                            logger.warning(f"Failed to train example '{question[:50]}': {e}")
+            logger.info(f"Trained with {counts['sql']}/{len(examples)} query examples")
+
+    _vanna_trained = True
+    logger.info(f"Vanna training complete: {counts}")
+    return counts
 
 
 # =============================================================================

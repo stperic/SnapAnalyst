@@ -5,27 +5,24 @@ All system prompts, business context, and LLM-related constants
 are defined here for easy reference and maintenance.
 
 This file contains:
-- Vanna SQL generation system prompt
-- AI Summary system prompts
+- Vanna SQL generation system prompt (loaded from training folder or generic default)
+- KB insight system prompt (loaded from training folder or generic default)
+- AI Summary system prompts (generic)
 - Business context documentation
-- Code lookup references
-- Common query patterns
 - UI message templates
 
-ARCHITECTURE NOTE (Gold Standard):
-- DDL is now extracted directly from PostgreSQL, NOT maintained here
-- Use src/database/ddl_extractor.get_all_ddl_statements() for Vanna training
-- The database is the single source of truth for schema
+ARCHITECTURE:
+- Dataset-specific prompts live in the training folder as .txt files:
+    sql_system_prompt.txt  — SQL generation system prompt
+    kb_system_prompt.txt   — KB insight system prompt
+- If these files exist, they are used. Otherwise, generic defaults apply.
+- DDL is extracted directly from PostgreSQL (database is source of truth)
 
 Usage:
     from src.core.prompts import (
         AI_SUMMARY_SYSTEM_PROMPT,
         VANNA_SQL_SYSTEM_PROMPT,
-        BUSINESS_CONTEXT_DOCUMENTATION,
     )
-
-    # For DDL, use the extractor:
-    from src.database.ddl_extractor import get_all_ddl_statements
 """
 
 # =============================================================================
@@ -60,43 +57,43 @@ Provide your analysis:"""
 # VANNA SQL GENERATION PROMPT (for generate_sql)
 # =============================================================================
 
-VANNA_SQL_SYSTEM_PROMPT = """You are an expert SNAP Quality Control Data Analyst and PostgreSQL specialist. Generate accurate, executable SQL queries based on natural language questions about SNAP data.
-
-### Domain-Specific Calculations
-**CRITICAL: All official error rates MUST filter WHERE case_classification = 1**
-**CRITICAL: FY2023 tolerance threshold is $54 - only count errors where ABS(amount_error) > 54**
-
-1. **Payment Error Rate** = (SUM(CASE WHEN ABS(amount_error) > 54 THEN ABS(amount_error) * household_weight ELSE 0 END) / NULLIF(SUM(snap_benefit * household_weight), 0)) * 100
-   - USDA official metric: only errors exceeding $54 tolerance threshold are counted
-   - ALWAYS use household_weight AND case_classification = 1 for accurate state/national rates
-2. **Overpayment Error Rate** = (SUM(CASE WHEN amount_error > 54 THEN amount_error * household_weight ELSE 0 END) / NULLIF(SUM(snap_benefit * household_weight), 0)) * 100
-3. **Underpayment Error Rate** = (SUM(CASE WHEN amount_error < -54 THEN ABS(amount_error) * household_weight ELSE 0 END) / NULLIF(SUM(snap_benefit * household_weight), 0)) * 100
-4. **Case Error Rate** = (COUNT(*) FILTER (WHERE status != 1 AND ABS(amount_error) > 54) / NULLIF(COUNT(*)::NUMERIC, 0)) * 100
-   - Percentage of cases with errors exceeding tolerance threshold
-
-### Business Rules
-- **Case Classification**: ALWAYS filter `WHERE case_classification = 1` for official error rates (1=included, 2=excluded SSA, 3=excluded FNS)
-- **Status codes**: 1=correct, 2=overissuance, 3=underissuance (only filter if user explicitly requests)
-- **Fiscal Year**: Use `fiscal_year` column for year filters (Oct-Sep periods)
-- **State queries**: Use `state_name` (full name), not `state_code`
-- **NULL handling**: Use `COALESCE(column, 0)` for financial calculations
+# Generic default — used when no sql_system_prompt.txt exists in training folder
+_DEFAULT_SQL_SYSTEM_PROMPT = """You are an expert data analyst and PostgreSQL specialist. Generate accurate, executable SQL queries based on natural language questions.
 
 ### SQL Guidelines
 - **Dialect**: PostgreSQL
-- **Joins**: Use composite keys `(case_id, fiscal_year)` for all joins
 - **Text search**: Use `ILIKE` for case-insensitive matching
 - **Limits**: Apply `LIMIT 100` for non-aggregate queries
-- **Aliases**: Use clear column names in results (e.g., `total_benefit` not `sum`)
+- **Aliases**: Use clear column names in results (e.g., `total_amount` not `sum`)
+- **NULL handling**: Use `COALESCE(column, 0)` for financial calculations
 
 Return **only** the SQL query without markdown formatting."""
+
+
+def _load_prompt_file(filename: str) -> str | None:
+    """Load a prompt from the system prompts folder, or return None if not found."""
+    from pathlib import Path
+
+    from src.core.config import settings
+
+    prompt_path = Path(settings.system_prompts_path) / filename
+    if prompt_path.exists():
+        return prompt_path.read_text(encoding="utf-8").strip()
+    return None
+
+
+VANNA_SQL_SYSTEM_PROMPT = _load_prompt_file("sql_system_prompt.txt") or _DEFAULT_SQL_SYSTEM_PROMPT
 
 
 # =============================================================================
 # KB INSIGHT PROMPTS (for /? command)
 # =============================================================================
 
-KB_INSIGHT_SYSTEM_PROMPT = """You are a SNAP QC data analyst. Answer briefly and directly.
+# Generic default — used when no kb_system_prompt.txt exists in training folder
+_DEFAULT_KB_SYSTEM_PROMPT = """You are a data analyst. Answer briefly and directly.
 IMPORTANT: When citing numbers from the data, use the EXACT formatted values shown (e.g., '$1,012.71' not '1012.714285...')."""
+
+KB_INSIGHT_SYSTEM_PROMPT = _load_prompt_file("kb_system_prompt.txt") or _DEFAULT_KB_SYSTEM_PROMPT
 
 KB_INSIGHT_INSTRUCTION = """Answer in 2-3 sentences. Be direct and factual. Use exact values from the data - do not recalculate or show raw decimals."""
 
@@ -212,10 +209,7 @@ def build_ai_summary_prompt(
 #   from src.database.ddl_extractor import get_all_ddl_statements
 #
 # This eliminates the need to maintain duplicate DDL here.
-# The actual database schema includes:
-# - Reference/lookup tables (ref_*) with FK constraints
-# - Main tables (households, household_members, qc_errors)
-# - Foreign key relationships for automatic JOINs
+# DDL is extracted from whatever tables exist in the active database.
 #
 # See src/database/ddl_extractor.py for implementation details.
 
@@ -224,79 +218,20 @@ def build_ai_summary_prompt(
 # BUSINESS CONTEXT DOCUMENTATION
 # =============================================================================
 
-BUSINESS_CONTEXT_DOCUMENTATION = """
-SNAP QC Database - Business Context and Query Patterns
+def _load_business_context() -> str:
+    """Load business context from the training data folder."""
+    from pathlib import Path
 
-PROGRAM TERMS:
-- SNAP = Supplemental Nutrition Assistance Program (formerly "food stamps")
-- QC = Quality Control review process to ensure benefit accuracy
-- Overissuance = Household received more benefits than entitled
-- Underissuance = Household received less benefits than entitled
-- RSDI = Retirement, Survivors, and Disability Insurance (Social Security)
-- SSI = Supplemental Security Income
-- TANF = Temporary Assistance for Needy Families (welfare/cash assistance)
-- ABAWD = Able-Bodied Adults Without Dependents (work requirement rules)
+    from src.core.config import settings
 
-DATABASE ARCHITECTURE - REFERENCE TABLES:
-The database uses lookup/reference tables (ref_*) for all code values.
-For human-readable results, JOIN to these tables instead of using raw codes.
+    doc_path = Path(settings.sql_training_data_path) / "business_context.md"
+    if doc_path.exists():
+        return doc_path.read_text(encoding="utf-8")
+    return ""
 
-KEY REFERENCE TABLES:
-- ref_status: status codes → 'Amount correct', 'Overissuance', 'Underissuance'
-- ref_element: element_code → error types like 'Wages and salaries', 'Shelter deduction'
-- ref_nature: nature_code → what went wrong, e.g., 'Unreported source of income'
-- ref_agency_responsibility: responsible_agency → who caused error (has responsibility_type column: 'client' or 'agency')
-- ref_error_finding: error_finding → 'Overissuance', 'Underissuance', 'Ineligible'
-- ref_sex: sex → 'Male', 'Female', 'Prefer not to answer'
-- ref_snap_affiliation: snap_affiliation_code → member eligibility status
 
-COMMON QUERY PATTERNS (using reference table JOINs):
-
-1. Error analysis by type:
-   SELECT re.description, COUNT(*)
-   FROM qc_errors e
-   JOIN ref_element re ON e.element_code = re.code
-   GROUP BY re.description
-
-2. Client vs Agency errors:
-   SELECT ra.responsibility_type, COUNT(*)
-   FROM qc_errors e
-   JOIN ref_agency_responsibility ra ON e.responsible_agency = ra.code
-   GROUP BY ra.responsibility_type
-
-3. Income-related errors:
-   SELECT re.description, SUM(e.error_amount)
-   FROM qc_errors e
-   JOIN ref_element re ON e.element_code = re.code
-   WHERE re.category = 'earned_income' OR re.category = 'unearned_income'
-   GROUP BY re.description
-
-4. Error patterns by state:
-   SELECT h.state_name, re.description, COUNT(*)
-   FROM qc_errors e
-   JOIN households h ON e.case_id = h.case_id AND e.fiscal_year = h.fiscal_year
-   JOIN ref_element re ON e.element_code = re.code
-   GROUP BY h.state_name, re.description
-
-5. Overissuance cases:
-   SELECT h.*, rs.description as status_desc
-   FROM households h
-   JOIN ref_status rs ON h.status = rs.code
-   WHERE rs.description = 'Overissuance'
-
-TABLE RELATIONSHIPS:
-- households: Core table with state_name, income totals, benefits
-- household_members: Person-level data (JOIN to households via case_id + fiscal_year)
-- qc_errors: Error details (JOIN to households via case_id + fiscal_year)
-- ref_* tables: Lookup tables (JOIN via code columns)
-
-IMPORTANT:
-- state_name is ONLY in households table - always JOIN when querying members or errors by state
-- Use ref_element.category to filter error types: 'eligibility', 'assets', 'earned_income', 'unearned_income', 'deductions', 'computation'
-- Use ref_agency_responsibility.responsibility_type to distinguish 'client' vs 'agency' errors
-- case_id is a STRING (not numeric) - use proper string comparison when needed
-- Column display formats are documented in DDL (extracted from data_mapping.json)
-"""
+# Kept for backward compatibility — content now lives in datasets/snap/business_context.md
+BUSINESS_CONTEXT_DOCUMENTATION = _load_business_context()
 
 
 # =============================================================================
@@ -354,7 +289,7 @@ MSG_SYSTEM_READY = "🟢 **SnapAnalysis is ready**"
 MSG_SYSTEM_DEGRADED = "🟡 **Some services unavailable** - Check logs for details"
 
 # --- Welcome ---
-MSG_WELCOME = "**Ask me anything about your SNAP QC data! See Readme for more information** 🚀"
+MSG_WELCOME = "**Ask me anything about your data! See Readme for more information** 🚀"
 
 # --- CSV Export ---
 MSG_CSV_READY = """Great! I've prepared your CSV export for you.
@@ -580,18 +515,14 @@ MSG_HELP = """## Available Commands
 **Schema & Documentation:**
 - `/schema` - View database schema summary
 
-**AI Memory Management:
-- `/mem stats` - Show ChromaDB statistics
-- `/mem list` - List all documentation in knowledge base
-- `/mem add [category]` - Add custom documentation
-- `/mem delete <id>` - Remove documentation entry
-- `/mem reset` - Clear and rebuild AI memory
+**AI Memory Management:**
+- `/mem` - Open Knowledge Base panel (stats, entries, upload, delete, reset)
+- `/memsql` - Open SQL Training panel (DDL, docs, SQL pairs, upload, delete, reset)
 
 **Prompt Management:**
 - `/prompt <sql|kb>` - View current prompt
-- `/prompt <sql|kb> set <text>` - Update with inline text
-- `/prompt <sql|kb> set` + file - Update from .txt file
-- `/prompt <sql|kb> reset` - Reset to default
+- `/memsql` - Update SQL prompts
+- `/mem` - Update KB prompts
 
 **Insights & Analysis:**
 - `/?  <question>` - **Full Thread Analysis** (deep, comprehensive)

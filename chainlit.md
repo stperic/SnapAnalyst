@@ -72,11 +72,16 @@ Type these commands to access features:
 | Command | Description |
 |---------|-------------|
 | `/help` | Show all available commands |
-| `/download` | Export current results to Excel |
-| `/filter status` | Check active state/year filters |
+| `/status` | Show system status |
 | `/database` | View database statistics |
 | `/schema` | Explore database structure |
 | `/llm` | View LLM configuration |
+| `/filter status` | Check active state/year filters |
+| `/export` | Export current results to Excel |
+| `/mem` | Open Knowledge Base management panel |
+| `/memsql` | Open SQL Training management panel |
+| `/prompt sql` | View current SQL generation prompt |
+| `/prompt kb` | View current KB insight prompt |
 | `/clear` | Clear chat history |
 
 ---
@@ -117,4 +122,4 @@ Type these commands to access features:
 
 **Need Help?** Type `/help` for a complete list of commands
 
-**Last Updated:** January 27, 2026
+**Last Updated:** February 19, 2026

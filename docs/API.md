@@ -277,16 +277,12 @@ Get ChromaDB memory statistics.
 List all entries in AI memory.
 
 ### POST `/llm/memory/add`
-Add documentation to AI memory.
+Add documentation to AI memory via file upload.
 
-**Request Body:**
-```json
-{
-  "content": "Business rule: SNAP benefits cannot exceed...",
-  "category": "business_rules",
-  "metadata": {}
-}
-```
+**Request:** `multipart/form-data`
+- `files` (required): One or more `.md` or `.txt` files
+- `category` (optional): Category label
+- `tags` (optional): Comma-separated tags
 
 ### DELETE `/llm/memory/{doc_id}`
 Delete a specific memory entry.
@@ -299,6 +295,64 @@ Manually trigger AI training.
 
 ### GET `/llm/training/status`
 Get training status.
+
+### GET `/llm/prompt/{prompt_type}`
+Get current prompt for a user. `prompt_type` is `kb` or `sql`.
+
+**Headers:** `X-User-ID` (optional, defaults to "default")
+
+**Response:**
+```json
+{
+  "prompt_text": "...",
+  "is_custom": false,
+  "char_count": 1234,
+  "prompt_type": "kb"
+}
+```
+
+### PUT `/llm/prompt/{prompt_type}`
+Set a custom prompt for a user.
+
+**Headers:** `X-User-ID`
+
+**Request Body:**
+```json
+{
+  "prompt_text": "Your custom prompt text..."
+}
+```
+
+### DELETE `/llm/prompt/{prompt_type}`
+Reset prompt to system default.
+
+**Headers:** `X-User-ID`
+
+### GET `/llm/vanna/stats`
+Get Vanna SQL training data statistics (DDL, documentation, SQL pair counts).
+
+### GET `/llm/vanna/list`
+List Vanna training data grouped by type (ddl, documentation, sql).
+
+### POST `/llm/vanna/add`
+Add training data to Vanna via file upload.
+
+**Request:** `multipart/form-data`
+- `files` (required): `.md`/`.txt` files (documentation) or `.json` files (question-SQL pairs)
+
+### DELETE `/llm/vanna/{entry_id}`
+Delete a specific Vanna training entry.
+
+### POST `/llm/vanna/reset`
+Reset Vanna training data and retrain.
+
+**Request Body:**
+```json
+{
+  "reload_training_data": true
+}
+```
+- `reload_training_data`: When true, reloads docs and query examples from `datasets/snap/training/`
 
 ---
 

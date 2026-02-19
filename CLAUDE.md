@@ -77,6 +77,20 @@ mypy src/                                  # Type check
    - `ai_summary.py`: Generates natural language summaries of query results
    - `kb_chromadb.py`: ChromaDB knowledge base for insights
 
+### Two ChromaDB Stores
+
+The system maintains two separate ChromaDB stores for different purposes:
+
+1. **KB ChromaDB** (`./chromadb/kb/`) — User knowledge base for insights (`/??` command)
+   - Managed by `/mem` commands
+   - Stores user-uploaded documentation, business context
+   - Used by `src/services/kb_chromadb.py`
+
+2. **Vanna ChromaDB** (`./chromadb/vanna_ddl/`) — SQL generation training data
+   - Managed by `/memsql` commands
+   - Collections: `ddl` (schema), `documentation` (business context), `sql` (question-SQL pairs)
+   - Used by Vanna 0.x instance via `_get_vanna_instance()` in `llm_providers.py`
+
 ### Vanna AI Integration (SQL Generation)
 
 The system uses Vanna 0.x-style DDL training wrapped with 2.x Agent architecture:
@@ -89,8 +103,15 @@ Key classes in `llm_providers.py`:
 - `OpenAIVanna`, `AnthropicVanna`, `OllamaVanna`, `AzureOpenAIVanna` - Provider-specific implementations
 - `LegacyVannaAdapter` bridges 0.x instances to 2.x Agent compatibility
 - DDL is trained once and stored in ChromaDB at `./chromadb/vanna_ddl`
-- Training data source: `datasets/snap/query_examples.json` (question/SQL pairs for RAG) and DDL extracted via `src/database/ddl_extractor.py`
+- Training data source: `datasets/snap/training/` (docs + question/SQL pairs for RAG) and DDL extracted via `src/database/ddl_extractor.py`
 - **Table discovery is config-driven** via `datasets/snap/config.yaml`: `include_table_prefixes: ["*"]` includes all tables by default; `exclude_tables` and `exclude_table_prefixes` filter out Chainlit/system tables. To restrict training to specific prefixes, change to e.g. `["ref_", "md_"]`.
+
+Training functions in `llm_providers.py`:
+- `train_vanna_with_ddl(force_retrain)` — Startup training (DDL + docs + query examples), called once on first use
+- `train_vanna(force_retrain, reload_training_data)` — Reset training:
+  - Clears all training data, retrains DDL for all tables
+  - `reload_training_data=True`: Also reloads docs + query examples from `datasets/snap/training/`
+  - `reload_training_data=False`: DDL only, users add docs and examples manually via `/memsql add`
 
 ### Database Schema
 
@@ -145,7 +166,9 @@ Dataset configuration in `datasets/snap/config.yaml`:
 The UI supports slash commands routed through `ui/handlers/commands/router.py`:
 - `/help`, `/status`, `/database`, `/schema`, `/llm` - Info commands
 - `/filter status`, `/export`, `/clear` - Utility commands
-- `/mem add|list|reset`, `/prompt show|set|reset` - Memory/prompt management
+- `/mem` - KB ChromaDB sidebar panel (stats, entries, upload, delete, reset)
+- `/memsql` - Vanna ChromaDB sidebar panel (stats, entries, upload, delete, reset)
+- `/prompt sql|kb` - View current prompt (updates via /mem and /memsql panels)
 - `/? question` - Full thread insight with previous query context
 - `/?? question` - Knowledge base lookup only
 
@@ -162,6 +185,10 @@ The UI supports slash commands routed through `ui/handlers/commands/router.py`:
 
 - Custom system prompts: `src/core/prompts.py` (`VANNA_SQL_SYSTEM_PROMPT`, `AI_SUMMARY_PROMPT`)
 - Database DDL extraction: `src/database/ddl_extractor.py`
+- Vanna training: `src/services/llm_providers.py` (`train_vanna`, `train_vanna_with_ddl`)
+- Vanna training data loader: `src/services/llm_training.py` (`load_training_examples`)
+- Vanna API endpoints: `src/api/routers/llm.py` (`/vanna/stats`, `/vanna/list`, `/vanna/add`, `/vanna/reset`)
+- Memsql UI commands: `ui/handlers/commands/memsql_commands.py`
 - ETL pipeline: `src/etl/` (reader, transformer, validator, writer, loader)
-- Dataset config: `datasets/snap/` (data_mapping.json, query_examples.json)
+- Dataset config: `datasets/snap/` (data_mapping.json, config.yaml, training/)
 - CI/CD workflows: `.github/workflows/` (ci.yml, codeql.yml)
