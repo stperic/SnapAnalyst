@@ -68,28 +68,24 @@ def _generate_sql_sync(question: str, dataset: str | None = None, user_id: str |
     if not question or not question.strip():
         raise ValueError("Question cannot be empty")
 
-    from src.core.prompts import VANNA_SQL_SYSTEM_PROMPT
-    from src.database.prompt_manager import get_user_prompt
+    from src.database.prompt_manager import get_user_prompt, has_custom_prompt
     from src.services.llm_providers import _get_vanna_instance, set_request_custom_prompt
 
     vn = _get_vanna_instance()
 
-    # Get user's custom prompt or default
+    # Only set thread-local prompt when user has a CUSTOM prompt.
+    # The default system prompt is already in Vanna's initial_prompt config
+    # (positioned BEFORE DDL/docs for maximum LLM attention).
+    custom_prompt = None
     if user_id:
         try:
-            system_prompt = get_user_prompt(user_id, 'sql')
-            logger.info(f"Using custom SQL prompt for user {user_id}: {system_prompt[:100]}...")
+            if has_custom_prompt(user_id, 'sql'):
+                custom_prompt = get_user_prompt(user_id, 'sql')
+                logger.info(f"Using custom SQL prompt for user {user_id}: {custom_prompt[:100]}...")
         except Exception as e:
-            logger.warning(f"Failed to get custom prompt for {user_id}: {e}, using default")
-            system_prompt = VANNA_SQL_SYSTEM_PROMPT
-    else:
-        logger.info("No user_id provided, using default SQL prompt")
-        system_prompt = VANNA_SQL_SYSTEM_PROMPT
+            logger.warning(f"Failed to get custom prompt for {user_id}: {e}")
 
-    # THREAD-SAFE: Store prompt in thread-local storage instead of on shared instance
-    # This prevents cross-user contamination in multi-user environments
-    set_request_custom_prompt(system_prompt)
-    logger.debug(f"Set custom system prompt in thread-local storage (length: {len(system_prompt)} chars)")
+    set_request_custom_prompt(custom_prompt)
 
     try:
         sql = vn.generate_sql(question)

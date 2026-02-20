@@ -326,14 +326,13 @@ class OpenAIVanna(ChromaDB_VectorStore, OpenAI_Chat):
 
     def system_message(self, message: str) -> dict:
         """
-        Override system message method to append custom prompt to Vanna's DDL context.
+        Override to append per-user custom prompt (from /prompt set) to Vanna's context.
 
-        THREAD-SAFE: Reads from thread-local storage instead of instance attributes.
-        This prevents cross-user contamination in multi-user environments.
+        The base system prompt is already injected via initial_prompt in Vanna config,
+        so it appears BEFORE DDL/docs. This override only adds per-user customizations.
         """
         custom_prompt = get_request_custom_prompt()
         if custom_prompt:
-            # Append custom prompt to Vanna's generated context (which includes DDL from ChromaDB)
             combined = f"{message}\n\n{custom_prompt}"
             return {"role": "system", "content": combined}
         return {"role": "system", "content": message}
@@ -348,14 +347,13 @@ class AnthropicVanna(ChromaDB_VectorStore, Anthropic_Chat):
 
     def system_message(self, message: str) -> dict:
         """
-        Override system message method to append custom prompt to Vanna's DDL context.
+        Override to append per-user custom prompt (from /prompt set) to Vanna's context.
 
-        THREAD-SAFE: Reads from thread-local storage instead of instance attributes.
-        This prevents cross-user contamination in multi-user environments.
+        The base system prompt is already injected via initial_prompt in Vanna config,
+        so it appears BEFORE DDL/docs. This override only adds per-user customizations.
         """
         custom_prompt = get_request_custom_prompt()
         if custom_prompt:
-            # Append custom prompt to Vanna's generated context (which includes DDL from ChromaDB)
             combined = f"{message}\n\n{custom_prompt}"
             return {"role": "system", "content": combined}
         return {"role": "system", "content": message}
@@ -389,14 +387,13 @@ class AzureOpenAIVanna(ChromaDB_VectorStore, OpenAI_Chat):
 
     def system_message(self, message: str) -> dict:
         """
-        Override system message method to append custom prompt to Vanna's DDL context.
+        Override to append per-user custom prompt (from /prompt set) to Vanna's context.
 
-        THREAD-SAFE: Reads from thread-local storage instead of instance attributes.
-        This prevents cross-user contamination in multi-user environments.
+        The base system prompt is already injected via initial_prompt in Vanna config,
+        so it appears BEFORE DDL/docs. This override only adds per-user customizations.
         """
         custom_prompt = get_request_custom_prompt()
         if custom_prompt:
-            # Append custom prompt to Vanna's generated context (which includes DDL from ChromaDB)
             combined = f"{message}\n\n{custom_prompt}"
             return {"role": "system", "content": combined}
         return {"role": "system", "content": message}
@@ -464,21 +461,31 @@ def _get_vanna_instance():
     if _vanna_instance is not None:
         return _vanna_instance
 
+    from src.core.prompts import VANNA_SQL_SYSTEM_PROMPT
+
     provider = settings.llm_provider
     model = settings.sql_model
     chroma_path = f"{settings.vanna_chromadb_path}/vanna_ddl"
 
     logger.info(f"Creating Vanna 0.x instance with ChromaDB at {chroma_path}")
 
+    # Common config: initial_prompt places our system prompt BEFORE DDL/docs in the LLM context
+    base_config = {
+        'path': chroma_path,
+        'model': model,
+        'initial_prompt': VANNA_SQL_SYSTEM_PROMPT,
+        'n_results_sql': 5,
+        'n_results_documentation': 5,
+        'log_level': 'WARNING',
+    }
+
     if provider == "openai":
         if not settings.openai_api_key:
             raise ValueError("OpenAI API key not configured")
 
         _vanna_instance = OpenAIVanna(config={
+            **base_config,
             'api_key': settings.openai_api_key,
-            'model': model,
-            'path': chroma_path,
-            'log_level': 'WARNING',  # Suppress verbose SQL prompt/response logging
         })
         logger.info(f"Created OpenAI Vanna with model: {model}")
 
@@ -487,9 +494,7 @@ def _get_vanna_instance():
             raise ValueError("Azure OpenAI endpoint and API key not configured")
 
         _vanna_instance = AzureOpenAIVanna(config={
-            'model': model,  # Use sql_model from settings
-            'path': chroma_path,
-            'log_level': 'WARNING',  # Suppress verbose SQL prompt/response logging
+            **base_config,
         })
         logger.info(f"Created Azure OpenAI Vanna with model: {model}")
 
@@ -498,19 +503,15 @@ def _get_vanna_instance():
             raise ValueError("Anthropic API key not configured")
 
         _vanna_instance = AnthropicVanna(config={
+            **base_config,
             'api_key': settings.anthropic_api_key,
-            'model': model,
-            'path': chroma_path,
-            'log_level': 'WARNING',  # Suppress verbose SQL prompt/response logging
         })
         logger.info(f"Created Anthropic Vanna with model: {model}")
 
     elif provider == "ollama":
         _vanna_instance = OllamaVanna(config={
-            'model': model,
-            'path': chroma_path,
-            'temperature': 0.1,  # Lower temperature for SQL generation
-            'log_level': 'WARNING',  # Suppress verbose SQL prompt/response logging
+            **base_config,
+            'temperature': 0.1,
         })
         logger.info(f"Created Ollama Vanna with model: {model} at {settings.ollama_base_url}")
 
@@ -594,7 +595,7 @@ def train_vanna_with_ddl(force_retrain: bool = False):
             except Exception as e:
                 logger.warning(f"Failed to train {doc_path.name}: {e}")
 
-        # Add query examples from query_examples.json
+        # Add query examples from training data folder
         from src.services.llm_training import load_training_examples
         examples = load_training_examples()
         if examples:
@@ -603,12 +604,9 @@ def train_vanna_with_ddl(force_retrain: bool = False):
                 for ex in examples:
                     question = ex.get("question", "")
                     sql = ex.get("sql", "")
-                    explanation = ex.get("explanation", "")
                     if question and sql:
-                        # Append explanation to question for richer RAG matching
-                        train_question = f"{question} ({explanation})" if explanation else question
                         try:
-                            vn.train(question=train_question, sql=sql)
+                            vn.train(question=question, sql=sql)
                             trained_count += 1
                         except Exception as e:
                             logger.warning(f"Failed to train example '{question[:50]}': {e}")

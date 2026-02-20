@@ -803,9 +803,9 @@
                 },
                 "amount_error": {
                     "type": "DECIMAL(10,2)",
-                    "description": "Dollar error in benefits (positive=overpaid, negative=underpaid)",
+                    "description": "Dollar error in benefits (always positive/absolute). Direction from status: 2=Overissuance, 3=Underissuance",
                     "nullable": true,
-                    "range": "-1265 to 1265",
+                    "range": "0 to 1265",
                     "example": 0.00,
                     "source_field": "AMTERR"
                 },

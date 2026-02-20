@@ -24,7 +24,7 @@ TABLES AND RELATIONSHIPS:
 KEY HOUSEHOLD COLUMNS:
 - snap_benefit: QC-corrected correct benefit amount (use for analysis)
 - raw_benefit: Original agency-issued benefit (may differ from snap_benefit if error found)
-- amount_error: Dollar error = raw_benefit minus snap_benefit. Positive = overpaid, negative = underpaid. This is a SIGNED value.
+- amount_error: Dollar amount of benefit error (always positive/absolute). Direction comes from status: 2=Overissuance (overpaid), 3=Underissuance (underpaid).
 - gross_income: Total household income BEFORE deductions
 - net_income: Income AFTER all deductions (drives benefit calculation)
 - certified_household_size: Number of people in the SNAP unit (use for "household size")
@@ -137,4 +137,4 @@ For common analytical queries, use these pre-computed tables/views instead of re
 
 - v_household_summary: Household-level view with pre-classified household_type (Elderly Only, With Children, Single Adult, etc.), income_category (Earned Only, Unearned Only, Mixed, Zero Income), and error_classification (Above/Within Tolerance).
 
-- fns_error_rates_historical: Official FNS-published error rates. Compare against mv_state_error_rates to validate computed rates. Use state_name = 'National' for national rates.
+- fns_error_rates_historical: Official FNS-published error rates. Compare against mv_state_error_rates to validate computed rates. No 'National' row — for national totals, SUM() across all states.

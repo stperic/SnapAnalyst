@@ -86,9 +86,10 @@ SnapAnalyst leverages [**Vanna.AI**](https://vanna.ai/) for intelligent natural 
 
 ## Use Cases
 
-- **Policy Analysts**: Error pattern analysis, benefit trends, state-level comparisons
-- **Researchers**: Demographic analysis, income studies, quality control investigations
-- **Program Administrators**: State performance monitoring, caseload management, data exports
+- **State QC Teams**: Identify top error elements by dollar impact, prioritize corrective actions, track payment error rate trends year over year
+- **Policy Analysts**: Compare state performance against national benchmarks, analyze demographic patterns, study benefit adequacy
+- **Program Administrators**: Monitor error rates, export data for internal reporting and corrective action planning, augment federal data with state-specific datasets
+- **Researchers**: Query SNAP QC microdata without data preparation, explore income and eligibility patterns across fiscal years
 
 ## Quick Start with Docker
 
@@ -233,7 +234,7 @@ The system scans the training folder at startup. No naming conventions required 
 | `.md`, `.txt` | Documentation — chunked and stored in ChromaDB for RAG retrieval during SQL generation | Plain text or Markdown |
 | `.json` | Question/SQL pairs — taught to Vanna as examples | `{"example_queries": [{"question": "...", "sql": "...", "explanation": "..."}]}` |
 
-The optional `explanation` field in query examples is appended to the question during training, giving Vanna richer context for RAG matching (e.g., "Show errors by type (JOIN ref_element for human-readable descriptions)").
+The optional `explanation` field in query examples is stored for documentation purposes but is not used during training. Only the `question` and `sql` fields are sent to Vanna for RAG matching.
 
 #### System Prompts Folder
 
@@ -244,7 +245,7 @@ The optional `explanation` field in query examples is appended to the question d
 
 #### Customizing System Prompts
 
-The system prompts are the most important files for SQL generation quality. The SNAP dataset includes a `sql_system_prompt.txt` with domain-specific formulas (error rate calculations, tolerance thresholds, business rules). When replacing the dataset, write your own prompts with your domain knowledge.
+The system prompts are the most important files for SQL generation quality. The SNAP dataset includes a `sql_system_prompt.txt` with domain-specific rules (pre-computed views, tolerance thresholds, SQL conventions). When replacing the dataset, write your own prompts with your domain knowledge.
 
 **Example `sql_system_prompt.txt` for a custom dataset:**
 ```
@@ -354,7 +355,10 @@ The ETL pipeline transforms wide-format CSV (1,200+ columns) into a normalized s
 | `households` | Core case data | state_name, snap_benefit, income totals |
 | `household_members` | Individual member data | age, wages, employment status |
 | `qc_errors` | Quality control errors | element_code, nature_code, error_amount |
-| `ref_*` (20+ tables) | Code lookups | Maps codes to descriptions |
+| `ref_*` (25+ tables) | Code lookups | Maps codes to descriptions |
+| `mv_state_error_rates` | Pre-computed state error rates | payment_error_rate, overpayment_rate |
+| `mv_error_element_rollup` | Error element dollar impact | weighted_error_dollars by element |
+| `mv_demographic_profile` | SNAP participant demographics | age, race, citizenship, education |
 
 **Storage**: All data is stored in Docker volumes that persist between restarts:
 - `snapanalyst_postgres_data` - PostgreSQL database
@@ -627,24 +631,30 @@ Original data provided by the USDA Food and Nutrition Service:
 
 ### Data Files
 
-| Fiscal Year | Compressed (ZIP) | Uncompressed (CSV) | Records |
-|-------------|------------------|-----------------------|---------|
-| FY2021 | ~1.1 MB | ~13.7 MB | ~50,000 |
-| FY2022 | ~4.4 MB | ~57.8 MB | ~200,000 |
-| FY2023 | ~4.8 MB | ~62.7 MB | ~220,000 |
+| Fiscal Year | Compressed (ZIP) | Uncompressed (CSV) | Households |
+|-------------|------------------|-----------------------|------------|
+| FY2021 | ~1.1 MB | ~13.7 MB | ~10,000 * |
+| FY2022 | ~4.4 MB | ~57.8 MB | ~41,000 |
+| FY2023 | ~4.8 MB | ~62.7 MB | ~44,000 |
+
+\* FY2021 reflects a reduced national sample due to COVID-19 pandemic QC review flexibilities. See FNS release notes for that year.
 
 The data includes:
 - **Households**: Demographics, income, benefits, case status
 - **Household Members**: Age, employment, income sources
 - **QC Errors**: Error findings, amounts, responsible agencies
 
+**Note on sampling weights**: The SNAP QC public use files are stratified random samples, not a census of all SNAP cases. Accurate national and state error rate calculations require applying FNS-provided sampling weights (`household_weight`). SnapAnalyst's pre-computed views (`mv_state_error_rates`, `mv_error_element_rollup`) use weighted calculations. Raw row counts and unweighted averages should not be used for policy conclusions.
+
 ### Pre-populated Data
 
-SnapAnalyst comes pre-populated with the latest SNAP QC data from **FY2021, FY2022, and FY2023**. On first Docker startup, the system automatically downloads and loads this data into the PostgreSQL database, giving you immediate access to over 470,000 household records.
+SnapAnalyst comes pre-populated with the latest SNAP QC data from **FY2021, FY2022, and FY2023**. On first Docker startup, the system automatically downloads and loads this data into the PostgreSQL database, giving you immediate access to ~95,000 household records across all 53 SNAP reporting jurisdictions (50 states, DC, Guam, and the U.S. Virgin Islands).
 
 ### Adding Custom Data (Advanced Users)
 
-SnapAnalyst automatically discovers and trains Vanna.AI on custom tables and views that follow naming conventions. This makes it easy to extend the platform with your own analysis tables, derived datasets, or state-specific data.
+States and analysts can augment the federal QC public use data with their own datasets — state-specific error analysis, internal reviews, regional breakdowns, or any supplemental tables. Custom tables are loaded into the same PostgreSQL database alongside the public data, and the AI automatically learns to query across both. This means analysts can ask questions that combine federal and state data in a single query.
+
+SnapAnalyst automatically discovers and trains Vanna.AI on custom tables and views that follow naming conventions:
 
 #### Naming Conventions
 
@@ -670,9 +680,9 @@ CREATE TABLE ref_county_codes (
 );
 ```
 
-**State-Specific Tables**: Use `md_*`, `ca_*`, etc. prefix
+**State-Specific Tables**: Use a state abbreviation prefix (e.g., `md_*`, `ca_*`)
 ```sql
--- State-prefixed tables are automatically included
+-- The md_* tables shipped with SnapAnalyst are Maryland-specific examples
 CREATE TABLE md_error_cases (
     fiscal_year INT,
     jurisdiction VARCHAR(100),
@@ -733,7 +743,7 @@ Use state_name to join with households.state_name for cross-referencing.
 
 COMMON QUERIES:
 - Error rates by state: SELECT state_name, error_rate FROM state_error_rates WHERE fiscal_year = 2023 ORDER BY error_rate DESC
-- States above national average: SELECT * FROM state_error_rates WHERE error_rate > (SELECT error_rate FROM state_error_rates WHERE state_name = ''U.S. TOTAL (National Average)'' AND fiscal_year = 2023) AND fiscal_year = 2023
+- States above national average: WITH national AS (SELECT SUM(error_dollars) / NULLIF(SUM(total_benefits), 0) * 100 AS national_rate FROM state_error_rates WHERE fiscal_year = 2023) SELECT s.state_name, s.error_rate FROM state_error_rates s CROSS JOIN national n WHERE s.fiscal_year = 2023 AND s.error_rate > n.national_rate
 - Liability states: SELECT state_name, error_rate FROM state_error_rates WHERE liability_status IS NOT NULL';
 ```
 

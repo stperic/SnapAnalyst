@@ -460,36 +460,13 @@ async def get_example_queries():
         List of example queries with descriptions
     """
     try:
-        # Query examples in the training data folder
-        from src.core.config import settings
-        examples_path = Path(settings.sql_training_data_path) / "query_examples.json"
+        from src.services.llm_training import load_training_examples
 
-        if not examples_path.exists():
-            # Return default examples if file doesn't exist yet
-            return {
-                "examples": [
-                    {
-                        "question": "What is the average SNAP benefit by state in 2023?",
-                        "sql": "SELECT state_code, state_name, AVG(snap_benefit) as avg_benefit, COUNT(*) as households FROM households WHERE fiscal_year = 2023 GROUP BY state_code, state_name ORDER BY avg_benefit DESC LIMIT 10",
-                        "category": "benefits"
-                    },
-                    {
-                        "question": "How many households have children?",
-                        "sql": "SELECT COUNT(*) as households_with_children FROM households WHERE num_children > 0 AND fiscal_year = 2023",
-                        "category": "demographics"
-                    },
-                    {
-                        "question": "What are the top income sources for SNAP households?",
-                        "sql": "SELECT SUM(wages) as total_wages, SUM(social_security) as total_ss, SUM(ssi) as total_ssi FROM household_members m JOIN households h ON (h.case_id = m.case_id AND h.fiscal_year = m.fiscal_year) WHERE h.fiscal_year = 2023",
-                        "category": "income"
-                    }
-                ]
-            }
+        examples = load_training_examples()
+        if not examples:
+            return {"example_queries": []}
 
-        with open(examples_path) as f:
-            examples = json.load(f)
-
-        return examples
+        return {"example_queries": examples}
 
     except Exception as e:
         logger.error(f"Error loading example queries: {e}")

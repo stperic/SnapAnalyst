@@ -386,7 +386,7 @@ COMMENT ON COLUMN households.gross_income IS 'Total monthly gross income BEFORE 
 COMMENT ON COLUMN households.net_income IS 'Monthly income AFTER deductions. Use gross_income for total/gross income queries';
 COMMENT ON COLUMN households.snap_benefit IS 'QC-calculated CORRECT SNAP benefit amount. This is the accurate amount. Use this for benefit analysis. raw_benefit is the original (possibly incorrect) amount';
 COMMENT ON COLUMN households.raw_benefit IS 'Originally issued SNAP benefit BEFORE QC correction (may be incorrect). Use snap_benefit for the correct amount';
-COMMENT ON COLUMN households.amount_error IS 'Dollar amount of benefit error in households table (positive=overpaid, negative=underpaid). For individual error amounts see qc_errors.error_amount';
+COMMENT ON COLUMN households.amount_error IS 'Dollar amount of benefit error (always positive/absolute). Direction is in status field: 2=Overissuance, 3=Underissuance. For individual error amounts see qc_errors.error_amount';
 COMMENT ON COLUMN households.num_elderly IS 'Count of members age 60+';
 COMMENT ON COLUMN households.num_children IS 'Count of members under 18';
 COMMENT ON COLUMN households.certified_household_size IS 'SNAP-certified household size for benefit calculation. Use this for "household size" queries. raw_household_size is before certification adjustments';
@@ -398,8 +398,6 @@ COMMENT ON COLUMN households.last_certification_date IS 'Last certification date
 -- Indexes for common query patterns
 CREATE INDEX IF NOT EXISTS idx_household_state_year ON households(state_name, fiscal_year);
 CREATE INDEX IF NOT EXISTS idx_household_fiscal_year ON households(fiscal_year);
-CREATE INDEX IF NOT EXISTS idx_household_status ON households(status);
-CREATE INDEX IF NOT EXISTS idx_household_snap_benefit ON households(snap_benefit);
 
 
 -- ----------------------------------------------------------------------------
@@ -552,7 +550,6 @@ COMMENT ON COLUMN qc_errors.error_finding IS 'Error finding: 2=Overissuance, 3=U
 CREATE INDEX IF NOT EXISTS idx_error_fiscal_year ON qc_errors(fiscal_year);
 CREATE INDEX IF NOT EXISTS idx_error_element ON qc_errors(element_code);
 CREATE INDEX IF NOT EXISTS idx_error_nature ON qc_errors(nature_code);
-CREATE INDEX IF NOT EXISTS idx_error_amount ON qc_errors(error_amount);
 
 
 -- ============================================================================
@@ -685,8 +682,8 @@ CREATE TABLE IF NOT EXISTS fns_error_rates_historical (
 COMMENT ON TABLE fns_error_rates_historical IS 'Official FNS-published SNAP QC error rates from annual reports.
 These are FINAL official rates after FNS arbitration and adjustments.
 Compare with mv_state_error_rates (computed from raw QC sample) to identify differences.
-Use state_name = ''National'' for national-level rates.
-Example: SELECT fiscal_year, payment_error_rate FROM fns_error_rates_historical WHERE state_name = ''National'' ORDER BY fiscal_year';
+No National row exists — for national totals use SUM() across all states.
+Example: SELECT fiscal_year, SUM(payment_error_rate * total_sample_cases) / NULLIF(SUM(total_sample_cases), 0) FROM fns_error_rates_historical GROUP BY fiscal_year ORDER BY fiscal_year';
 
 CREATE INDEX IF NOT EXISTS idx_fns_historical_fy ON fns_error_rates_historical(fiscal_year);
 
@@ -707,14 +704,14 @@ WITH base AS (
         COUNT(*) FILTER (WHERE h.status = 3) AS underissuance_sample_cases,
         SUM(h.household_weight) AS estimated_total_households,
         SUM(h.snap_benefit * h.household_weight) AS total_weighted_benefits,
-        SUM(CASE WHEN ABS(h.amount_error) > COALESCE(t.threshold_amount, 54)
-            THEN ABS(h.amount_error) * h.household_weight ELSE 0 END
+        SUM(CASE WHEN h.status IN (2, 3) AND h.amount_error > COALESCE(t.threshold_amount, 54)
+            THEN h.amount_error * h.household_weight ELSE 0 END
         ) AS total_weighted_error_dollars,
-        SUM(CASE WHEN h.amount_error > COALESCE(t.threshold_amount, 54)
+        SUM(CASE WHEN h.status = 2 AND h.amount_error > COALESCE(t.threshold_amount, 54)
             THEN h.amount_error * h.household_weight ELSE 0 END
         ) AS weighted_overpayment_dollars,
-        SUM(CASE WHEN h.amount_error < -COALESCE(t.threshold_amount, 54)
-            THEN ABS(h.amount_error) * h.household_weight ELSE 0 END
+        SUM(CASE WHEN h.status = 3 AND h.amount_error > COALESCE(t.threshold_amount, 54)
+            THEN h.amount_error * h.household_weight ELSE 0 END
         ) AS weighted_underpayment_dollars,
         SUM(h.snap_benefit * h.household_weight) / NULLIF(SUM(h.household_weight), 0) AS avg_weighted_benefit,
         SUM(h.gross_income * h.household_weight) / NULLIF(SUM(h.household_weight), 0) AS avg_weighted_gross_income

@@ -335,19 +335,10 @@ function setupEnterToSend() {
                 e.stopPropagation();
 
                 const form = textarea.closest('form');
-                const submitBtn = form?.querySelector('button[type="submit"]') ||
-                    form?.querySelector('button:last-of-type');
-
-                if (submitBtn) {
-                    submitBtn.click();
-                } else {
-                    const parent = textarea.parentElement?.parentElement?.parentElement;
-                    const buttons = parent?.querySelectorAll('button');
-                    if (buttons?.length > 0) {
-                        buttons[buttons.length - 1].click();
-                    } else if (form) {
-                        form.requestSubmit();
-                    }
+                if (form) {
+                    // Use requestSubmit to trigger native form submission
+                    // This avoids accidentally clicking starter buttons
+                    form.requestSubmit();
                 }
             }
         }, true);

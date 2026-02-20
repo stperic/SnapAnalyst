@@ -164,7 +164,7 @@ async def retrain_service() -> TrainingStatusResponse:
 
     This will:
     1. Reload the database schema from data_mapping.json
-    2. Reload query examples from query_examples.json
+    2. Reload query examples from datasets/snap/training/
     3. Retrain the LLM with updated information
 
     Use this after updating schema documentation or adding new query examples.

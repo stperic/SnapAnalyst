@@ -171,9 +171,9 @@ class TestPromptConstants:
     def test_vanna_sql_prompt_contains_business_rules(self):
         """Test Vanna SQL prompt contains critical business rules"""
         assert "case_classification = 1" in VANNA_SQL_SYSTEM_PROMPT
-        assert "$54" in VANNA_SQL_SYSTEM_PROMPT  # Tolerance threshold
-        assert "household_weight" in VANNA_SQL_SYSTEM_PROMPT
-        assert "Payment Error Rate" in VANNA_SQL_SYSTEM_PROMPT
+        assert "ref_tolerance_threshold" in VANNA_SQL_SYSTEM_PROMPT
+        assert "mv_state_error_rates" in VANNA_SQL_SYSTEM_PROMPT
+        assert "ALWAYS USE THESE FIRST" in VANNA_SQL_SYSTEM_PROMPT
 
     def test_kb_insight_prompt_is_brief(self):
         """Test KB insight instruction emphasizes brevity"""

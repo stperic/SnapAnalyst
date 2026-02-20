@@ -266,16 +266,20 @@ async def set_starters():
     """
     return [
         cl.Starter(
-            label="Error Rates by State",
-            message="What is the payment error rate in 2023 for each state?",
+            label="Payment Error Rates",
+            message="What is the payment error rate by state for FY2023, including overpayment and underpayment rates?",
         ),
         cl.Starter(
-            label="Root Causes",
-            message="What are the top 3 causes of payment errors?",
+            label="Top Overpayment Drivers",
+            message="Which error elements drive the most overpayment dollars in FY2023? Rank by weighted dollar impact for corrective action prioritization.",
         ),
         cl.Starter(
-            label="Error Trends",
-            message="How have error rates changed from 2021 to 2023?",
+            label="Year-over-Year Trends",
+            message="Which states improved their payment error rate from FY2022 to FY2023, and by how much?",
+        ),
+        cl.Starter(
+            label="Corrective Action ROI",
+            message="Rank each error element by its contribution to the FY2023 overpayment rate with cumulative impact, so I can see which errors to fix first.",
         ),
     ]
 

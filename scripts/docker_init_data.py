@@ -264,6 +264,18 @@ def refresh_materialized_views():
                     print(f"  ✗ {view}: {e}")
 
         print("  ✓ All materialized views refreshed!")
+
+        # Run ANALYZE on key tables and views so the query planner has fresh statistics
+        print("  Running ANALYZE on key tables...")
+        with _get_engine().connect() as conn:
+            for table in ['households', 'household_members', 'qc_errors'] + views:
+                try:
+                    conn.execute(text(f"ANALYZE {table}"))
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
+            print("  ✓ ANALYZE complete")
+
     except Exception as e:
         print(f"  WARNING: Could not refresh materialized views: {e}")
         print("  Run manually: REFRESH MATERIALIZED VIEW <view_name>")

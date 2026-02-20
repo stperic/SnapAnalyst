@@ -138,7 +138,7 @@
     {
       "question": "Compare the original benefit to the corrected benefit by state",
       "sql": "SELECT state_name, SUM(raw_benefit * household_weight) / NULLIF(SUM(household_weight), 0) AS avg_original_benefit, SUM(snap_benefit * household_weight) / NULLIF(SUM(household_weight), 0) AS avg_corrected_benefit, SUM(amount_error * household_weight) / NULLIF(SUM(household_weight), 0) AS avg_error FROM households WHERE amount_error != 0 GROUP BY state_name ORDER BY avg_error DESC",
-      "explanation": "Benefit accuracy with weighted averages; raw_benefit is agency-issued, snap_benefit is QC-corrected, amount_error is the signed difference"
+      "explanation": "Benefit accuracy with weighted averages; raw_benefit is agency-issued, snap_benefit is QC-corrected, amount_error is absolute dollar error"
     },
     {
       "question": "Show error trends by fiscal year and category",
@@ -172,8 +172,8 @@
     },
     {
       "question": "Which states have error rates above the national average?",
-      "sql": "WITH national_avg AS (SELECT (SUM(CASE WHEN ABS(amount_error) > 54 THEN ABS(amount_error) * household_weight ELSE 0 END) / NULLIF(SUM(snap_benefit * household_weight), 0)) * 100 AS avg_rate FROM households WHERE case_classification = 1 AND fiscal_year = 2023), state_rates AS (SELECT state_name, (SUM(CASE WHEN ABS(amount_error) > 54 THEN ABS(amount_error) * household_weight ELSE 0 END) / NULLIF(SUM(snap_benefit * household_weight), 0)) * 100 AS state_rate FROM households WHERE case_classification = 1 AND fiscal_year = 2023 GROUP BY state_name) SELECT s.state_name, ROUND(s.state_rate, 2) AS state_error_rate, ROUND(n.avg_rate, 2) AS national_avg_rate FROM state_rates s CROSS JOIN national_avg n WHERE s.state_rate > n.avg_rate ORDER BY s.state_rate DESC",
-      "explanation": "CTE (WITH clause) pattern for comparative analysis; first CTE computes weighted national average, second per-state, then filter above average"
+      "sql": "WITH national AS (SELECT SUM(total_weighted_error_dollars) / NULLIF(SUM(total_weighted_benefits), 0) * 100 AS national_rate FROM mv_state_error_rates WHERE fiscal_year = 2023) SELECT s.state_name, s.payment_error_rate AS state_error_rate, ROUND(n.national_rate, 4) AS national_avg_rate FROM mv_state_error_rates s CROSS JOIN national n WHERE s.fiscal_year = 2023 AND s.payment_error_rate > n.national_rate ORDER BY s.payment_error_rate DESC",
+      "explanation": "Use mv_state_error_rates for state vs national comparison; national rate computed from weighted totals across all states; CTE pattern with CROSS JOIN"
     },
     {
       "question": "Which states have more than 50 error cases in the sample?",
@@ -197,8 +197,8 @@
     },
     {
       "question": "What is the overpayment rate by state for FY2023?",
-      "sql": "SELECT state_name, (SUM(CASE WHEN amount_error > 54 THEN amount_error * household_weight ELSE 0 END) / NULLIF(SUM(snap_benefit * household_weight), 0)) * 100 AS overpayment_rate FROM households WHERE case_classification = 1 AND fiscal_year = 2023 GROUP BY state_name ORDER BY overpayment_rate DESC",
-      "explanation": "Overpayment-only rate; amount_error > 0 means overpaid; only count errors exceeding $54 threshold for FY2023"
+      "sql": "SELECT state_name, (SUM(CASE WHEN status = 2 AND amount_error > 54 THEN amount_error * household_weight ELSE 0 END) / NULLIF(SUM(snap_benefit * household_weight), 0)) * 100 AS overpayment_rate FROM households WHERE case_classification = 1 AND fiscal_year = 2023 GROUP BY state_name ORDER BY overpayment_rate DESC",
+      "explanation": "Overpayment-only rate; status=2 means Overissuance; amount_error is always positive, direction from status field"
     },
     {
       "question": "Compare payment error rates across all fiscal years",
@@ -212,8 +212,8 @@
     },
     {
       "question": "What is the underpayment error rate for FY2023?",
-      "sql": "SELECT (SUM(CASE WHEN amount_error < -54 THEN ABS(amount_error) * household_weight ELSE 0 END) / NULLIF(SUM(snap_benefit * household_weight), 0)) * 100 AS underpayment_rate FROM households WHERE case_classification = 1 AND fiscal_year = 2023",
-      "explanation": "Underpayment rate; amount_error < 0 means household received too little; threshold comparison on negative side: < -54"
+      "sql": "SELECT (SUM(CASE WHEN status = 3 AND amount_error > 54 THEN amount_error * household_weight ELSE 0 END) / NULLIF(SUM(snap_benefit * household_weight), 0)) * 100 AS underpayment_rate FROM households WHERE case_classification = 1 AND fiscal_year = 2023",
+      "explanation": "Underpayment rate; status=3 means Underissuance; amount_error is always positive, direction from status field"
     },
     {
       "question": "Show average benefits by household size and state",
@@ -222,13 +222,23 @@
     },
     {
       "question": "Which error elements drive the most overpayment dollars?",
-      "sql": "SELECT re.description AS error_type, re.category, SUM(e.error_amount * h.household_weight) AS weighted_error_dollars, COUNT(*) AS sample_count FROM qc_errors e JOIN households h ON e.case_id = h.case_id AND e.fiscal_year = h.fiscal_year JOIN ref_element re ON e.element_code = re.code JOIN ref_error_finding rf ON e.error_finding = rf.code WHERE rf.description = 'Overissuance' GROUP BY re.description, re.category ORDER BY weighted_error_dollars DESC",
-      "explanation": "Corrective action prioritization; rank error elements by weighted dollar impact to identify which errors to target first for reducing overpayment rate"
+      "sql": "SELECT re.description AS error_type, re.category, SUM(e.error_amount * h.household_weight) AS weighted_error_dollars, COUNT(*) AS sample_count FROM qc_errors e JOIN households h ON e.case_id = h.case_id AND e.fiscal_year = h.fiscal_year JOIN ref_element re ON e.element_code = re.code JOIN ref_error_finding rf ON e.error_finding = rf.code WHERE rf.description IN ('Overissuance', 'Ineligible') AND h.case_classification = 1 GROUP BY re.description, re.category ORDER BY weighted_error_dollars DESC",
+      "explanation": "Corrective action prioritization; rank error elements by weighted dollar impact; includes both Overissuance and Ineligible (entire benefit is error) since FNS counts both in overpayment rate"
+    },
+    {
+      "question": "Which error elements drive the most overpayment dollars in FY2023? Rank by weighted dollar impact for corrective action prioritization.",
+      "sql": "SELECT re.description AS error_type, re.category, SUM(e.error_amount * h.household_weight) AS weighted_error_dollars, COUNT(*) AS sample_count FROM qc_errors e JOIN households h ON e.case_id = h.case_id AND e.fiscal_year = h.fiscal_year JOIN ref_element re ON e.element_code = re.code JOIN ref_error_finding rf ON e.error_finding = rf.code WHERE rf.description IN ('Overissuance', 'Ineligible') AND h.case_classification = 1 AND h.fiscal_year = 2023 GROUP BY re.description, re.category ORDER BY weighted_error_dollars DESC",
+      "explanation": "Corrective action prioritization for FY2023; rank error elements by weighted dollar impact to identify which errors to target first; includes Overissuance + Ineligible since FNS counts both in overpayment rate; case_classification = 1 for official sample; household_weight for population-level dollar estimates"
     },
     {
       "question": "Rank the top error elements by their contribution to the overpayment rate with cumulative impact",
-      "sql": "WITH error_impact AS (SELECT re.description AS error_type, re.category, SUM(e.error_amount * h.household_weight) AS weighted_error_dollars FROM qc_errors e JOIN households h ON e.case_id = h.case_id AND e.fiscal_year = h.fiscal_year JOIN ref_element re ON e.element_code = re.code JOIN ref_error_finding rf ON e.error_finding = rf.code WHERE rf.description = 'Overissuance' AND h.case_classification = 1 AND h.fiscal_year = 2023 GROUP BY re.description, re.category), total AS (SELECT SUM(snap_benefit * household_weight) AS total_weighted_benefits FROM households WHERE case_classification = 1 AND fiscal_year = 2023) SELECT ei.error_type, ei.category, ROUND((ei.weighted_error_dollars / NULLIF(t.total_weighted_benefits, 0)) * 100, 4) AS contribution_to_error_rate, ROUND(SUM(ei.weighted_error_dollars) OVER (ORDER BY ei.weighted_error_dollars DESC) / NULLIF(t.total_weighted_benefits, 0) * 100, 4) AS cumulative_error_rate FROM error_impact ei CROSS JOIN total t ORDER BY ei.weighted_error_dollars DESC",
-      "explanation": "Corrective action planning with cumulative impact; shows which errors to fix first to maximize error rate reduction; uses CTE + window function for running total"
+      "sql": "WITH error_impact AS (SELECT element_description AS error_type, element_category, SUM(sample_error_count) AS sample_error_count, SUM(weighted_error_dollars) AS weighted_error_dollars FROM mv_error_element_rollup WHERE fiscal_year = 2023 AND finding_type IN ('Overissuance', 'Ineligible') GROUP BY element_description, element_category), total AS (SELECT SUM(total_weighted_benefits) AS total_weighted_benefits FROM mv_state_error_rates WHERE fiscal_year = 2023) SELECT ei.error_type, ei.element_category, ei.sample_error_count, ROUND((ei.weighted_error_dollars / NULLIF(t.total_weighted_benefits, 0)) * 100, 4) AS contribution_to_error_rate, ROUND(SUM(ei.weighted_error_dollars) OVER (ORDER BY ei.weighted_error_dollars DESC) / NULLIF(t.total_weighted_benefits, 0) * 100, 4) AS cumulative_error_rate FROM error_impact ei CROSS JOIN total t ORDER BY ei.weighted_error_dollars DESC",
+      "explanation": "Corrective action planning with cumulative impact using pre-computed views; mv_error_element_rollup for error dollars, SUM(total_weighted_benefits) from mv_state_error_rates for national denominator — there is no 'National' row, so always SUM across all states"
+    },
+    {
+      "question": "Rank each error element by its contribution to the FY2023 overpayment rate with cumulative impact, so I can see which errors to fix first",
+      "sql": "WITH error_impact AS (SELECT element_description AS error_type, element_category, SUM(sample_error_count) AS sample_error_count, SUM(weighted_error_dollars) AS weighted_error_dollars FROM mv_error_element_rollup WHERE fiscal_year = 2023 AND finding_type IN ('Overissuance', 'Ineligible') GROUP BY element_description, element_category), total AS (SELECT SUM(total_weighted_benefits) AS total_weighted_benefits FROM mv_state_error_rates WHERE fiscal_year = 2023) SELECT ei.error_type, ei.element_category, ei.sample_error_count, ei.weighted_error_dollars, ROUND((ei.weighted_error_dollars / NULLIF(t.total_weighted_benefits, 0)) * 100, 4) AS contribution_to_overpayment_rate, ROUND(SUM(ei.weighted_error_dollars) OVER (ORDER BY ei.weighted_error_dollars DESC) / NULLIF(t.total_weighted_benefits, 0) * 100, 4) AS cumulative_overpayment_rate, ROUND((ei.weighted_error_dollars / NULLIF(SUM(ei.weighted_error_dollars) OVER (), 0)) * 100, 2) AS pct_of_total_overpayment FROM error_impact ei CROSS JOIN total t ORDER BY ei.weighted_error_dollars DESC",
+      "explanation": "Corrective action prioritization using pre-computed views only; national denominator = SUM(total_weighted_benefits) from mv_state_error_rates (no 'National' row exists — always SUM across all states); includes Overissuance + Ineligible; cumulative_overpayment_rate for 80/20 cutoff; pct_of_total_overpayment for each element's share"
     },
     {
       "question": "What is the 2-year rolling payment error rate for FY2022-2023?",
@@ -257,9 +267,19 @@
       "explanation": "Pre-computed error rates from mv_state_error_rates materialized view; no need to re-derive the formula; includes all four rate types"
     },
     {
+      "question": "What is the payment error rate by state for FY2023, including overpayment and underpayment rates?",
+      "sql": "SELECT state_name, payment_error_rate, overpayment_rate, underpayment_rate, case_error_rate, total_sample_cases FROM mv_state_error_rates WHERE fiscal_year = 2023 ORDER BY payment_error_rate DESC",
+      "explanation": "ALWAYS use mv_state_error_rates for state-level error rates — it has pre-computed payment_error_rate, overpayment_rate, underpayment_rate, and case_error_rate using the official USDA formula with correct tolerance thresholds and household_weight; never re-derive the formula from the households table when this view is available"
+    },
+    {
       "question": "Which states improved their error rate from FY2022 to FY2023?",
-      "sql": "SELECT r23.state_name, r22.payment_error_rate AS fy2022_rate, r23.payment_error_rate AS fy2023_rate, ROUND(r23.payment_error_rate - r22.payment_error_rate, 4) AS rate_change FROM mv_state_error_rates r23 JOIN mv_state_error_rates r22 ON r23.state_name = r22.state_name AND r22.fiscal_year = 2022 WHERE r23.fiscal_year = 2023 AND r23.payment_error_rate < r22.payment_error_rate ORDER BY rate_change ASC",
-      "explanation": "Year-over-year improvement analysis using self-join on mv_state_error_rates; negative rate_change means improvement"
+      "sql": "SELECT r23.state_name, r22.payment_error_rate AS fy2022_rate, r23.payment_error_rate AS fy2023_rate, ROUND(r22.payment_error_rate - r23.payment_error_rate, 4) AS improvement, r23.total_sample_cases AS fy2023_sample_size FROM mv_state_error_rates r23 JOIN mv_state_error_rates r22 ON r23.state_name = r22.state_name AND r22.fiscal_year = 2022 WHERE r23.fiscal_year = 2023 AND r23.payment_error_rate < r22.payment_error_rate ORDER BY improvement DESC",
+      "explanation": "Year-over-year improvement analysis using self-join on mv_state_error_rates; improvement = FY2022 minus FY2023 (positive = improved); total_sample_cases for statistical reliability of small-state swings"
+    },
+    {
+      "question": "Which states improved their payment error rate from FY2022 to FY2023, and by how much?",
+      "sql": "SELECT r23.state_name, r22.payment_error_rate AS fy2022_rate, r23.payment_error_rate AS fy2023_rate, ROUND(r22.payment_error_rate - r23.payment_error_rate, 4) AS improvement, r23.total_sample_cases AS fy2023_sample_size FROM mv_state_error_rates r23 JOIN mv_state_error_rates r22 ON r23.state_name = r22.state_name AND r22.fiscal_year = 2022 WHERE r23.fiscal_year = 2023 AND r23.payment_error_rate < r22.payment_error_rate ORDER BY improvement DESC",
+      "explanation": "ALWAYS use mv_state_error_rates for state error rate comparisons — pre-computed with official USDA formula; self-join compares FY2022 vs FY2023; improvement shown as positive number (FY2022 minus FY2023); includes sample size for statistical reliability context; ordered by biggest improvement first"
     },
     {
       "question": "Show states with error rates above the national average using the pre-computed view",
@@ -278,8 +298,33 @@
     },
     {
       "question": "What are the top error elements driving overpayment in my state?",
-      "sql": "SELECT element_description, element_category, SUM(weighted_error_dollars) AS total_weighted_dollars, SUM(sample_error_count) AS total_errors FROM mv_error_element_rollup WHERE fiscal_year = 2023 AND finding_type = 'Overissuance' GROUP BY element_description, element_category ORDER BY total_weighted_dollars DESC LIMIT 10",
-      "explanation": "Corrective action prioritization from mv_error_element_rollup; rank by weighted dollars to find highest-impact errors to target"
+      "sql": "SELECT element_description, element_category, SUM(weighted_error_dollars) AS total_weighted_dollars, SUM(sample_error_count) AS total_errors FROM mv_error_element_rollup WHERE fiscal_year = 2023 AND finding_type IN ('Overissuance', 'Ineligible') GROUP BY element_description, element_category ORDER BY total_weighted_dollars DESC LIMIT 10",
+      "explanation": "Corrective action prioritization from mv_error_element_rollup; includes Overissuance + Ineligible since FNS counts both in overpayment rate"
+    },
+    {
+      "question": "What is the payment error rate for Texas?",
+      "sql": "SELECT state_name, fiscal_year, payment_error_rate, overpayment_rate, underpayment_rate, case_error_rate, total_sample_cases FROM mv_state_error_rates WHERE state_name = 'Texas' ORDER BY fiscal_year",
+      "explanation": "State-specific error rates from mv_state_error_rates; show all available fiscal years for trend context"
+    },
+    {
+      "question": "Show error rates for California for FY2023",
+      "sql": "SELECT state_name, payment_error_rate, overpayment_rate, underpayment_rate, case_error_rate, total_sample_cases, total_weighted_benefits, total_weighted_error_dollars FROM mv_state_error_rates WHERE state_name = 'California' AND fiscal_year = 2023",
+      "explanation": "Single-state lookup from mv_state_error_rates; include dollar totals for context"
+    },
+    {
+      "question": "What are the top overpayment error elements for Georgia?",
+      "sql": "SELECT element_description, element_category, SUM(weighted_error_dollars) AS total_weighted_dollars, SUM(sample_error_count) AS total_errors FROM mv_error_element_rollup WHERE fiscal_year = 2023 AND state_name = 'Georgia' AND finding_type IN ('Overissuance', 'Ineligible') GROUP BY element_description, element_category ORDER BY total_weighted_dollars DESC LIMIT 10",
+      "explanation": "State-specific corrective action priorities from mv_error_element_rollup; view already has state_name column — no need to join base tables"
+    },
+    {
+      "question": "Rank error elements by contribution to Maryland's overpayment rate with cumulative impact",
+      "sql": "WITH error_impact AS (SELECT element_description AS error_type, element_category, SUM(sample_error_count) AS sample_error_count, SUM(weighted_error_dollars) AS weighted_error_dollars FROM mv_error_element_rollup WHERE fiscal_year = 2023 AND state_name = 'Maryland' AND finding_type IN ('Overissuance', 'Ineligible') GROUP BY element_description, element_category), total AS (SELECT total_weighted_benefits FROM mv_state_error_rates WHERE fiscal_year = 2023 AND state_name = 'Maryland') SELECT ei.error_type, ei.element_category, ei.sample_error_count, ei.weighted_error_dollars, ROUND((ei.weighted_error_dollars / NULLIF(t.total_weighted_benefits, 0)) * 100, 4) AS contribution_to_overpayment_rate, ROUND(SUM(ei.weighted_error_dollars) OVER (ORDER BY ei.weighted_error_dollars DESC) / NULLIF(t.total_weighted_benefits, 0) * 100, 4) AS cumulative_overpayment_rate FROM error_impact ei CROSS JOIN total t ORDER BY ei.weighted_error_dollars DESC",
+      "explanation": "State-specific corrective action ROI using BOTH pre-computed views: mv_error_element_rollup for error dollars by element and mv_state_error_rates for total_weighted_benefits denominator; no base table joins needed"
+    },
+    {
+      "question": "How did Florida's error rate change from FY2022 to FY2023?",
+      "sql": "SELECT fiscal_year, payment_error_rate, overpayment_rate, underpayment_rate, case_error_rate, total_sample_cases FROM mv_state_error_rates WHERE state_name = 'Florida' AND fiscal_year IN (2022, 2023) ORDER BY fiscal_year",
+      "explanation": "State-specific year-over-year comparison from mv_state_error_rates; show both years side by side"
     },
     {
       "question": "Which error categories are caused by the agency versus the client?",

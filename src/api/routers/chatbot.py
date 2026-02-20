@@ -553,17 +553,18 @@ async def chat_stream(request: StreamChatRequest):
             # Debug log the request
             logger.info(f"🔍 Streaming request - user_id: {request.user_id}, question: {request.question[:50]}...")
 
-            # Set custom prompt if user_id provided
+            # Set custom prompt if user has one (thread-safe via thread-local storage)
+            from src.services.llm_providers import set_request_custom_prompt
+            custom_prompt = None
             if request.user_id and request.user_id != "system":
-                from src.core.prompts import VANNA_SQL_SYSTEM_PROMPT
-                from src.database.prompt_manager import get_user_prompt
+                from src.database.prompt_manager import get_user_prompt, has_custom_prompt
                 try:
-                    system_prompt = get_user_prompt(request.user_id, 'sql')
-                    logger.info(f"Streaming: Using custom SQL prompt for user {request.user_id}: {system_prompt[:100]}...")
+                    if has_custom_prompt(request.user_id, 'sql'):
+                        custom_prompt = get_user_prompt(request.user_id, 'sql')
+                        logger.info(f"Streaming: Using custom SQL prompt for user {request.user_id}: {custom_prompt[:100]}...")
                 except Exception as e:
                     logger.warning(f"Streaming: Failed to get custom prompt for {request.user_id}: {e}")
-                    system_prompt = VANNA_SQL_SYSTEM_PROMPT
-                vn._custom_system_prompt = system_prompt
+            set_request_custom_prompt(custom_prompt)
 
             sql = vn.generate_sql(request.question)
 

@@ -13,7 +13,7 @@ This is a template for creating new datasets in the SnapAnalyst multi-dataset ar
    - `config.yaml` - Dataset metadata and table structure
    - `__init__.py` - Python configuration class
    - `data_mapping.json` - Code lookups for Vanna training
-   - `query_examples.json` - Example queries for Vanna training
+   - `training/query_examples.json` - Example queries for Vanna training
 
 3. **Create your models:**
    - `models.py` - SQLAlchemy models for your tables
@@ -36,7 +36,8 @@ your_dataset_name/
 ├── __init__.py           # Dataset configuration class (required)
 ├── config.yaml           # Dataset metadata (required)
 ├── data_mapping.json     # Code lookups for Vanna (required)
-├── query_examples.json   # Training examples (recommended)
+├── training/
+│   └── query_examples.json   # Training examples (recommended)
 ├── models.py             # SQLAlchemy models (required for new schema)
 ├── reference_models.py   # Lookup tables (optional)
 ├── column_mapping.py     # ETL column mappings (required for ETL)
