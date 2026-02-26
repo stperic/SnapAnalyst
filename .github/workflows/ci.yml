@@ -44,7 +44,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements/base.txt
         pip install -r requirements/test.txt
-        pip install ruff
+        pip install ruff==0.14.11
 
     - name: Lint with ruff
       run: ruff check .
