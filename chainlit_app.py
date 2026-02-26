@@ -609,6 +609,26 @@ async def on_close_sidebar(action: cl.Action):
 
 
 # =============================================================================
+# SHUTDOWN
+# =============================================================================
+
+
+@cl.on_app_shutdown
+async def shutdown():
+    """Clean up resources on application shutdown."""
+    global _auth_pool
+    logger = logging.getLogger(__name__)
+    if _auth_pool is not None and not _auth_pool._closed:
+        logger.info("Shutting down auth connection pool...")
+        try:
+            await asyncio.wait_for(_auth_pool.close(), timeout=3.0)
+        except TimeoutError:
+            _auth_pool.terminate()
+            logger.warning("Auth pool close timed out, terminated")
+        _auth_pool = None
+
+
+# =============================================================================
 # MAIN
 # =============================================================================
 

@@ -78,6 +78,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     except Exception as e:
         logger.warning(f"Error during shutdown: {e}")
 
+    # Reset Vanna instance to release ChromaDB/internal resources
+    try:
+        from src.services.llm_providers import shutdown_vanna
+
+        await asyncio.wait_for(asyncio.to_thread(shutdown_vanna), timeout=3.0)
+    except TimeoutError:
+        logger.warning("Vanna shutdown timed out after 3s")
+    except Exception as e:
+        logger.warning(f"Error shutting down Vanna: {e}")
+
     # Close Vanna's psycopg2 connection pool (moved from atexit to avoid
     # blocking indefinitely when connections are checked out at SIGTERM)
     try:

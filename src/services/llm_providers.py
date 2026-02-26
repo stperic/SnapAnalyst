@@ -291,6 +291,19 @@ def get_shared_db_pool() -> PostgresConnectionPool:
     return _db_pool
 
 
+def shutdown_vanna() -> None:
+    """
+    Reset the global Vanna instance to release ChromaDB/internal resources.
+
+    Called from the FastAPI lifespan shutdown handler.
+    """
+    global _vanna_instance, _vanna_trained
+    if _vanna_instance is not None:
+        logger.info("Shutting down Vanna instance...")
+        _vanna_instance = None
+        _vanna_trained = False
+
+
 def shutdown_db_pool() -> None:
     """
     Shutdown the shared database connection pool.
