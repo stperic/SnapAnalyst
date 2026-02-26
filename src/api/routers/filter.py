@@ -4,6 +4,7 @@ Filter API Router
 Provides endpoints to manage application-level data filters.
 Filters apply globally to all queries and exports.
 """
+
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query
@@ -18,6 +19,7 @@ router = APIRouter()
 
 class FilterResponse(BaseModel):
     """Response model for filter operations."""
+
     status: str
     message: str
     filter: dict
@@ -25,12 +27,14 @@ class FilterResponse(BaseModel):
 
 class FilterSetRequest(BaseModel):
     """Request to set filter."""
+
     state: str | None = Field(None, description="State name (e.g., 'Connecticut')")
     fiscal_year: int | None = Field(None, description="Fiscal year (e.g., 2023)")
 
 
 class AvailableOptionsResponse(BaseModel):
     """Available filter options."""
+
     states: list[str]
     fiscal_years: list[int]
 
@@ -90,15 +94,10 @@ async def set_filter(request: FilterSetRequest):
     """
     try:
         manager = get_filter_manager()
-        updated_filter = manager.set_filter(
-            state=request.state,
-            fiscal_year=request.fiscal_year
-        )
+        updated_filter = manager.set_filter(state=request.state, fiscal_year=request.fiscal_year)
 
         return FilterResponse(
-            status="success",
-            message=f"Filter set: {updated_filter.get_description()}",
-            filter=updated_filter.to_dict()
+            status="success", message=f"Filter set: {updated_filter.get_description()}", filter=updated_filter.to_dict()
         )
 
     except Exception as e:
@@ -124,9 +123,7 @@ async def clear_filter():
         cleared_filter = manager.clear()
 
         return FilterResponse(
-            status="success",
-            message="Filter cleared - showing all data",
-            filter=cleared_filter.to_dict()
+            status="success", message="Filter cleared - showing all data", filter=cleared_filter.to_dict()
         )
 
     except Exception as e:
@@ -148,32 +145,46 @@ async def get_filter_options():
         ```
     """
     try:
-        from sqlalchemy import distinct
+        from sqlalchemy import text
 
+        from datasets import get_active_dataset
         from src.database.engine import SessionLocal
-        from src.database.models import Household
+
+        ds = get_active_dataset()
+        dimensions = ds.get_filter_dimensions() if ds else []
 
         session = SessionLocal()
 
         try:
-            # Get distinct states (ordered alphabetically)
-            states_query = session.query(distinct(Household.state_name)).filter(
-                Household.state_name.isnot(None)
-            ).order_by(Household.state_name)
+            states = []
+            fiscal_years = []
 
-            states = [s[0] for s in states_query.all()]
+            for dim in dimensions:
+                col = dim["column"]
+                table = dim.get("table", "")
+                if table == "*":
+                    # Use first main table for universal columns
+                    table = ds.get_main_table_names()[0] if ds else "households"
 
-            # Get distinct fiscal years (ordered)
-            years_query = session.query(distinct(Household.fiscal_year)).filter(
-                Household.fiscal_year.isnot(None)
-            ).order_by(Household.fiscal_year)
+                # Validate identifiers to prevent SQL injection (defense-in-depth)
+                import re
 
-            fiscal_years = [y[0] for y in years_query.all()]
+                if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", col):
+                    raise HTTPException(status_code=400, detail=f"Invalid column name: {col}")
+                if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", table):
+                    raise HTTPException(status_code=400, detail=f"Invalid table name: {table}")
 
-            return AvailableOptionsResponse(
-                states=states,
-                fiscal_years=fiscal_years
-            )
+                result = session.execute(
+                    text(f"SELECT DISTINCT {col} FROM {table} WHERE {col} IS NOT NULL ORDER BY {col}")
+                )
+                values = [row[0] for row in result]
+
+                if dim["name"] == "state":
+                    states = values
+                elif dim["name"] == "fiscal_year":
+                    fiscal_years = values
+
+            return AvailableOptionsResponse(states=states, fiscal_years=fiscal_years)
 
         finally:
             session.close()
@@ -184,9 +195,7 @@ async def get_filter_options():
 
 
 @router.get("/test-sql", summary="Test SQL filter application")
-async def test_sql_filter(
-    sql: str = Query(..., description="SQL query to test filter on")
-) -> dict:
+async def test_sql_filter(sql: str = Query(..., description="SQL query to test filter on")) -> dict:
     """
     Test how filter would be applied to a SQL query.
 

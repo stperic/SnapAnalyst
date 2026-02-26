@@ -24,10 +24,19 @@ from src.database.engine import engine
 logger = get_logger(__name__)
 router = APIRouter()
 
-# Paths to schema files (now in datasets/snap/)
+# Paths to schema files
 WORKSPACE_ROOT = Path(__file__).parent.parent.parent.parent
-DATA_MAPPING_PATH = WORKSPACE_ROOT / "datasets" / "snap" / "data_mapping.json"
 SCHEMA_DOCS_PATH = WORKSPACE_ROOT / "schema_documentation.json"
+
+
+def _get_data_mapping_path() -> Path:
+    """Get data_mapping.json path from active dataset."""
+    from datasets import get_active_dataset
+
+    ds = get_active_dataset()
+    if ds:
+        return ds.get_data_mapping_path()
+    return WORKSPACE_ROOT / "datasets" / "snap" / "data_mapping.json"
 
 
 def get_introspector() -> SchemaIntrospector:
@@ -42,21 +51,16 @@ def load_json_file(file_path: Path) -> dict[str, Any]:
             return json.load(f)
     except FileNotFoundError:
         logger.error(f"Schema file not found: {file_path}")
-        raise HTTPException(
-            status_code=404,
-            detail=f"Schema file not found: {file_path.name}"
-        )
+        raise HTTPException(status_code=404, detail=f"Schema file not found: {file_path.name}")
     except json.JSONDecodeError as e:
         logger.error(f"Invalid JSON in schema file {file_path}: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Invalid JSON in schema file: {file_path.name}"
-        )
+        raise HTTPException(status_code=500, detail=f"Invalid JSON in schema file: {file_path.name}")
 
 
 # ============================================================================
 # SCHEMA QUERY ENDPOINTS
 # ============================================================================
+
 
 @router.get("/", summary="Schema API information")
 async def schema_root() -> dict[str, Any]:
@@ -65,14 +69,21 @@ async def schema_root() -> dict[str, Any]:
 
     Returns a list of available endpoints and their purposes.
     """
+    from datasets import get_active_dataset
+
+    ds = get_active_dataset()
+    ds_name = ds.display_name if ds else "SnapAnalyst"
+    available_tables = ds.get_main_table_names() if ds else ["households", "household_members", "qc_errors"]
+    available_lookups = ds.get_code_lookup_names() if ds else []
+
     return {
-        "name": "SnapAnalyst Schema API",
+        "name": f"{ds_name} Schema API",
         "description": "Access database schema, data mappings, and code lookups",
         "endpoints": {
             "/data-mapping": "Complete data mapping schema with all tables, columns, and codes",
             "/documentation": "Schema documentation",
             "/tables": "All table structures",
-            "/tables/{table_name}": "Specific table structure (households, household_members, qc_errors)",
+            "/tables/{table_name}": "Specific table structure",
             "/code-lookups": "All code lookup tables",
             "/code-lookups/{lookup_name}": "Specific code lookup table",
             "/relationships": "Table relationships and join conditions",
@@ -86,22 +97,10 @@ async def schema_root() -> dict[str, Any]:
             "/export/code-lookups/csv": "Export code lookups to CSV",
             "/export/code-lookups/pdf": "Export code lookups to PDF",
             "/export/code-lookups/markdown": "Export code lookups to Markdown",
-            "/export/database-info/pdf": "Export database info to PDF"
+            "/export/database-info/pdf": "Export database info to PDF",
         },
-        "available_tables": ["households", "household_members", "qc_errors"],
-        "available_code_lookups": [
-            "case_classification_codes",
-            "status_codes",
-            "expedited_service_codes",
-            "categorical_eligibility_codes",
-            "error_finding_codes",
-            "sex_codes",
-            "snap_affiliation_codes",
-            "element_codes",
-            "nature_codes",
-            "agency_responsibility_codes",
-            "discovery_method_codes"
-        ]
+        "available_tables": available_tables,
+        "available_code_lookups": available_lookups,
     }
 
 
@@ -126,7 +125,7 @@ async def get_data_mapping() -> dict[str, Any]:
     - Valid code values and their meanings
     """
     logger.info("Fetching complete data mapping schema")
-    return load_json_file(DATA_MAPPING_PATH)
+    return load_json_file(_get_data_mapping_path())
 
 
 @router.get("/documentation", summary="Get schema documentation")
@@ -171,7 +170,7 @@ async def get_tables() -> dict[str, Any]:
 
     # Get static metadata for enrichment
     try:
-        static_metadata = load_json_file(DATA_MAPPING_PATH)
+        static_metadata = load_json_file(_get_data_mapping_path())
 
         # Enrich with descriptions from static file
         for table_name, table_info in tables.items():
@@ -192,7 +191,7 @@ async def get_tables() -> dict[str, Any]:
     return {
         "tables": tables,
         "relationships": introspector.get_table_relationships(),
-        "source": "database (live introspection)"
+        "source": "database (live introspection)",
     }
 
 
@@ -217,14 +216,11 @@ async def get_table(table_name: str) -> dict[str, Any]:
         table_info = introspector.get_table_structure(table_name)
     except Exception as e:
         logger.error(f"Error introspecting table {table_name}: {e}")
-        raise HTTPException(
-            status_code=404,
-            detail=f"Table '{table_name}' not found in database"
-        )
+        raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found in database")
 
     # Enrich with static metadata
     try:
-        static_metadata = load_json_file(DATA_MAPPING_PATH)
+        static_metadata = load_json_file(_get_data_mapping_path())
         static_table = static_metadata.get("tables", {}).get(table_name, {})
 
         table_info["description"] = static_table.get("description", "")
@@ -241,11 +237,7 @@ async def get_table(table_name: str) -> dict[str, Any]:
     except Exception as e:
         logger.warning(f"Could not load static metadata: {e}")
 
-    return {
-        "table_name": table_name,
-        **table_info,
-        "source": "database (live introspection)"
-    }
+    return {"table_name": table_name, **table_info, "source": "database (live introspection)"}
 
 
 @router.get("/code-lookups", summary="Get all code lookup tables")
@@ -270,11 +262,11 @@ async def get_code_lookups() -> dict[str, Any]:
     which returns "Overissuance".
     """
     logger.info("Fetching code lookup tables")
-    data_mapping = load_json_file(DATA_MAPPING_PATH)
+    data_mapping = load_json_file(_get_data_mapping_path())
 
     return {
         "code_lookups": data_mapping.get("code_lookups", {}),
-        "description": "Code lookup tables for interpreting coded values in the database"
+        "description": "Code lookup tables for interpreting coded values in the database",
     }
 
 
@@ -299,20 +291,16 @@ async def get_code_lookup(lookup_name: str) -> dict[str, Any]:
     Returns the specific lookup table with code-to-description mappings.
     """
     logger.info(f"Fetching code lookup: {lookup_name}")
-    data_mapping = load_json_file(DATA_MAPPING_PATH)
+    data_mapping = load_json_file(_get_data_mapping_path())
 
     code_lookups = data_mapping.get("code_lookups", {})
     if lookup_name not in code_lookups:
         available = ", ".join(code_lookups.keys())
         raise HTTPException(
-            status_code=404,
-            detail=f"Code lookup '{lookup_name}' not found. Available lookups: {available}"
+            status_code=404, detail=f"Code lookup '{lookup_name}' not found. Available lookups: {available}"
         )
 
-    return {
-        "lookup_name": lookup_name,
-        **code_lookups[lookup_name]
-    }
+    return {"lookup_name": lookup_name, **code_lookups[lookup_name]}
 
 
 @router.get("/relationships", summary="Get table relationships")
@@ -334,7 +322,7 @@ async def get_relationships() -> dict[str, Any]:
 
     # Enrich with static metadata if available
     try:
-        static_metadata = load_json_file(DATA_MAPPING_PATH)
+        static_metadata = load_json_file(_get_data_mapping_path())
         static_relationships = static_metadata.get("relationships", {})
 
         # Add descriptions and examples from static metadata
@@ -349,7 +337,7 @@ async def get_relationships() -> dict[str, Any]:
     return {
         "relationships": relationships,
         "description": "How tables are connected via foreign keys",
-        "source": "database (live introspection)"
+        "source": "database (live introspection)",
     }
 
 
@@ -372,7 +360,7 @@ async def get_database_info() -> dict[str, Any]:
 
     # Enrich with static metadata
     try:
-        static_metadata = load_json_file(DATA_MAPPING_PATH)
+        static_metadata = load_json_file(_get_data_mapping_path())
         static_db = static_metadata.get("database", {})
 
         db_info["description"] = static_db.get("description", "")
@@ -382,10 +370,7 @@ async def get_database_info() -> dict[str, Any]:
     except Exception as e:
         logger.warning(f"Could not load static metadata: {e}")
 
-    return {
-        "database": db_info,
-        "source": "database (live introspection)"
-    }
+    return {"database": db_info, "source": "database (live introspection)"}
 
 
 @router.get("/query-tips", summary="Get query writing tips")
@@ -402,13 +387,17 @@ async def get_query_tips() -> dict[str, Any]:
     - Working with weighted data
     """
     logger.info("Fetching query tips")
-    data_mapping = load_json_file(DATA_MAPPING_PATH)
+    data_mapping = load_json_file(_get_data_mapping_path())
+
+    from datasets import get_active_dataset
+
+    ds = get_active_dataset()
+    table_names = ds.get_main_table_names() if ds else ["households", "household_members", "qc_errors"]
+    tables_data = data_mapping.get("tables", {})
 
     return {
         "tips": data_mapping.get("tips_for_queries", []),
         "common_queries": {
-            "households": data_mapping.get("tables", {}).get("households", {}).get("common_queries", []),
-            "household_members": data_mapping.get("tables", {}).get("household_members", {}).get("common_queries", []),
-            "qc_errors": data_mapping.get("tables", {}).get("qc_errors", {}).get("common_queries", [])
-        }
+            table: tables_data.get(table, {}).get("common_queries", []) for table in table_names
+        },
     }

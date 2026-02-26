@@ -15,25 +15,21 @@ PERSON_LEVEL_VARIABLES: dict[str, str] = {
     "REL": "relationship_to_head",
     "CTZN": "citizenship_status",
     "YRSED": "years_education",
-
     # Status Indicators
     "DIS": "disability_indicator",
     "FOSTER": "foster_child_indicator",
     "WRKREG": "work_registration_status",
     "ABWDST": "abawd_status",
     "WORK": "working_indicator",
-
     # Employment
     "EMPRG": "employment_region",
     "EMPSTA": "employment_status_a",
     "EMPSTB": "employment_status_b",
-
     # Earned Income
     "WAGES": "wages",
     "SLFEMP": "self_employment_income",
     "EITC": "earned_income_tax_credit",
     "OTHERN": "other_earned_income",
-
     # Unearned Income
     "SOCSEC": "social_security",
     "SSI": "ssi",
@@ -48,7 +44,6 @@ PERSON_LEVEL_VARIABLES: dict[str, str] = {
     "CONT": "contributions",
     "DEEM": "deemed_income",
     "OTHUN": "other_unearned_income",
-
     # Deductions & Expenses
     "DPCOST": "dependent_care_cost",
     "ENERGY": "energy_assistance",
@@ -74,7 +69,6 @@ HOUSEHOLD_LEVEL_VARIABLES: dict[str, str] = {
     # Unique Identifier & Classification
     "HHLDNO": "case_id",  # Unique unit identifier (row number in source file)
     "CASE": "case_classification",  # Classification code (1-3), NOT unique ID
-
     # Geographic & Administrative
     "REGIONCD": "region_code",
     "STATE": "state_code",
@@ -82,7 +76,6 @@ HOUSEHOLD_LEVEL_VARIABLES: dict[str, str] = {
     "YRMONTH": "year_month",
     "STATUS": "status",
     "STRATUM": "stratum",
-
     # Household Composition
     "RAWHSIZE": "raw_household_size",
     "CERTHHSZ": "certified_household_size",
@@ -92,19 +85,16 @@ HOUSEHOLD_LEVEL_VARIABLES: dict[str, str] = {
     "FSELDER": "num_elderly",
     "FSKID": "num_children",
     "COMPOSITION": "composition_code",
-
     # Financial Summary
     "RAWGROSS": "gross_income",
     "RAWNET": "net_income",
     "RAWERND": "earned_income",
     "FSUNEARN": "unearned_income",
-
     # Assets
     "LIQRESOR": "liquid_resources",
     "REALPROP": "real_property",
     "FSVEHAST": "vehicle_assets",
     "FSASSET": "total_assets",
-
     # Deductions
     "FSSTDDED": "standard_deduction",
     "FSERNDED": "earned_income_deduction",
@@ -112,35 +102,29 @@ HOUSEHOLD_LEVEL_VARIABLES: dict[str, str] = {
     "FSMEDDED": "medical_deduction",
     "SHELDED": "shelter_deduction",
     "FSTOTDED": "total_deductions",
-
     # Housing Expenses
     "RENT": "rent",
     "UTIL": "utilities",
     "FSCSEXP": "shelter_expense",
     "HOMELESS_DED": "homeless_deduction",
-
     # Benefits
     "FSBEN": "snap_benefit",
     "RAWBEN": "raw_benefit",
     "BENMAX": "maximum_benefit",
     "MINIMUM_BEN": "minimum_benefit",
-
     # Eligibility & Certification
     "CAT_ELIG": "categorical_eligibility",
     "EXPEDSER": "expedited_service",
     "CERTMTH": "certification_month",
     "LASTCERT": "last_certification_date",
-
     # Poverty & Work Status
     "TPOV": "poverty_level",
     "WRK_POOR": "working_poor_indicator",
     "TANF_IND": "tanf_indicator",
-
     # QC Information
     "AMTERR": "amount_error",
     "FSGRTEST": "gross_test_result",
     "FSNETEST": "net_test_result",
-
     # Statistical Weights
     "HWGT": "household_weight",
     "FYWGT": "fiscal_year_weight",

@@ -3,6 +3,7 @@ SnapAnalyst Data Transformer - Optimized with List Comprehensions
 
 Uses list comprehensions and batch operations for 3-5x faster transformation.
 """
+
 from __future__ import annotations
 
 import polars as pl
@@ -75,7 +76,9 @@ class DataTransformer:
         logger.debug("Extracting member-level data (optimized)...")
 
         # Get case IDs once
-        case_ids = df["HHLDNO"].cast(pl.String).to_list() if "HHLDNO" in df.columns else [str(i+1) for i in range(len(df))]
+        case_ids = (
+            df["HHLDNO"].cast(pl.String).to_list() if "HHLDNO" in df.columns else [str(i + 1) for i in range(len(df))]
+        )
 
         # Convert entire DF to dict once (much faster than row-by-row access)
         df_dict = df.to_dict(as_series=False)
@@ -86,10 +89,12 @@ class DataTransformer:
             fsafil_col = get_person_column_name("FSAFIL", member_num)
             if fsafil_col in df.columns:
                 member_col_map[member_num] = {
-                    'fsafil': fsafil_col,
-                    'cols': {target_col: get_person_column_name(source_var, member_num)
-                            for source_var, target_col in PERSON_LEVEL_VARIABLES.items()
-                            if get_person_column_name(source_var, member_num) in df.columns}
+                    "fsafil": fsafil_col,
+                    "cols": {
+                        target_col: get_person_column_name(source_var, member_num)
+                        for source_var, target_col in PERSON_LEVEL_VARIABLES.items()
+                        if get_person_column_name(source_var, member_num) in df.columns
+                    },
                 }
 
         # Extract all members using list comprehension
@@ -97,25 +102,22 @@ class DataTransformer:
             {
                 "case_id": case_ids[row_idx],
                 "member_number": member_num,
-                **{target_col: df_dict[source_col][row_idx]
-                   for target_col, source_col in cols['cols'].items()}
+                **{target_col: df_dict[source_col][row_idx] for target_col, source_col in cols["cols"].items()},
             }
             for member_num, cols in member_col_map.items()
             for row_idx in range(len(case_ids))
-            if df_dict[cols['fsafil']][row_idx] is not None and
-               df_dict[cols['fsafil']][row_idx] != "" and
-               df_dict[cols['fsafil']][row_idx] != "NA"
+            if df_dict[cols["fsafil"]][row_idx] is not None
+            and df_dict[cols["fsafil"]][row_idx] != ""
+            and df_dict[cols["fsafil"]][row_idx] != "NA"
         ]
 
         if members_list:
             members_df = pl.DataFrame(members_list)
             logger.debug(f"Extracted {len(members_df)} members")
         else:
-            members_df = pl.DataFrame({
-                "case_id": [],
-                "member_number": [],
-                **{col: [] for col in PERSON_LEVEL_VARIABLES.values()}
-            })
+            members_df = pl.DataFrame(
+                {"case_id": [], "member_number": [], **{col: [] for col in PERSON_LEVEL_VARIABLES.values()}}
+            )
 
         return members_df
 
@@ -127,7 +129,9 @@ class DataTransformer:
         logger.debug("Extracting QC error data (optimized)...")
 
         # Get case IDs once
-        case_ids = df["HHLDNO"].cast(pl.String).to_list() if "HHLDNO" in df.columns else [str(i+1) for i in range(len(df))]
+        case_ids = (
+            df["HHLDNO"].cast(pl.String).to_list() if "HHLDNO" in df.columns else [str(i + 1) for i in range(len(df))]
+        )
 
         # Convert entire DF to dict once
         df_dict = df.to_dict(as_series=False)
@@ -138,10 +142,12 @@ class DataTransformer:
             element_col = get_error_column_name("ELEMENT", error_num)
             if element_col in df.columns:
                 error_col_map[error_num] = {
-                    'element': element_col,
-                    'cols': {target_col: get_error_column_name(source_var, error_num)
-                            for source_var, target_col in ERROR_LEVEL_VARIABLES.items()
-                            if get_error_column_name(source_var, error_num) in df.columns}
+                    "element": element_col,
+                    "cols": {
+                        target_col: get_error_column_name(source_var, error_num)
+                        for source_var, target_col in ERROR_LEVEL_VARIABLES.items()
+                        if get_error_column_name(source_var, error_num) in df.columns
+                    },
                 }
 
         # Extract all errors using list comprehension
@@ -149,24 +155,21 @@ class DataTransformer:
             {
                 "case_id": case_ids[row_idx],
                 "error_number": error_num,
-                **{target_col: df_dict[source_col][row_idx]
-                   for target_col, source_col in cols['cols'].items()}
+                **{target_col: df_dict[source_col][row_idx] for target_col, source_col in cols["cols"].items()},
             }
             for error_num, cols in error_col_map.items()
             for row_idx in range(len(case_ids))
-            if df_dict[cols['element']][row_idx] is not None and
-               df_dict[cols['element']][row_idx] != "" and
-               df_dict[cols['element']][row_idx] != "NA"
+            if df_dict[cols["element"]][row_idx] is not None
+            and df_dict[cols["element"]][row_idx] != ""
+            and df_dict[cols["element"]][row_idx] != "NA"
         ]
 
         if errors_list:
             errors_df = pl.DataFrame(errors_list)
             logger.debug(f"Extracted {len(errors_df)} errors")
         else:
-            errors_df = pl.DataFrame({
-                "case_id": [],
-                "error_number": [],
-                **{col: [] for col in ERROR_LEVEL_VARIABLES.values()}
-            })
+            errors_df = pl.DataFrame(
+                {"case_id": [], "error_number": [], **{col: [] for col in ERROR_LEVEL_VARIABLES.values()}}
+            )
 
         return errors_df

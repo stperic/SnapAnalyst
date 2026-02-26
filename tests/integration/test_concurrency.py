@@ -4,6 +4,7 @@ Integration tests for multi-user concurrency and thread-safety.
 Tests that multiple users can use the system simultaneously without
 cross-contamination of data, filters, or custom prompts.
 """
+
 import concurrent.futures
 import threading
 import time
@@ -42,12 +43,12 @@ class TestCustomPromptThreadSafety:
 
                 # Verify we still have User A's prompt
                 prompt = get_request_custom_prompt()
-                results['user_a'] = prompt
+                results["user_a"] = prompt
 
                 # Clean up
                 set_request_custom_prompt(None)
             except Exception as e:
-                errors.append(('user_a', str(e)))
+                errors.append(("user_a", str(e)))
 
         def user_b_request():
             """Simulate User B's request with different custom prompt."""
@@ -60,12 +61,12 @@ class TestCustomPromptThreadSafety:
 
                 # Verify we still have User B's prompt
                 prompt = get_request_custom_prompt()
-                results['user_b'] = prompt
+                results["user_b"] = prompt
 
                 # Clean up
                 set_request_custom_prompt(None)
             except Exception as e:
-                errors.append(('user_b', str(e)))
+                errors.append(("user_b", str(e)))
 
         # Run both users concurrently
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
@@ -80,13 +81,13 @@ class TestCustomPromptThreadSafety:
         assert not errors, f"Errors occurred: {errors}"
 
         # Verify results don't contain cross-contamination
-        assert "California" in results['user_a'], "User A lost their custom prompt"
-        assert "Texas" in results['user_b'], "User B lost their custom prompt"
-        assert "Texas" not in results['user_a'], "User A got User B's prompt"
-        assert "California" not in results['user_b'], "User B got User A's prompt"
+        assert "California" in results["user_a"], "User A lost their custom prompt"
+        assert "Texas" in results["user_b"], "User B lost their custom prompt"
+        assert "Texas" not in results["user_a"], "User A got User B's prompt"
+        assert "California" not in results["user_b"], "User B got User A's prompt"
 
     @pytest.mark.integration
-    @patch('src.services.llm_providers._get_vanna_instance')
+    @patch("src.services.llm_providers._get_vanna_instance")
     def test_concurrent_sql_generation_with_different_prompts(self, mock_vanna):
         """
         Test that concurrent SQL generation requests use correct prompts.
@@ -101,7 +102,8 @@ class TestCustomPromptThreadSafety:
         mock_vanna.return_value = mock_vn
 
         # Mock get_user_prompt to return different prompts for different users
-        with patch('src.services.llm_service.get_user_prompt') as mock_get_prompt:
+        with patch("src.services.llm_service.get_user_prompt") as mock_get_prompt:
+
             def get_prompt_side_effect(user_id, prompt_type):
                 return f"Custom prompt for {user_id}"
 
@@ -113,10 +115,7 @@ class TestCustomPromptThreadSafety:
             def user_request(user_id: str, question: str):
                 """Simulate a user's SQL generation request."""
                 try:
-                    sql, explanation = _generate_sql_sync(
-                        question=question,
-                        user_id=user_id
-                    )
+                    sql, explanation = _generate_sql_sync(question=question, user_id=user_id)
                     results[user_id] = sql
                 except Exception as e:
                     errors.append((user_id, str(e)))
@@ -124,10 +123,7 @@ class TestCustomPromptThreadSafety:
             # Run 5 concurrent users
             users = [f"user_{i}" for i in range(5)]
             with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-                futures = [
-                    executor.submit(user_request, user_id, f"question from {user_id}")
-                    for user_id in users
-                ]
+                futures = [executor.submit(user_request, user_id, f"question from {user_id}") for user_id in users]
 
                 # Wait for all to complete
                 for future in concurrent.futures.as_completed(futures):
@@ -183,10 +179,7 @@ class TestFilterManagerThreadSafety:
         ]
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-            futures = [
-                executor.submit(user_request, user_id, state)
-                for user_id, state in users
-            ]
+            futures = [executor.submit(user_request, user_id, state) for user_id, state in users]
 
             for future in concurrent.futures.as_completed(futures):
                 future.result()
@@ -238,6 +231,7 @@ class TestConcurrentDatabaseAccess:
                 try:
                     # Execute a simple query
                     from sqlalchemy import text
+
                     result = db.execute(text("SELECT 1 as value"))
                     row = result.fetchone()
                     results[thread_id] = row[0] if row else None
@@ -294,12 +288,14 @@ class TestRaceConditionPrevention:
             retrieved_prompt = get_request_custom_prompt()
 
             with lock:
-                results.append({
-                    'user_id': user_id,
-                    'set_prompt': custom_prompt,
-                    'retrieved_prompt': retrieved_prompt,
-                    'match': custom_prompt == retrieved_prompt
-                })
+                results.append(
+                    {
+                        "user_id": user_id,
+                        "set_prompt": custom_prompt,
+                        "retrieved_prompt": retrieved_prompt,
+                        "match": custom_prompt == retrieved_prompt,
+                    }
+                )
 
             # Clean up
             set_request_custom_prompt(None)
@@ -308,10 +304,7 @@ class TestRaceConditionPrevention:
         prompts = [f"Custom prompt for user {i}" for i in range(20)]
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-            futures = [
-                executor.submit(simulate_request, f"user_{i}", prompt)
-                for i, prompt in enumerate(prompts)
-            ]
+            futures = [executor.submit(simulate_request, f"user_{i}", prompt) for i, prompt in enumerate(prompts)]
 
             for future in concurrent.futures.as_completed(futures):
                 future.result()
@@ -319,5 +312,5 @@ class TestRaceConditionPrevention:
         # Verify all prompts matched
         assert len(results) == 20, f"Expected 20 results, got {len(results)}"
 
-        mismatches = [r for r in results if not r['match']]
+        mismatches = [r for r in results if not r["match"]]
         assert not mismatches, f"Found prompt mismatches (race condition): {mismatches}"

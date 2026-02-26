@@ -94,6 +94,7 @@ dump.rdb
 
 # Docker
 docker-compose.override.yml
+docker/logs/
 
 # Backup files
 *.bak
@@ -117,6 +118,6 @@ temp/
 chromadb/
 *-*-*-*-*/
 
-# Chainlit file storage
+# Chainlit file storage and config
 .files/
-.chainlit/.files/
+.chainlit/

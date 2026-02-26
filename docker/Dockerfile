@@ -62,9 +62,12 @@ RUN chmod +x /app/scripts/*.sh 2>/dev/null || true
 # 8001 - Chainlit UI
 EXPOSE 8000 8001
 
-# Health check for API
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+# Note: Healthchecks are defined per-service in docker-compose.yml
+# (this image is used for backend, frontend, and data-loader with different ports)
+
+# Use SIGINT for cleaner shutdown — Python/uvicorn/chainlit handle KeyboardInterrupt
+# more reliably than SIGTERM, especially in Docker Desktop for Mac
+STOPSIGNAL SIGINT
 
 # Default command (can be overridden in docker-compose)
 CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

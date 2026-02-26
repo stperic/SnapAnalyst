@@ -16,9 +16,10 @@ Tables:
 
 Note: Custom user datasets should use separate schemas (e.g., state_ca, custom_data)
 """
+
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
@@ -60,20 +61,29 @@ class Household(Base):
     )
 
     # Natural Composite Primary Key
-    case_id: Mapped[str] = mapped_column(String(50), primary_key=True, comment="HHLDNO - Unique unit identifier (row number)")
+    case_id: Mapped[str] = mapped_column(
+        String(50), primary_key=True, comment="HHLDNO - Unique unit identifier (row number)"
+    )
     fiscal_year: Mapped[int] = mapped_column(Integer, primary_key=True)
 
     # Case Information
-    case_classification: Mapped[int | None] = mapped_column(Integer, comment="CASE - Classification code (1-3): 1=Included in error rate, 2=Excluded SSA, 3=Excluded FNS")
+    case_classification: Mapped[int | None] = mapped_column(
+        Integer, comment="CASE - Classification code (1-3): 1=Included in error rate, 2=Excluded SSA, 3=Excluded FNS"
+    )
 
     # Geographic & Administrative
     region_code: Mapped[str | None] = mapped_column(String(10), comment="FNS region code")
-    state_code: Mapped[str | None] = mapped_column(String(2), comment="2-letter state abbreviation")  # Indexed in __table_args__
+    state_code: Mapped[str | None] = mapped_column(
+        String(2), comment="2-letter state abbreviation"
+    )  # Indexed in __table_args__
     state_name: Mapped[str | None] = mapped_column(String(50), comment="Full state name for geographic queries")
-    year_month: Mapped[str | None] = mapped_column(String(6), comment="Review period YYYYMM")  # Indexed in __table_args__
+    year_month: Mapped[str | None] = mapped_column(
+        String(6), comment="Review period YYYYMM"
+    )  # Indexed in __table_args__
     status: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("ref_status.code", ondelete="SET NULL"),
-        comment="Error status: JOIN ref_status for description (1=correct, 2=overissuance, 3=underissuance)"
+        Integer,
+        ForeignKey("ref_status.code", ondelete="SET NULL"),
+        comment="Error status: JOIN ref_status for description (1=correct, 2=overissuance, 3=underissuance)",
     )
     stratum: Mapped[str | None] = mapped_column(String(20), comment="Sampling stratum code")
 
@@ -88,10 +98,16 @@ class Household(Base):
     composition_code: Mapped[str | None] = mapped_column(String(10), comment="Household composition type")
 
     # Financial Summary (monthly amounts in dollars)
-    gross_income: Mapped[Decimal | None] = mapped_column(DECIMAL(12, 2), comment="Total monthly gross income before deductions")
+    gross_income: Mapped[Decimal | None] = mapped_column(
+        DECIMAL(12, 2), comment="Total monthly gross income before deductions"
+    )
     net_income: Mapped[Decimal | None] = mapped_column(DECIMAL(12, 2), comment="Monthly income after deductions")
-    earned_income: Mapped[Decimal | None] = mapped_column(DECIMAL(12, 2), comment="Monthly earned income (wages, self-employment)")
-    unearned_income: Mapped[Decimal | None] = mapped_column(DECIMAL(12, 2), comment="Monthly unearned income (SSI, TANF, etc)")
+    earned_income: Mapped[Decimal | None] = mapped_column(
+        DECIMAL(12, 2), comment="Monthly earned income (wages, self-employment)"
+    )
+    unearned_income: Mapped[Decimal | None] = mapped_column(
+        DECIMAL(12, 2), comment="Monthly unearned income (SSI, TANF, etc)"
+    )
 
     # Assets
     liquid_resources: Mapped[Decimal | None] = mapped_column(DECIMAL(12, 2))
@@ -114,19 +130,27 @@ class Household(Base):
     homeless_deduction: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 2))
 
     # Benefits (monthly amounts in dollars)
-    snap_benefit: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 2), comment="QC-calculated correct SNAP benefit amount")  # Indexed in __table_args__
-    raw_benefit: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 2), comment="Originally issued SNAP benefit (before QC correction)")
-    maximum_benefit: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 2), comment="Maximum SNAP benefit for household size")
+    snap_benefit: Mapped[Decimal | None] = mapped_column(
+        DECIMAL(10, 2), comment="QC-calculated correct SNAP benefit amount"
+    )  # Indexed in __table_args__
+    raw_benefit: Mapped[Decimal | None] = mapped_column(
+        DECIMAL(10, 2), comment="Originally issued SNAP benefit (before QC correction)"
+    )
+    maximum_benefit: Mapped[Decimal | None] = mapped_column(
+        DECIMAL(10, 2), comment="Maximum SNAP benefit for household size"
+    )
     minimum_benefit: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 2), comment="Minimum SNAP benefit amount")
 
     # Eligibility & Certification (FK to reference tables)
     categorical_eligibility: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("ref_categorical_eligibility.code", ondelete="SET NULL"),
-        comment="Categorical eligibility status: JOIN ref_categorical_eligibility"
+        Integer,
+        ForeignKey("ref_categorical_eligibility.code", ondelete="SET NULL"),
+        comment="Categorical eligibility status: JOIN ref_categorical_eligibility",
     )
     expedited_service: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("ref_expedited_service.code", ondelete="SET NULL"),
-        comment="Expedited service status: JOIN ref_expedited_service"
+        Integer,
+        ForeignKey("ref_expedited_service.code", ondelete="SET NULL"),
+        comment="Expedited service status: JOIN ref_expedited_service",
     )
     certification_month: Mapped[str | None] = mapped_column(String(6), comment="Certification period YYYYMM")
     # Note: last_certification_date is actually an integer code in the source data, not a date
@@ -138,7 +162,9 @@ class Household(Base):
     tanf_indicator: Mapped[bool | None] = mapped_column(Boolean)
 
     # QC Information
-    amount_error: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 2), comment="Dollar amount of benefit error (positive=over, negative=under)")
+    amount_error: Mapped[Decimal | None] = mapped_column(
+        DECIMAL(10, 2), comment="Dollar amount of benefit error (positive=over, negative=under)"
+    )
     gross_test_result: Mapped[int | None] = mapped_column(Integer, comment="Gross income test result (1=pass, 2=fail)")
     net_test_result: Mapped[int | None] = mapped_column(Integer, comment="Net income test result (1=pass, 2=fail)")
 
@@ -147,18 +173,16 @@ class Household(Base):
     fiscal_year_weight: Mapped[Decimal | None] = mapped_column(DECIMAL(18, 8))
 
     # Metadata
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC)
     )
 
     # Relationships
     members: Mapped[list[HouseholdMember]] = relationship(
         "HouseholdMember", back_populates="household", cascade="all, delete-orphan"
     )
-    errors: Mapped[list[QCError]] = relationship(
-        "QCError", back_populates="household", cascade="all, delete-orphan"
-    )
+    errors: Mapped[list[QCError]] = relationship("QCError", back_populates="household", cascade="all, delete-orphan")
 
     # Constraints and Indexes
     # Performance indexes for common query patterns:
@@ -186,9 +210,7 @@ class HouseholdMember(Base):
     __tablename__ = "household_members"
     __table_args__ = (
         ForeignKeyConstraint(
-            ['case_id', 'fiscal_year'],
-            ['households.case_id', 'households.fiscal_year'],
-            ondelete='CASCADE'
+            ["case_id", "fiscal_year"], ["households.case_id", "households.fiscal_year"], ondelete="CASCADE"
         ),
         Index("idx_member_fiscal_year", "fiscal_year"),
         Index("idx_member_age", "age"),
@@ -200,18 +222,16 @@ class HouseholdMember(Base):
     # Natural Composite Primary Key + Foreign Key
     case_id: Mapped[str] = mapped_column(String(50), primary_key=True)
     fiscal_year: Mapped[int] = mapped_column(Integer, primary_key=True)
-    member_number: Mapped[int] = mapped_column(
-        Integer, primary_key=True, comment="Member position in household (1-17)"
-    )
+    member_number: Mapped[int] = mapped_column(Integer, primary_key=True, comment="Member position in household (1-17)")
 
     # Demographics (FK to reference tables)
     age: Mapped[int | None] = mapped_column(
-        Integer, CheckConstraint("age >= 0 AND age <= 120"),
-        comment="Age in years (0=under 1, 98=98 or older)"
+        Integer, CheckConstraint("age >= 0 AND age <= 120"), comment="Age in years (0=under 1, 98=98 or older)"
     )
     sex: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("ref_sex.code", ondelete="SET NULL"),
-        comment="Gender: JOIN ref_sex for description (1=Male, 2=Female)"
+        Integer,
+        ForeignKey("ref_sex.code", ondelete="SET NULL"),
+        comment="Gender: JOIN ref_sex for description (1=Male, 2=Female)",
     )
     race_ethnicity: Mapped[int | None] = mapped_column(Integer, comment="Race/ethnicity code")
     relationship_to_head: Mapped[int | None] = mapped_column(Integer, comment="Relationship to head of household")
@@ -220,8 +240,9 @@ class HouseholdMember(Base):
 
     # Status Indicators (FK to reference tables)
     snap_affiliation_code: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("ref_snap_affiliation.code", ondelete="SET NULL"),
-        comment="SNAP eligibility status: JOIN ref_snap_affiliation for description"
+        Integer,
+        ForeignKey("ref_snap_affiliation.code", ondelete="SET NULL"),
+        comment="SNAP eligibility status: JOIN ref_snap_affiliation for description",
     )  # Indexed in __table_args__ as idx_member_affiliation
     disability_indicator: Mapped[int | None] = mapped_column(Integer, comment="Disability status (1=disabled)")
     foster_child_indicator: Mapped[int | None] = mapped_column(Integer, comment="Foster child status")
@@ -236,8 +257,12 @@ class HouseholdMember(Base):
 
     # Earned Income Sources (monthly amounts in dollars)
     wages: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), default=0, comment="Monthly wages and salaries")
-    self_employment_income: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), default=0, comment="Monthly self-employment income")
-    earned_income_tax_credit: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), default=0, comment="Earned Income Tax Credit")
+    self_employment_income: Mapped[Decimal] = mapped_column(
+        DECIMAL(10, 2), default=0, comment="Monthly self-employment income"
+    )
+    earned_income_tax_credit: Mapped[Decimal] = mapped_column(
+        DECIMAL(10, 2), default=0, comment="Earned Income Tax Credit"
+    )
     other_earned_income: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), default=0, comment="Other earned income")
 
     # Unearned Income Sources (monthly amounts in dollars)
@@ -267,9 +292,9 @@ class HouseholdMember(Base):
     total_income: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 2), nullable=True)
 
     # Metadata
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC)
     )
 
     # Relationships
@@ -300,9 +325,7 @@ class QCError(Base):
     __tablename__ = "qc_errors"
     __table_args__ = (
         ForeignKeyConstraint(
-            ['case_id', 'fiscal_year'],
-            ['households.case_id', 'households.fiscal_year'],
-            ondelete='CASCADE'
+            ["case_id", "fiscal_year"], ["households.case_id", "households.fiscal_year"], ondelete="CASCADE"
         ),
         Index("idx_error_fiscal_year", "fiscal_year"),
         Index("idx_error_element", "element_code"),
@@ -320,24 +343,27 @@ class QCError(Base):
 
     # Error Details (FK to reference tables for Gold Standard lookups)
     element_code: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("ref_element.code", ondelete="SET NULL"),
-        comment="Error element type: JOIN ref_element for description and category"
+        Integer,
+        ForeignKey("ref_element.code", ondelete="SET NULL"),
+        comment="Error element type: JOIN ref_element for description and category",
     )  # Indexed in __table_args__ as idx_error_element
     nature_code: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("ref_nature.code", ondelete="SET NULL"),
-        comment="Nature of error (what went wrong): JOIN ref_nature for description"
+        Integer,
+        ForeignKey("ref_nature.code", ondelete="SET NULL"),
+        comment="Nature of error (what went wrong): JOIN ref_nature for description",
     )  # Indexed in __table_args__ as idx_error_nature
     responsible_agency: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("ref_agency_responsibility.code", ondelete="SET NULL"),
-        comment="Who caused error: JOIN ref_agency_responsibility (use responsibility_type for client vs agency)"
+        Integer,
+        ForeignKey("ref_agency_responsibility.code", ondelete="SET NULL"),
+        comment="Who caused error: JOIN ref_agency_responsibility (use responsibility_type for client vs agency)",
     )
     error_amount: Mapped[Decimal | None] = mapped_column(
-        DECIMAL(10, 2),
-        comment="Dollar amount of this specific error (positive=overissuance)"
+        DECIMAL(10, 2), comment="Dollar amount of this specific error (positive=overissuance)"
     )  # Indexed in __table_args__ as idx_error_amount
     discovery_method: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("ref_discovery.code", ondelete="SET NULL"),
-        comment="How error was discovered: JOIN ref_discovery"
+        Integer,
+        ForeignKey("ref_discovery.code", ondelete="SET NULL"),
+        comment="How error was discovered: JOIN ref_discovery",
     )
     verification_status: Mapped[int | None] = mapped_column(Integer, comment="Verification status code")
 
@@ -347,12 +373,13 @@ class QCError(Base):
 
     # Finding (FK to reference table)
     error_finding: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("ref_error_finding.code", ondelete="SET NULL"),
-        comment="Error finding (overissuance/underissuance/ineligible): JOIN ref_error_finding"
+        Integer,
+        ForeignKey("ref_error_finding.code", ondelete="SET NULL"),
+        comment="Error finding (overissuance/underissuance/ineligible): JOIN ref_error_finding",
     )
 
     # Metadata
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
 
     # Relationships
     household: Mapped[Household] = relationship("Household", back_populates="errors")
@@ -381,11 +408,11 @@ class UserPrompt(Base):
 
     __tablename__ = "user_prompts"
     __table_args__ = (
-        UniqueConstraint('user_id', 'prompt_type', name='uq_user_prompt_type'),
-        Index('idx_user_prompts_user_type', 'user_id', 'prompt_type'),
-        CheckConstraint("prompt_type IN ('sql', 'kb')", name='ck_prompt_type'),
-        CheckConstraint("LENGTH(prompt_text) >= 20 AND LENGTH(prompt_text) <= 5000", name='ck_prompt_length'),
-        {"schema": "app"}  # Application data in app schema
+        UniqueConstraint("user_id", "prompt_type", name="uq_user_prompt_type"),
+        Index("idx_user_prompts_user_type", "user_id", "prompt_type"),
+        CheckConstraint("prompt_type IN ('sql', 'kb', 'summary')", name="ck_prompt_type"),
+        CheckConstraint("LENGTH(prompt_text) >= 20 AND LENGTH(prompt_text) <= 5000", name="ck_prompt_length"),
+        {"schema": "app"},  # Application data in app schema
     )
 
     # Primary Key
@@ -396,17 +423,18 @@ class UserPrompt(Base):
 
     # Prompt Type
     prompt_type: Mapped[str] = mapped_column(
-        String(20), nullable=False,
-        comment="Type of prompt: 'sql' for SQL generation, 'kb' for KB insights"
+        String(20), nullable=False, comment="Type of prompt: 'sql' for SQL generation, 'kb' for KB insights"
     )
 
     # Prompt Content
     prompt_text: Mapped[str] = mapped_column(Text, nullable=False, comment="The custom prompt text")
 
     # Metadata
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, comment="When prompt was created")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(UTC), comment="When prompt was created"
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, comment="Last update timestamp"
+        DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC), comment="Last update timestamp"
     )
 
     # Constraints
@@ -427,7 +455,7 @@ class DataLoadHistory(Base):
     __table_args__ = (
         Index("idx_load_history_year", "fiscal_year"),
         Index("idx_load_history_status", "load_status"),
-        {"schema": "app"}  # Application data in app schema
+        {"schema": "app"},  # Application data in app schema
     )
 
     # Primary Key
@@ -453,7 +481,7 @@ class DataLoadHistory(Base):
     error_message: Mapped[str | None] = mapped_column(Text)
 
     # Timing
-    started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime)
     duration_seconds: Mapped[int | None] = mapped_column(Integer)
 
@@ -465,7 +493,4 @@ class DataLoadHistory(Base):
     # REMOVED: __table_args__ moved to class definition with schema
 
     def __repr__(self) -> str:
-        return (
-            f"<DataLoadHistory(fy={self.fiscal_year}, status={self.load_status}, "
-            f"rows={self.rows_loaded})>"
-        )
+        return f"<DataLoadHistory(fy={self.fiscal_year}, status={self.load_status}, rows={self.rows_loaded})>"

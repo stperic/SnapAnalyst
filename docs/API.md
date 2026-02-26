@@ -297,7 +297,7 @@ Manually trigger AI training.
 Get training status.
 
 ### GET `/llm/prompt/{prompt_type}`
-Get current prompt for a user. `prompt_type` is `kb` or `sql`.
+Get current prompt for a user. `prompt_type` is `sql`, `kb`, or `summary`.
 
 **Headers:** `X-User-ID` (optional, defaults to "default")
 

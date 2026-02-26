@@ -7,6 +7,7 @@ Creates Excel files with:
 - Professional formatting
 - Reference table lookups (code-to-description mappings)
 """
+
 import json
 import time
 from datetime import datetime
@@ -63,10 +64,7 @@ class DataExporter:
     SECTION_FONT = Font(bold=True, size=12)
 
     THIN_BORDER = Border(
-        left=Side(style="thin"),
-        right=Side(style="thin"),
-        top=Side(style="thin"),
-        bottom=Side(style="thin")
+        left=Side(style="thin"), right=Side(style="thin"), top=Side(style="thin"), bottom=Side(style="thin")
     )
 
     def __init__(self, db: Session, data_mapping_path: Path):
@@ -116,16 +114,12 @@ class DataExporter:
             try:
                 rows = self.db.query(model_class).all()
                 # Store as code -> description mapping
-                self._reference_cache[cache_key] = {
-                    getattr(row, code_field): getattr(row, desc_field)
-                    for row in rows
-                }
+                self._reference_cache[cache_key] = {getattr(row, code_field): getattr(row, desc_field) for row in rows}
                 # Store extra fields if present (e.g., category, responsibility_type)
                 for extra in extra_fields:
                     extra_key = f"{cache_key}_{extra}"
                     self._reference_cache[extra_key] = {
-                        getattr(row, code_field): getattr(row, extra, None)
-                        for row in rows
+                        getattr(row, code_field): getattr(row, extra, None) for row in rows
                     }
             except Exception:
                 # Table might not exist or be empty
@@ -138,12 +132,7 @@ class DataExporter:
         cache = self._reference_cache.get(cache_key, {})
         return cache.get(code)
 
-    def create_excel_export(
-        self,
-        tables: list[str] = None,
-        fiscal_year: int = None,
-        limit: int = None
-    ) -> BytesIO:
+    def create_excel_export(self, tables: list[str] = None, fiscal_year: int = None, limit: int = None) -> BytesIO:
         """
         Create complete Excel export with README and specified tables.
 
@@ -163,9 +152,12 @@ class DataExporter:
         if "Sheet" in wb.sheetnames:
             wb.remove(wb["Sheet"])
 
-        # Default to core 3 tables if not specified (backward compatibility)
-        DEFAULT_TABLES = ["households", "household_members", "qc_errors"]
-        tables_to_export = tables or DEFAULT_TABLES
+        # Default to dataset main tables if not specified
+        from datasets import get_active_dataset
+
+        ds = get_active_dataset()
+        default_tables = ds.get_main_table_names() if ds else ["households", "household_members", "qc_errors"]
+        tables_to_export = tables or default_tables
 
         # 1. Create README sheet (first/default)
         self._create_readme_sheet(wb, fiscal_year, limit, tables_to_export)
@@ -193,27 +185,28 @@ class DataExporter:
 
         return buffer
 
-    def _create_readme_sheet(
-        self,
-        wb: Workbook,
-        fiscal_year: int = None,
-        limit: int = None,
-        tables: list[str] = None
-    ):
+    def _create_readme_sheet(self, wb: Workbook, fiscal_year: int = None, limit: int = None, tables: list[str] = None):
         """Create comprehensive README sheet."""
         ws = wb.create_sheet("README", 0)  # First sheet
         ws.sheet_properties.tabColor = "4F81BD"  # Blue tab
 
         # Default tables if not specified
         if tables is None:
-            tables = ["households", "household_members", "qc_errors"]
+            from datasets import get_active_dataset
+
+            ds = get_active_dataset()
+            tables = ds.get_main_table_names() if ds else ["households", "household_members", "qc_errors"]
 
         row = 1
 
         # Title
         ws.merge_cells(f"A{row}:E{row}")
         title_cell = ws[f"A{row}"]
-        title_cell.value = "SnapAnalyst Data Export - README"
+        from datasets import get_active_dataset
+
+        ds_export = get_active_dataset()
+        ds_title = ds_export.display_name if ds_export else "SnapAnalyst"
+        title_cell.value = f"{ds_title} Data Export - README"
         title_cell.font = self.TITLE_FONT
         title_cell.fill = self.README_TITLE_FILL
         title_cell.alignment = Alignment(horizontal="center", vertical="center")
@@ -270,18 +263,14 @@ class DataExporter:
         sheets_info = [("README", "This sheet - Complete documentation and data dictionary")]
 
         # Add descriptions for each exported table
-        table_descriptions = {
-            "households": "Household case data (~50k rows per year)",
-            "household_members": "Individual household member data (~120k rows)",
-            "qc_errors": "Quality control errors/variances (~20k rows)",
-        }
+        from datasets import get_active_dataset
+
+        ds_desc = get_active_dataset()
+        table_descriptions = ds_desc.get_table_descriptions() if ds_desc else {}
 
         for table_name in tables:
             # Use predefined description or generate generic one
-            description = table_descriptions.get(
-                table_name,
-                f"Custom data table: {table_name}"
-            )
+            description = table_descriptions.get(table_name, f"Custom data table: {table_name}")
             # Convert table name to sheet name format
             sheet_name = table_name.replace("_", " ").title()[:31]
             sheets_info.append((sheet_name, description))
@@ -299,7 +288,7 @@ class DataExporter:
         row = ws.max_row + 2
 
         # Table Columns
-        for table_name in ["households", "household_members", "qc_errors"]:
+        for table_name in tables:
             self._add_table_columns(ws, row, table_name)
             row = ws.max_row + 2
 
@@ -331,7 +320,9 @@ class DataExporter:
         row = start_row + 1
 
         ws.merge_cells(f"A{row}:E{row}")
-        ws[f"A{row}"] = "Each coded field has a corresponding '_desc' column with human-readable text from reference tables."
+        ws[f"A{row}"] = (
+            "Each coded field has a corresponding '_desc' column with human-readable text from reference tables."
+        )
         row += 2
 
         # Headers
@@ -348,8 +339,18 @@ class DataExporter:
         # Households columns
         households_mappings = [
             ("status", "status_desc", "ref_status", "Amount correct"),
-            ("categorical_eligibility", "categorical_eligibility_desc", "ref_categorical_eligibility", "Unit categorically eligible"),
-            ("expedited_service", "expedited_service_desc", "ref_expedited_service", "Not entitled to expedited service"),
+            (
+                "categorical_eligibility",
+                "categorical_eligibility_desc",
+                "ref_categorical_eligibility",
+                "Unit categorically eligible",
+            ),
+            (
+                "expedited_service",
+                "expedited_service_desc",
+                "ref_expedited_service",
+                "Not entitled to expedited service",
+            ),
         ]
 
         # Members columns
@@ -358,7 +359,12 @@ class DataExporter:
             ("race_ethnicity", "race_ethnicity_desc", "ref_race_ethnicity", "Black or African American (Not Hispanic)"),
             ("relationship_to_head", "relationship_to_head_desc", "ref_relationship", "Head of household"),
             ("citizenship_status", "citizenship_status_desc", "ref_citizenship_status", "US-born citizen"),
-            ("snap_affiliation_code", "snap_affiliation_code_desc", "ref_snap_affiliation", "Eligible member entitled to receive benefits"),
+            (
+                "snap_affiliation_code",
+                "snap_affiliation_code_desc",
+                "ref_snap_affiliation",
+                "Eligible member entitled to receive benefits",
+            ),
             ("disability_indicator", "disability_indicator_desc", "ref_disability", "Not disabled"),
             ("work_registration_status", "work_registration_status_desc", "ref_work_registration", "Work registrant"),
             ("abawd_status", "abawd_status_desc", "ref_abawd_status", "Not an ABAWD"),
@@ -373,9 +379,24 @@ class DataExporter:
             ("element_code", "element_category", "ref_element (category)", "earned_income"),
             ("nature_code", "nature_code_desc", "ref_nature", "Unreported source of income"),
             ("nature_code", "nature_category", "ref_nature (category)", "income"),
-            ("responsible_agency", "responsible_agency_desc", "ref_agency_responsibility", "Policy incorrectly applied"),
-            ("responsible_agency", "agency_responsibility_responsibility_type", "ref_agency_responsibility (type)", "agency"),
-            ("discovery_method", "discovery_method_desc", "ref_discovery", "Variance discovered from recipient interview"),
+            (
+                "responsible_agency",
+                "responsible_agency_desc",
+                "ref_agency_responsibility",
+                "Policy incorrectly applied",
+            ),
+            (
+                "responsible_agency",
+                "agency_responsibility_responsibility_type",
+                "ref_agency_responsibility (type)",
+                "agency",
+            ),
+            (
+                "discovery_method",
+                "discovery_method_desc",
+                "ref_discovery",
+                "Variance discovered from recipient interview",
+            ),
             ("error_finding", "error_finding_desc", "ref_error_finding", "Overissuance"),
         ]
 
@@ -557,6 +578,7 @@ class DataExporter:
 
         # Get global filter
         from src.core.filter_manager import get_filter_manager
+
         filter_manager = get_filter_manager()
         current_filter = filter_manager.get_filter()
 
@@ -663,18 +685,19 @@ class DataExporter:
 
         # Get global filter
         from src.core.filter_manager import get_filter_manager
+
         filter_manager = get_filter_manager()
         current_filter = filter_manager.get_filter()
 
         # Query data - SELECT state_name directly from joined Household to avoid lazy loading
-        query = self.db.query(
-            HouseholdMember,
-            Household.state_name
-        ).join(
-            Household,
-            (HouseholdMember.case_id == Household.case_id) &
-            (HouseholdMember.fiscal_year == Household.fiscal_year)
-        ).order_by(HouseholdMember.case_id, HouseholdMember.fiscal_year, HouseholdMember.member_number)
+        query = (
+            self.db.query(HouseholdMember, Household.state_name)
+            .join(
+                Household,
+                (HouseholdMember.case_id == Household.case_id) & (HouseholdMember.fiscal_year == Household.fiscal_year),
+            )
+            .order_by(HouseholdMember.case_id, HouseholdMember.fiscal_year, HouseholdMember.member_number)
+        )
 
         # Apply global state filter
         if current_filter.state:
@@ -781,18 +804,16 @@ class DataExporter:
 
         # Get global filter
         from src.core.filter_manager import get_filter_manager
+
         filter_manager = get_filter_manager()
         current_filter = filter_manager.get_filter()
 
         # Query data - SELECT state_name directly from joined Household to avoid lazy loading
-        query = self.db.query(
-            QCError,
-            Household.state_name
-        ).join(
-            Household,
-            (QCError.case_id == Household.case_id) &
-            (QCError.fiscal_year == Household.fiscal_year)
-        ).order_by(QCError.case_id, QCError.fiscal_year, QCError.error_number)
+        query = (
+            self.db.query(QCError, Household.state_name)
+            .join(Household, (QCError.case_id == Household.case_id) & (QCError.fiscal_year == Household.fiscal_year))
+            .order_by(QCError.case_id, QCError.fiscal_year, QCError.error_number)
+        )
 
         # Apply global state filter
         if current_filter.state:
@@ -821,7 +842,12 @@ class DataExporter:
             ("error_number", None, False, []),
             ("element_code", "element", False, ["element_category"]),  # Add element_desc and element_category
             ("nature_code", "nature", False, ["nature_category"]),  # Add nature_desc and nature_category
-            ("responsible_agency", "agency_responsibility", False, ["agency_responsibility_responsibility_type"]),  # Add agency_desc and responsibility_type
+            (
+                "responsible_agency",
+                "agency_responsibility",
+                False,
+                ["agency_responsibility_responsibility_type"],
+            ),  # Add agency_desc and responsibility_type
             ("error_amount", None, False, []),
             ("discovery_method", "discovery", False, []),  # Add discovery_desc
             ("verification_status", None, False, []),
@@ -889,13 +915,7 @@ class DataExporter:
         elapsed = time.time() - start_time
         logger.info(f"Created errors sheet with {row_count} rows in {elapsed:.2f}s")
 
-    def _create_dynamic_sheet(
-        self,
-        wb: Workbook,
-        table_name: str,
-        fiscal_year: int = None,
-        limit: int = None
-    ):
+    def _create_dynamic_sheet(self, wb: Workbook, table_name: str, fiscal_year: int = None, limit: int = None):
         """
         Create a sheet for any table dynamically using schema introspection.
 

@@ -3,6 +3,7 @@ Unit tests for Database Engine and Session Management
 
 Tests engine creation, session management, and database operations.
 """
+
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -21,8 +22,8 @@ from src.database.engine import (
 class TestCreateEngine:
     """Test engine creation"""
 
-    @patch('src.database.engine.create_engine')
-    @patch('src.database.engine.settings')
+    @patch("src.database.engine.create_engine")
+    @patch("src.database.engine.settings")
     def test_create_engine_with_connect_args(self, mock_settings, mock_create_engine):
         """Test engine creation with connection arguments"""
         # Mock settings
@@ -77,8 +78,8 @@ class TestGetEngineForDataset:
 class TestGetActiveEngine:
     """Test active engine retrieval"""
 
-    @patch('src.database.engine.settings')
-    @patch('src.database.engine.get_engine_for_dataset')
+    @patch("src.database.engine.settings")
+    @patch("src.database.engine.get_engine_for_dataset")
     def test_get_active_engine(self, mock_get_engine, mock_settings):
         """Test getting engine for active dataset"""
         mock_settings.active_dataset = "snap"
@@ -94,7 +95,7 @@ class TestGetActiveEngine:
 class TestGetSessionForDataset:
     """Test dataset session factory"""
 
-    @patch('src.database.engine.get_engine_for_dataset')
+    @patch("src.database.engine.get_engine_for_dataset")
     def test_get_session_for_dataset(self, mock_get_engine):
         """Test getting session factory for dataset"""
         mock_engine = MagicMock()
@@ -120,7 +121,7 @@ class TestGetDb:
         # Session should be closed after generator exits
         # (We can't easily test this without mocking SessionLocal)
 
-    @patch('src.database.engine.SessionLocal')
+    @patch("src.database.engine.SessionLocal")
     def test_get_db_closes_on_exit(self, mock_session_local):
         """Test get_db closes session on exit"""
         mock_session = MagicMock()
@@ -137,7 +138,7 @@ class TestGetDb:
 class TestGetDbContext:
     """Test get_db_context context manager"""
 
-    @patch('src.database.engine.SessionLocal')
+    @patch("src.database.engine.SessionLocal")
     def test_get_db_context_success(self, mock_session_local):
         """Test successful database operation"""
         mock_session = MagicMock()
@@ -150,7 +151,7 @@ class TestGetDbContext:
         mock_session.commit.assert_called_once()
         mock_session.close.assert_called_once()
 
-    @patch('src.database.engine.SessionLocal')
+    @patch("src.database.engine.SessionLocal")
     def test_get_db_context_exception(self, mock_session_local):
         """Test database operation with exception"""
         mock_session = MagicMock()
@@ -168,8 +169,8 @@ class TestGetDbContext:
 class TestDatabaseInitialization:
     """Test database initialization functions"""
 
-    @patch('src.database.engine.Base')
-    @patch('src.database.engine.engine')
+    @patch("src.database.engine.Base")
+    @patch("src.database.engine.engine")
     def test_init_db(self, mock_engine, mock_base):
         """Test database initialization"""
         from src.database.engine import init_db
@@ -179,8 +180,8 @@ class TestDatabaseInitialization:
         # Should create all tables
         mock_base.metadata.create_all.assert_called_once_with(bind=mock_engine)
 
-    @patch('src.database.engine.Base')
-    @patch('src.database.engine.engine')
+    @patch("src.database.engine.Base")
+    @patch("src.database.engine.engine")
     def test_drop_all_tables(self, mock_engine, mock_base):
         """Test dropping all tables"""
         from src.database.engine import drop_all_tables
@@ -226,9 +227,9 @@ class TestEngineCaching:
         _dataset_engines.clear()
 
         # Temporarily hide the datasets module
-        datasets_module = sys.modules.get('datasets')
-        if 'datasets' in sys.modules:
-            del sys.modules['datasets']
+        datasets_module = sys.modules.get("datasets")
+        if "datasets" in sys.modules:
+            del sys.modules["datasets"]
 
         try:
             # Should fall back to public schema when datasets module not available
@@ -239,4 +240,4 @@ class TestEngineCaching:
         finally:
             # Restore datasets module if it was there
             if datasets_module is not None:
-                sys.modules['datasets'] = datasets_module
+                sys.modules["datasets"] = datasets_module

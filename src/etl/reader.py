@@ -3,13 +3,14 @@ SnapAnalyst CSV Reader
 
 Reads SNAP QC CSV files using Polars for performance.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
 
 import polars as pl
 
-from src.core.exceptions import FileNotFoundError as SnapFileNotFoundError
+from src.core.exceptions import DataFileNotFoundError as SnapFileNotFoundError
 from src.core.exceptions import ValidationError
 from src.core.logging import get_logger
 from src.utils.column_mapping import get_required_household_columns
@@ -130,9 +131,7 @@ class CSVReader:
         logger.info(f"Missing columns: {missing_columns}")
 
         if missing_columns:
-            raise ValidationError(
-                f"Missing required columns: {', '.join(missing_columns)}"
-            )
+            raise ValidationError(f"Missing required columns: {', '.join(missing_columns)}")
 
         logger.debug(f"CSV structure validated: {len(df.columns)} columns")
 

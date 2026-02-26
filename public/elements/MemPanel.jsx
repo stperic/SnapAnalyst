@@ -2,8 +2,8 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Input } from "@/components/ui/input"
-import { useState, useRef, useEffect } from "react"
-import { Trash2, Upload, RefreshCw, ChevronDown, ChevronRight, AlertTriangle, CheckCircle, XCircle, FileText } from "lucide-react"
+import { useState, useRef } from "react"
+import { ArrowLeft, Trash2, Upload, RefreshCw, ChevronDown, ChevronRight, AlertTriangle, CheckCircle, XCircle } from "lucide-react"
 
 export default function MemPanel() {
     const [uploading, setUploading] = useState(false)
@@ -14,17 +14,8 @@ export default function MemPanel() {
     const [statusMsg, setStatusMsg] = useState(null)
     const [confirmAction, setConfirmAction] = useState(null)
     const fileInputRef = useRef(null)
-    const promptFileRef = useRef(null)
-
-    // Prompt state
-    const [promptData, setPromptData] = useState(null)
-    const [promptOpen, setPromptOpen] = useState(false)
-    const [promptExpanded, setPromptExpanded] = useState(false)
-    const [updatingPrompt, setUpdatingPrompt] = useState(false)
-
     // API base URL passed from Python (e.g. "http://localhost:8000/api/v1")
     const apiUrl = props.apiUrl || "/api/v1"
-    const userId = props.userId || "default"
 
     // Local state for data — initialized from props, updated after mutations
     const [stats, setStats] = useState(props.stats || {})
@@ -71,87 +62,6 @@ export default function MemPanel() {
         } catch (e) {
             showStatus("error", "Failed to refresh: " + e.message)
         }
-    }
-
-    const fetchPrompt = async () => {
-        try {
-            const res = await fetch(apiUrl + "/llm/prompt/kb", {
-                headers: { "X-User-ID": userId }
-            })
-            if (res.ok) {
-                const data = await res.json()
-                setPromptData(data)
-            }
-        } catch (e) {
-            // Silently fail on prompt fetch — not critical
-        }
-    }
-
-    useEffect(() => { fetchPrompt() }, [])
-
-    const handlePromptUpdate = async () => {
-        const input = promptFileRef.current
-        if (!input || !input.files || !input.files.length) {
-            showStatus("error", "Select a .txt file for the prompt")
-            return
-        }
-        const file = input.files[0]
-        if (!file.name.endsWith(".txt")) {
-            showStatus("error", "Only .txt files are allowed for prompts")
-            return
-        }
-
-        setConfirmAction({
-            location: "prompt",
-            label: "Update KB insight prompt with this file?",
-            onConfirm: async () => {
-                setConfirmAction(null)
-                setUpdatingPrompt(true)
-                try {
-                    const text = await file.text()
-                    const res = await fetch(apiUrl + "/llm/prompt/kb", {
-                        method: "PUT",
-                        headers: { "Content-Type": "application/json", "X-User-ID": userId },
-                        body: JSON.stringify({ prompt_text: text })
-                    })
-                    if (!res.ok) {
-                        const err = await res.json().catch(() => ({}))
-                        throw new Error(err.detail || "HTTP " + res.status)
-                    }
-                    showStatus("success", "KB prompt updated")
-                    input.value = ""
-                    await fetchPrompt()
-                } catch (e) {
-                    showStatus("error", "Prompt update failed: " + e.message)
-                } finally {
-                    setUpdatingPrompt(false)
-                }
-            }
-        })
-    }
-
-    const handlePromptReset = async () => {
-        setConfirmAction({
-            location: "prompt",
-            label: "Reset KB prompt to system default?",
-            onConfirm: async () => {
-                setConfirmAction(null)
-                setUpdatingPrompt(true)
-                try {
-                    const res = await fetch(apiUrl + "/llm/prompt/kb", {
-                        method: "DELETE",
-                        headers: { "X-User-ID": userId }
-                    })
-                    if (!res.ok) throw new Error("HTTP " + res.status)
-                    showStatus("success", "KB prompt reset to default")
-                    await fetchPrompt()
-                } catch (e) {
-                    showStatus("error", "Prompt reset failed: " + e.message)
-                } finally {
-                    setUpdatingPrompt(false)
-                }
-            }
-        })
     }
 
     const handleDelete = async (id) => {
@@ -226,8 +136,24 @@ export default function MemPanel() {
     const chunkCount = trainingStats.total_chunks || 0
     const sizeMb = stats.chromadb_size_mb || 0
 
+    const handleBack = () => {
+        callAction({
+            name: "open_settings_panel",
+            payload: { panel: "settings" },
+        })
+    }
+
     return (
-        <div className="flex flex-col gap-3 p-1 text-sm">
+        <div className="flex flex-col gap-4 p-2 text-sm">
+            {/* Back to Settings */}
+            <button
+                onClick={handleBack}
+                className="flex items-center gap-1 text-xs opacity-60 hover:opacity-100 transition-opacity w-fit"
+            >
+                <ArrowLeft className="h-3 w-3" />
+                Settings
+            </button>
+
             {/* Status message banner */}
             {statusMsg && (
                 <div className={`flex items-center gap-2 p-2 rounded text-xs ${
@@ -312,59 +238,6 @@ export default function MemPanel() {
                     <Upload className="h-3 w-3 mr-1" />
                     {uploading ? "Uploading..." : "Upload"}
                 </Button>
-            </div>
-
-            <Separator />
-
-            {/* System Prompt */}
-            <div>
-                <button onClick={() => setPromptOpen(!promptOpen)}
-                    className="flex items-center gap-1 w-full text-left py-1 px-1 rounded hover:bg-muted/50 text-sm font-medium">
-                    {promptOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                    <FileText className="h-3 w-3" />
-                    System Prompt
-                    {promptData && (
-                        <Badge variant="outline" className={`ml-auto text-[10px] px-1 py-0 ${
-                            promptData.is_custom ? "text-blue-500 border-blue-500" : "text-gray-400 border-gray-500"
-                        }`}>
-                            {promptData.is_custom ? "Custom" : "Default"}
-                        </Badge>
-                    )}
-                </button>
-                {promptOpen && promptData && (
-                    <div className="ml-2 mt-1 space-y-2">
-                        <div className="grid grid-cols-2 gap-y-1 text-xs">
-                            <span>Type</span><span className="text-right">KB Insight</span>
-                            <span>Characters</span><span className="text-right font-medium tabular-nums">{promptData.char_count?.toLocaleString()}</span>
-                        </div>
-                        <div>
-                            <pre className="text-[10px] bg-muted/50 rounded p-2 whitespace-pre-wrap break-words max-h-40 overflow-y-auto">
-                                {promptExpanded ? promptData.prompt_text : (promptData.prompt_text || "").slice(0, 500)}
-                            </pre>
-                            {promptData.prompt_text && promptData.prompt_text.length > 500 && (
-                                <button onClick={() => setPromptExpanded(!promptExpanded)}
-                                    className="text-[10px] text-blue-400 hover:text-blue-300 mt-1">
-                                    {promptExpanded ? "Show less" : "Show more..."}
-                                </button>
-                            )}
-                        </div>
-                        <div>
-                            <input type="file" ref={promptFileRef} accept=".txt" className="block w-full text-xs mb-1" />
-                            <Button size="sm" className="w-full" onClick={handlePromptUpdate} disabled={updatingPrompt}>
-                                <Upload className="h-3 w-3 mr-1" />
-                                {updatingPrompt ? "Updating..." : "Update Prompt"}
-                            </Button>
-                        </div>
-                        {promptData.is_custom && (
-                            <Button variant="outline" size="sm" className="w-full border-red-400 text-red-400 hover:bg-red-500/10"
-                                onClick={handlePromptReset} disabled={updatingPrompt}>
-                                <RefreshCw className="h-3 w-3 mr-1" />
-                                Reset to Default
-                            </Button>
-                        )}
-                        <ConfirmInline location="prompt" />
-                    </div>
-                )}
             </div>
 
             <Separator />

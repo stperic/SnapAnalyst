@@ -1,6 +1,7 @@
 """
 SnapAnalyst Configuration Management
 """
+
 from __future__ import annotations
 
 from functools import lru_cache
@@ -55,8 +56,9 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
 
-    # CORS — set CORS_ORIGINS env var as comma-separated URLs, or "*" to allow all
-    cors_origins: list[str] = ["*"]
+    # CORS — set CORS_ORIGINS env var as comma-separated URLs
+    # Default to localhost only; set to "*" explicitly in .env if you need wildcard
+    cors_origins: list[str] = ["http://localhost:8001", "http://localhost:8000"]
 
     @field_validator("cors_origins", mode="before")
     @classmethod
@@ -79,7 +81,6 @@ class Settings(BaseSettings):
 
     # LLM Configuration
     llm_provider: str = Field(default="ollama", pattern="^(openai|anthropic|ollama|azure_openai)$")
-    llm_model: str | None = None  # Auto-selected based on provider if not set (legacy)
 
     # Legacy/shared settings (used as defaults if specific settings not provided)
     llm_temperature: float = Field(default=0.1, ge=0.0, le=2.0)
@@ -87,18 +88,49 @@ class Settings(BaseSettings):
 
     # SQL Generation settings (LLM_SQL_*)
     llm_sql_model: str | None = None  # Model for SQL generation
-    llm_sql_max_tokens: int | None = Field(default=None, ge=100, le=8000, description="Max tokens for SQL generation (defaults to llm_max_tokens)")
-    llm_sql_temperature: float | None = Field(default=None, ge=0.0, le=2.0, description="Temperature for SQL generation (defaults to llm_temperature)")
+    llm_sql_max_tokens: int | None = Field(
+        default=None, ge=100, le=8000, description="Max tokens for SQL generation (defaults to llm_max_tokens)"
+    )
+    llm_sql_temperature: float | None = Field(
+        default=None, ge=0.0, le=2.0, description="Temperature for SQL generation (defaults to llm_temperature)"
+    )
 
     # Knowledge Base / Insight settings (LLM_KB_*)
     llm_kb_model: str | None = None  # Model for KB/insight generation
-    llm_kb_max_tokens: int = Field(default=150, ge=50, le=1000, description="Max response tokens for insights")
-    llm_kb_max_data_size: int = Field(default=8000, ge=1000, le=50000, description="Max chars for previous query data in insights")
-    llm_kb_max_prompt_size: int = Field(default=10000, ge=1000, le=50000, description="Total max prompt size (chars) for KB insights")
-    llm_kb_temperature: float | None = Field(default=None, ge=0.0, le=2.0, description="Temperature for KB insights (defaults to llm_temperature)")
+    llm_kb_max_tokens: int = Field(default=1000, ge=50, le=8000, description="Max response tokens for insights")
+    llm_kb_max_data_size: int = Field(
+        default=50000, ge=1000, le=500000, description="Max chars for previous query data in insights"
+    )
+    llm_kb_max_prompt_size: int = Field(
+        default=100000, ge=1000, le=500000, description="Total max prompt size (chars) for KB insights"
+    )
+    llm_kb_temperature: float | None = Field(
+        default=0.3, ge=0.0, le=2.0, description="Temperature for KB insights (higher for more natural summaries)"
+    )
+
+    # SQL Result AI Summary settings
+    llm_sql_summary_enabled: bool = Field(
+        default=True, description="Enable AI-powered summaries for SQL query results"
+    )
+    llm_sql_summary_max_rows: int = Field(
+        default=50, ge=1, le=500, description="Max result rows sent to LLM for AI summary"
+    )
+
+    # Vanna RAG retrieval counts
+    vanna_n_results_sql: int = Field(
+        default=10, ge=1, le=50, description="Number of SQL example pairs retrieved from ChromaDB"
+    )
+    vanna_n_results_docs: int = Field(
+        default=10, ge=1, le=50, description="Number of documentation chunks retrieved from ChromaDB"
+    )
 
     # Query Result Settings
-    max_result_columns: int = Field(default=10, ge=1, le=100, description="Maximum number of columns to return in query results (for SELECT * queries)")
+    max_result_columns: int = Field(
+        default=10,
+        ge=1,
+        le=100,
+        description="Maximum number of columns to return in query results (for SELECT * queries)",
+    )
 
     # API Keys (Optional - required based on provider)
     openai_api_key: str | None = None
@@ -124,7 +156,7 @@ class Settings(BaseSettings):
     #    - Risk: All user questions stored (privacy concern)
     #    - Controlled by: VANNA_STORE_USER_QUERIES flag below
 
-    vanna_store_user_queries: bool = False  # Enable continuous learning (DEFAULT: OFF)
+    vanna_store_user_queries: bool = True  # Feedback-driven training: thumbs up/down trains Vanna
 
     # SQL training data folder — all .md/.txt loaded as documentation, all .json as question/SQL pairs
     sql_training_data_path: str = "./datasets/snap/training"
@@ -139,6 +171,56 @@ class Settings(BaseSettings):
     dataset_schema_isolation: bool = False  # If True, use PostgreSQL schemas for isolation
 
     @property
+    def resolved_data_path(self) -> str:
+        """Resolve data path from active dataset, falling back to snapdata_path."""
+        if self.snapdata_path != "./datasets/snap/data":
+            return self.snapdata_path  # User override
+        try:
+            from datasets import get_active_dataset
+
+            ds = get_active_dataset()
+            if ds:
+                return str(ds.base_path / "data")
+        except Exception:
+            pass
+        return self.snapdata_path
+
+    @property
+    def resolved_training_path(self) -> str:
+        """Resolve training data path from active dataset, falling back to sql_training_data_path."""
+        if self.sql_training_data_path != "./datasets/snap/training":
+            return self.sql_training_data_path  # User override
+        try:
+            from datasets import get_active_dataset
+
+            ds = get_active_dataset()
+            if ds:
+                return str(ds.base_path / "training")
+        except Exception:
+            pass
+        return self.sql_training_data_path
+
+    @property
+    def resolved_prompts_path(self) -> str:
+        """Resolve prompts path from active dataset, falling back to system_prompts_path."""
+        if self.system_prompts_path != "./datasets/snap/prompts":
+            return self.system_prompts_path  # User override
+        try:
+            from datasets import get_active_dataset
+
+            ds = get_active_dataset()
+            if ds:
+                return str(ds.base_path / "prompts")
+        except Exception:
+            pass
+        return self.system_prompts_path
+
+    @property
+    def data_path(self) -> str:
+        """Alias for resolved_data_path (backward compatible)."""
+        return self.resolved_data_path
+
+    @property
     def is_development(self) -> bool:
         """Check if running in development mode"""
         return self.environment == "development"
@@ -149,42 +231,30 @@ class Settings(BaseSettings):
         return self.environment == "production"
 
     @property
-    def default_llm_model(self) -> str:
-        """Get default model based on provider (legacy - use sql or summary specific)"""
-        defaults = {
-            "openai": "gpt-4-turbo-preview",
-            "anthropic": "claude-3-5-sonnet-20241022",
-            "ollama": "llama3.1:8b",
-            "azure_openai": "gpt-4"  # Default, but will use llm_sql_model if set
-        }
-        return self.llm_model or defaults.get(self.llm_provider, "llama3.1:8b")
-
-    @property
     def sql_model(self) -> str:
         """Get model for SQL generation"""
         if self.llm_sql_model:
             return self.llm_sql_model
-        # Default to more powerful models for SQL generation
         defaults = {
-            "openai": "gpt-4-turbo-preview",
-            "azure_openai": "gpt-4",  # Will use llm_sql_model if set
-            "anthropic": "claude-3-5-sonnet-20241022",
-            "ollama": "llama3.1:8b"
+            "openai": "gpt-4.1",
+            "azure_openai": "gpt-4.1",
+            "anthropic": "claude-sonnet-4-20250514",
+            "ollama": "llama3.1:8b",
         }
-        return defaults.get(self.llm_provider, "gpt-4-turbo-preview")
+        return defaults.get(self.llm_provider, "gpt-4.1")
 
     @property
     def kb_model(self) -> str:
         """Get model for KB/insight generation"""
         if self.llm_kb_model:
             return self.llm_kb_model
-        # Default to faster/cheaper models for insights
         defaults = {
-            "openai": "gpt-3.5-turbo",
-            "anthropic": "claude-3-5-haiku-20241022",
-            "ollama": "llama3.1:8b"
+            "openai": "gpt-4.1-mini",
+            "azure_openai": "gpt-4.1-mini",
+            "anthropic": "claude-haiku-4-5-20251001",
+            "ollama": "llama3.1:8b",
         }
-        return defaults.get(self.llm_provider, "gpt-3.5-turbo")
+        return defaults.get(self.llm_provider, "gpt-4.1-mini")
 
     @property
     def effective_sql_max_tokens(self) -> int:
@@ -209,7 +279,23 @@ def get_settings() -> Settings:
 
     Uses LRU cache to ensure settings are loaded once and reused.
     """
-    return Settings()
+    import logging
+
+    _settings = Settings()
+
+    # Warn about wildcard CORS in production
+    if _settings.is_production and "*" in _settings.cors_origins:
+        logging.getLogger(__name__).warning(
+            "CORS is set to wildcard ('*') in production. Set CORS_ORIGINS to specific origins for better security."
+        )
+
+    # Warn about default SECRET_KEY
+    if _settings.secret_key in ("change-this-to-a-secure-random-string", "change-this-in-production"):
+        logging.getLogger(__name__).warning(
+            "SECRET_KEY is set to a default placeholder value. Generate a secure random key for production use."
+        )
+
+    return _settings
 
 
 # Global settings instance

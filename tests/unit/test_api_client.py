@@ -3,6 +3,7 @@ Unit tests for API Client
 
 Tests HTTP client functions for backend communication.
 """
+
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import httpx
@@ -55,13 +56,14 @@ class TestAPIError:
 class TestGetAPIHelpers:
     """Test API helper functions"""
 
-    @patch.dict('os.environ', {'API_BASE_URL': 'http://custom:9000'})
+    @patch.dict("os.environ", {"API_BASE_URL": "http://custom:9000"})
     def test_get_api_base_url_custom(self):
         """Test getting custom API base URL from environment"""
         # Need to reload module to pick up env var change
         from importlib import reload
 
         import src.clients.api_client as client_module
+
         reload(client_module)
 
         assert client_module.get_api_base_url() == "http://custom:9000"
@@ -71,34 +73,37 @@ class TestGetAPIHelpers:
         result = get_api_prefix()
         assert result == "/api/v1"
 
-    @patch.dict('os.environ', {'API_EXTERNAL_URL': 'https://example.com'})
+    @patch.dict("os.environ", {"API_EXTERNAL_URL": "https://example.com"})
     def test_get_api_external_url_custom(self):
         """Test getting custom external URL"""
         from importlib import reload
 
         import src.clients.api_client as client_module
+
         reload(client_module)
 
         result = client_module.get_api_external_url()
         assert result == "https://example.com"
 
-    @patch.dict('os.environ', {'API_EXTERNAL_URL': 'relative'})
+    @patch.dict("os.environ", {"API_EXTERNAL_URL": "relative"})
     def test_get_api_external_url_relative(self):
         """Test getting relative external URL"""
         from importlib import reload
 
         import src.clients.api_client as client_module
+
         reload(client_module)
 
         result = client_module.get_api_external_url()
         assert result == ""
 
-    @patch.dict('os.environ', {'API_EXTERNAL_URL': ''})
+    @patch.dict("os.environ", {"API_EXTERNAL_URL": ""})
     def test_get_api_external_url_empty(self):
         """Test getting empty external URL"""
         from importlib import reload
 
         import src.clients.api_client as client_module
+
         reload(client_module)
 
         result = client_module.get_api_external_url()
@@ -109,7 +114,7 @@ class TestCallAPI:
     """Test call_api function"""
 
     @pytest.mark.asyncio
-    @patch('httpx.AsyncClient')
+    @patch("httpx.AsyncClient")
     async def test_call_api_get_success(self, mock_client_cls):
         """Test successful GET request"""
         mock_response = Mock()
@@ -126,7 +131,7 @@ class TestCallAPI:
         mock_client.get.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch('httpx.AsyncClient')
+    @patch("httpx.AsyncClient")
     async def test_call_api_post_success(self, mock_client_cls):
         """Test successful POST request"""
         mock_response = Mock()
@@ -137,17 +142,13 @@ class TestCallAPI:
         mock_client.post.return_value = mock_response
         mock_client_cls.return_value.__aenter__.return_value = mock_client
 
-        result = await call_api(
-            "/test/endpoint",
-            method="POST",
-            data={"name": "test"}
-        )
+        result = await call_api("/test/endpoint", method="POST", data={"name": "test"})
 
         assert result == {"created": True}
         mock_client.post.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch('httpx.AsyncClient')
+    @patch("httpx.AsyncClient")
     async def test_call_api_delete_success(self, mock_client_cls):
         """Test successful DELETE request"""
         mock_response = Mock()
@@ -171,9 +172,8 @@ class TestCallAPI:
 
         assert "Unsupported method" in str(exc_info.value)
 
-
     @pytest.mark.asyncio
-    @patch('httpx.AsyncClient')
+    @patch("httpx.AsyncClient")
     async def test_call_api_custom_timeout(self, mock_client_cls):
         """Test call_api with custom timeout"""
         mock_response = Mock()
@@ -194,7 +194,7 @@ class TestCheckAPIHealth:
     """Test check_api_health function"""
 
     @pytest.mark.asyncio
-    @patch('httpx.AsyncClient')
+    @patch("httpx.AsyncClient")
     async def test_check_api_health_success(self, mock_client_cls):
         """Test successful API health check"""
         mock_response = Mock()
@@ -210,7 +210,7 @@ class TestCheckAPIHealth:
         assert version == "0.1.0"
 
     @pytest.mark.asyncio
-    @patch('httpx.AsyncClient')
+    @patch("httpx.AsyncClient")
     async def test_check_api_health_no_version(self, mock_client_cls):
         """Test health check without version in response"""
         mock_response = Mock()
@@ -226,7 +226,7 @@ class TestCheckAPIHealth:
         assert version == "unknown"
 
     @pytest.mark.asyncio
-    @patch('httpx.AsyncClient')
+    @patch("httpx.AsyncClient")
     async def test_check_api_health_connection_error(self, mock_client_cls):
         """Test health check with connection error"""
         mock_client = AsyncMock()
@@ -243,13 +243,11 @@ class TestCheckDatabaseHealth:
     """Test check_database_health function"""
 
     @pytest.mark.asyncio
-    @patch('httpx.AsyncClient')
+    @patch("httpx.AsyncClient")
     async def test_check_database_health_connected(self, mock_client_cls):
         """Test database health check when connected"""
         mock_response = Mock()
-        mock_response.json.return_value = {
-            "database": {"connected": True, "name": "test_db"}
-        }
+        mock_response.json.return_value = {"database": {"connected": True, "name": "test_db"}}
 
         mock_client = AsyncMock()
         mock_client.get.return_value = mock_response
@@ -261,13 +259,11 @@ class TestCheckDatabaseHealth:
         assert db_name == "test_db"
 
     @pytest.mark.asyncio
-    @patch('httpx.AsyncClient')
+    @patch("httpx.AsyncClient")
     async def test_check_database_health_disconnected(self, mock_client_cls):
         """Test database health check when disconnected"""
         mock_response = Mock()
-        mock_response.json.return_value = {
-            "database": {"connected": False}
-        }
+        mock_response.json.return_value = {"database": {"connected": False}}
 
         mock_client = AsyncMock()
         mock_client.get.return_value = mock_response
@@ -279,13 +275,11 @@ class TestCheckDatabaseHealth:
         assert db_name == "unknown"
 
     @pytest.mark.asyncio
-    @patch('httpx.AsyncClient')
+    @patch("httpx.AsyncClient")
     async def test_check_database_health_default_name(self, mock_client_cls):
         """Test database health check with missing name"""
         mock_response = Mock()
-        mock_response.json.return_value = {
-            "database": {"connected": True}
-        }
+        mock_response.json.return_value = {"database": {"connected": True}}
 
         mock_client = AsyncMock()
         mock_client.get.return_value = mock_response
@@ -297,7 +291,7 @@ class TestCheckDatabaseHealth:
         assert db_name == "snapanalyst_db"
 
     @pytest.mark.asyncio
-    @patch('httpx.AsyncClient')
+    @patch("httpx.AsyncClient")
     async def test_check_database_health_error(self, mock_client_cls):
         """Test database health check with error"""
         mock_client = AsyncMock()
@@ -314,15 +308,11 @@ class TestCheckLLMHealth:
     """Test check_llm_health function"""
 
     @pytest.mark.asyncio
-    @patch('httpx.AsyncClient')
+    @patch("httpx.AsyncClient")
     async def test_check_llm_health_healthy(self, mock_client_cls):
         """Test LLM health check when healthy"""
         mock_response = Mock()
-        mock_response.json.return_value = {
-            "healthy": True,
-            "provider": "OpenAI",
-            "status": "ok"
-        }
+        mock_response.json.return_value = {"healthy": True, "provider": "OpenAI", "status": "ok"}
 
         mock_client = AsyncMock()
         mock_client.get.return_value = mock_response
@@ -334,15 +324,11 @@ class TestCheckLLMHealth:
         assert provider == "OpenAI"
 
     @pytest.mark.asyncio
-    @patch('httpx.AsyncClient')
+    @patch("httpx.AsyncClient")
     async def test_check_llm_health_not_configured(self, mock_client_cls):
         """Test LLM health check when not configured"""
         mock_response = Mock()
-        mock_response.json.return_value = {
-            "healthy": False,
-            "provider": "OpenAI",
-            "status": "not_configured"
-        }
+        mock_response.json.return_value = {"healthy": False, "provider": "OpenAI", "status": "not_configured"}
 
         mock_client = AsyncMock()
         mock_client.get.return_value = mock_response
@@ -354,15 +340,11 @@ class TestCheckLLMHealth:
         assert "not configured" in provider
 
     @pytest.mark.asyncio
-    @patch('httpx.AsyncClient')
+    @patch("httpx.AsyncClient")
     async def test_check_llm_health_not_reachable(self, mock_client_cls):
         """Test LLM health check when not reachable"""
         mock_response = Mock()
-        mock_response.json.return_value = {
-            "healthy": False,
-            "provider": "Ollama",
-            "status": "not_reachable"
-        }
+        mock_response.json.return_value = {"healthy": False, "provider": "Ollama", "status": "not_reachable"}
 
         mock_client = AsyncMock()
         mock_client.get.return_value = mock_response
@@ -374,15 +356,11 @@ class TestCheckLLMHealth:
         assert "not reachable" in provider
 
     @pytest.mark.asyncio
-    @patch('httpx.AsyncClient')
+    @patch("httpx.AsyncClient")
     async def test_check_llm_health_model_not_found(self, mock_client_cls):
         """Test LLM health check when model not found"""
         mock_response = Mock()
-        mock_response.json.return_value = {
-            "healthy": False,
-            "provider": "Ollama",
-            "status": "model_not_found"
-        }
+        mock_response.json.return_value = {"healthy": False, "provider": "Ollama", "status": "model_not_found"}
 
         mock_client = AsyncMock()
         mock_client.get.return_value = mock_response
@@ -394,15 +372,11 @@ class TestCheckLLMHealth:
         assert "model not found" in provider
 
     @pytest.mark.asyncio
-    @patch('httpx.AsyncClient')
+    @patch("httpx.AsyncClient")
     async def test_check_llm_health_connection_failed(self, mock_client_cls):
         """Test LLM health check with connection failure"""
         mock_response = Mock()
-        mock_response.json.return_value = {
-            "healthy": False,
-            "provider": "Anthropic",
-            "status": "connection_failed"
-        }
+        mock_response.json.return_value = {"healthy": False, "provider": "Anthropic", "status": "connection_failed"}
 
         mock_client = AsyncMock()
         mock_client.get.return_value = mock_response
@@ -414,15 +388,11 @@ class TestCheckLLMHealth:
         assert "connection failed" in provider
 
     @pytest.mark.asyncio
-    @patch('httpx.AsyncClient')
+    @patch("httpx.AsyncClient")
     async def test_check_llm_health_unknown_status(self, mock_client_cls):
         """Test LLM health check with unknown status"""
         mock_response = Mock()
-        mock_response.json.return_value = {
-            "healthy": False,
-            "provider": "TestProvider",
-            "status": "weird_error"
-        }
+        mock_response.json.return_value = {"healthy": False, "provider": "TestProvider", "status": "weird_error"}
 
         mock_client = AsyncMock()
         mock_client.get.return_value = mock_response
@@ -434,7 +404,7 @@ class TestCheckLLMHealth:
         assert "weird_error" in provider
 
     @pytest.mark.asyncio
-    @patch('httpx.AsyncClient')
+    @patch("httpx.AsyncClient")
     async def test_check_llm_health_network_error(self, mock_client_cls):
         """Test LLM health check with network error"""
         mock_client = AsyncMock()
@@ -451,8 +421,8 @@ class TestUploadFile:
     """Test upload_file function"""
 
     @pytest.mark.asyncio
-    @patch('httpx.AsyncClient')
-    @patch('builtins.open', create=True)
+    @patch("httpx.AsyncClient")
+    @patch("builtins.open", create=True)
     async def test_upload_file_success(self, mock_open, mock_client_cls):
         """Test successful file upload"""
         mock_file = MagicMock()
@@ -469,12 +439,12 @@ class TestUploadFile:
         result = await upload_file("/path/to/file.csv", "test.csv")
 
         assert result == {"file_id": "123", "status": "uploaded"}
-        mock_open.assert_called_once_with("/path/to/file.csv", 'rb')
+        mock_open.assert_called_once_with("/path/to/file.csv", "rb")
         mock_client.post.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch('httpx.AsyncClient')
-    @patch('builtins.open', create=True)
+    @patch("httpx.AsyncClient")
+    @patch("builtins.open", create=True)
     async def test_upload_file_http_error(self, mock_open, mock_client_cls):
         """Test file upload with HTTP error"""
         mock_file = MagicMock()
@@ -497,18 +467,18 @@ class TestStreamFromAPI:
     """Test stream_from_api function"""
 
     @pytest.mark.asyncio
-    @patch('src.clients.api_client.httpx.AsyncClient')
+    @patch("src.clients.api_client.httpx.AsyncClient")
     async def test_stream_from_api_success(self, mock_client_cls):
         """Test successful SSE streaming"""
         lines = [
             "event: start",
-            "data: {\"message\": \"Starting\"}",
+            'data: {"message": "Starting"}',
             "",
             "event: progress",
-            "data: {\"percent\": 50}",
+            'data: {"percent": 50}',
             "",
-            "data: {\"done\": true}",
-            ""
+            'data: {"done": true}',
+            "",
         ]
 
         async def mock_aiter_lines():
@@ -541,16 +511,10 @@ class TestStreamFromAPI:
         assert events[2]["data"]["done"] is True
 
     @pytest.mark.asyncio
-    @patch('src.clients.api_client.httpx.AsyncClient')
+    @patch("src.clients.api_client.httpx.AsyncClient")
     async def test_stream_from_api_with_comments(self, mock_client_cls):
         """Test SSE streaming with comment lines"""
-        lines = [
-            ": keepalive",
-            "data: {\"test\": \"value\"}",
-            "",
-            ": another comment",
-            ""
-        ]
+        lines = [": keepalive", 'data: {"test": "value"}', "", ": another comment", ""]
 
         async def mock_aiter_lines():
             for line in lines:
@@ -578,13 +542,10 @@ class TestStreamFromAPI:
         assert events[0]["data"]["test"] == "value"
 
     @pytest.mark.asyncio
-    @patch('src.clients.api_client.httpx.AsyncClient')
+    @patch("src.clients.api_client.httpx.AsyncClient")
     async def test_stream_from_api_malformed_json(self, mock_client_cls):
         """Test SSE streaming with malformed JSON"""
-        lines = [
-            "data: not valid json",
-            ""
-        ]
+        lines = ["data: not valid json", ""]
 
         async def mock_aiter_lines():
             for line in lines:
@@ -610,4 +571,3 @@ class TestStreamFromAPI:
         # Should return raw data when JSON parsing fails
         assert len(events) == 1
         assert events[0]["data"]["raw"] == "not valid json"
-

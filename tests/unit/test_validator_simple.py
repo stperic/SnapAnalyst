@@ -1,6 +1,7 @@
 """
 Unit tests for DataValidator - simplified version
 """
+
 from decimal import Decimal
 
 from src.etl.validator import DataValidator, ValidationResult

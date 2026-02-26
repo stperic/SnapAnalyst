@@ -82,6 +82,7 @@ class DatasetRegistry:
 
             try:
                 import importlib
+
                 module = importlib.import_module(f"datasets.{dataset_name}")
                 if hasattr(module, "DATASET_CONFIG"):
                     config = module.DATASET_CONFIG
@@ -107,9 +108,8 @@ class DatasetRegistry:
             except Exception as e:
                 # Log but don't fail - some configs may be invalid
                 import logging
-                logging.getLogger(__name__).warning(
-                    f"Failed to load dataset from {config_file}: {e}"
-                )
+
+                logging.getLogger(__name__).warning(f"Failed to load dataset from {config_file}: {e}")
 
     def register(self, config: DatasetConfig) -> None:
         """
@@ -189,6 +189,7 @@ class DatasetRegistry:
 # =============================================================================
 # MODULE-LEVEL CONVENIENCE FUNCTIONS
 # =============================================================================
+
 
 def get_registry() -> DatasetRegistry:
     """

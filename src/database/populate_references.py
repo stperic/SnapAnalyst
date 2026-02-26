@@ -25,6 +25,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from src.core.logging import get_logger
 from src.database.engine import Base, engine
 from src.database.reference_models import (
     ALL_REFERENCE_MODELS,
@@ -56,7 +57,7 @@ from src.database.reference_models import (
     RefWorkRegistration,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Path to the single source of truth (now in datasets/snap/)
 DATA_MAPPING_PATH = Path(__file__).parent.parent.parent / "datasets" / "snap" / "data_mapping.json"
@@ -226,11 +227,7 @@ def populate_agency_responsibility(session: Session, data: dict) -> int:
                 existing.description = description
                 existing.responsibility_type = resp_type
             else:
-                record = RefAgencyResponsibility(
-                    code=code,
-                    description=description,
-                    responsibility_type=resp_type
-                )
+                record = RefAgencyResponsibility(code=code, description=description, responsibility_type=resp_type)
                 session.add(record)
             count += 1
         except (ValueError, TypeError) as e:
@@ -263,11 +260,7 @@ def populate_states(session: Session, data: dict) -> int:
                 existing.state_name = state_name
                 existing.abbreviation = abbreviation
             else:
-                record = RefState(
-                    fips_code=fips_code,
-                    state_name=state_name,
-                    abbreviation=abbreviation
-                )
+                record = RefState(fips_code=fips_code, state_name=state_name, abbreviation=abbreviation)
                 session.add(record)
             count += 1
         except (ValueError, TypeError) as e:
@@ -282,9 +275,7 @@ def create_reference_tables():
     from src.database import reference_models  # noqa
 
     # Create tables
-    Base.metadata.create_all(engine, tables=[
-        model.__table__ for model in ALL_REFERENCE_MODELS
-    ])
+    Base.metadata.create_all(engine, tables=[model.__table__ for model in ALL_REFERENCE_MODELS])
     logger.info("Reference tables created/verified")
 
 

@@ -3,6 +3,7 @@ SnapAnalyst FastAPI Dependencies
 
 Shared dependencies for API endpoints.
 """
+
 from collections.abc import Generator
 from contextvars import ContextVar
 
@@ -12,7 +13,7 @@ from src.database.engine import get_db
 
 # Thread-safe request context for user identification
 # ContextVar is preferred over threading.local() for asyncio compatibility
-_request_user_id: ContextVar[str | None] = ContextVar('request_user_id', default=None)
+_request_user_id: ContextVar[str | None] = ContextVar("request_user_id", default=None)
 
 
 def set_request_user(user_id: str) -> None:

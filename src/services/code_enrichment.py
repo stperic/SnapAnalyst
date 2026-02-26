@@ -8,29 +8,32 @@ This is business/domain logic, not UI-specific.
 """
 
 import json
-import logging
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
+from src.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 # =============================================================================
-# CODE COLUMN MAPPINGS
+# CODE COLUMN MAPPINGS (loaded from active dataset)
 # =============================================================================
 
-# Maps column names to lookup keys in data_mapping.json
-CODE_COLUMN_MAPPINGS = {
-    'element_code': 'element_codes',
-    'nature_code': 'nature_codes',
-    'status': 'status_codes',
-    'error_finding': 'error_finding_codes',
-    'case_classification': 'case_classification_codes',
-    'expedited_service': 'expedited_service_codes',
-    'categorical_eligibility': 'categorical_eligibility_codes',
-    'sex': 'sex_codes',
-    'snap_affiliation_code': 'snap_affiliation_codes',
-    'agency_responsibility': 'agency_responsibility_codes',
-    'discovery_method': 'discovery_method_codes',
-}
+
+def _get_code_column_mappings() -> dict[str, str]:
+    """Get code column mappings from the active dataset configuration."""
+    try:
+        from datasets import get_active_dataset
+
+        ds = get_active_dataset()
+        if ds:
+            return ds.get_code_column_mappings()
+    except Exception:
+        pass
+    return {}
+
+
+# Backward-compatible module-level access (lazy-evaluated)
+CODE_COLUMN_MAPPINGS = _get_code_column_mappings()
 
 # =============================================================================
 # GLOBAL CACHE
@@ -53,22 +56,34 @@ def load_code_lookups() -> dict:
         return _CODE_LOOKUPS_CACHE
 
     try:
-        # Look for data_mapping.json in datasets/snap/ (primary) or project root (fallback)
+        # Try loading from active dataset first
+        try:
+            from datasets import get_active_dataset
+
+            ds = get_active_dataset()
+            if ds:
+                _CODE_LOOKUPS_CACHE = ds.get_code_lookups()
+                if _CODE_LOOKUPS_CACHE:
+                    logger.info(f"Loaded {len(_CODE_LOOKUPS_CACHE)} code lookup tables from dataset '{ds.name}'")
+                    return _CODE_LOOKUPS_CACHE
+        except Exception as e:
+            logger.debug(f"Could not load code lookups from dataset registry: {e}")
+
+        # Fallback: search for data_mapping.json directly
         possible_paths = [
-            Path(__file__).parent.parent.parent / "datasets" / "snap" / "data_mapping.json",  # Primary location
-            Path("./datasets/snap/data_mapping.json"),  # Current directory
-            Path(__file__).parent.parent.parent / "data_mapping.json",  # Legacy root location
+            Path(__file__).parent.parent.parent / "datasets" / "snap" / "data_mapping.json",
+            Path(__file__).parent.parent.parent / "data_mapping.json",
         ]
 
         for data_mapping_path in possible_paths:
             if data_mapping_path.exists():
                 with open(data_mapping_path) as f:
                     data = json.load(f)
-                    _CODE_LOOKUPS_CACHE = data.get('code_lookups', {})
+                    _CODE_LOOKUPS_CACHE = data.get("code_lookups", {})
                     logger.info(f"Loaded {len(_CODE_LOOKUPS_CACHE)} code lookup tables from {data_mapping_path}")
                     return _CODE_LOOKUPS_CACHE
 
-        logger.warning("data_mapping.json not found in datasets/snap/ or root")
+        logger.warning("data_mapping.json not found")
         return {}
 
     except Exception as e:
@@ -97,8 +112,9 @@ def enrich_results_with_code_descriptions(results: list[dict]) -> dict[str, dict
         return {}
 
     # Detect code columns in results
+    code_column_mappings = _get_code_column_mappings()
     column_names = set(results[0].keys())
-    code_columns = column_names & CODE_COLUMN_MAPPINGS.keys()
+    code_columns = column_names & code_column_mappings.keys()
 
     if not code_columns:
         return {}  # No code columns found
@@ -110,7 +126,7 @@ def enrich_results_with_code_descriptions(results: list[dict]) -> dict[str, dict
 
     enriched = {}
     for col_name in code_columns:
-        lookup_key = CODE_COLUMN_MAPPINGS[col_name]
+        lookup_key = code_column_mappings[col_name]
 
         # Extract unique codes from results (convert to string for lookup)
         unique_codes = set()
@@ -128,7 +144,7 @@ def enrich_results_with_code_descriptions(results: list[dict]) -> dict[str, dict
         enriched[col_name] = {}
         for code in unique_codes:
             # Get description, skip metadata fields
-            if code in lookup_table and code not in ['description', 'source_field']:
+            if code in lookup_table and code not in ["description", "source_field"]:
                 enriched[col_name][code] = lookup_table[code]
             else:
                 enriched[col_name][code] = f"Unknown code {code}"

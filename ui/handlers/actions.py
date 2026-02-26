@@ -6,10 +6,10 @@ Uses centralized message templates from src/core/prompts.py.
 
 All messages use APP_PERSONA (SnapAnalyst) - the app persona.
 """
+
 from __future__ import annotations
 
 import csv
-import logging
 import os
 import re
 from datetime import datetime
@@ -19,8 +19,8 @@ import chainlit as cl
 # Import from src/ for business logic
 from src.clients.api_client import call_api
 
-# Import LLM logger for feedback logging
-from src.core.logging import get_llm_logger
+# Import logging utilities
+from src.core.logging import get_llm_logger, get_logger
 
 # Import centralized prompts
 from src.core.prompts import (
@@ -32,7 +32,7 @@ from src.core.prompts import (
 from ..config import DEFAULT_FISCAL_YEAR
 from ..responses import csv_error_message, csv_ready_message, no_results_message, send_error, send_message
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 llm_logger = get_llm_logger()
 
 
@@ -55,7 +55,7 @@ async def handle_csv_download():
         csv_file_path = f"/tmp/{csv_filename}"
 
         headers = list(results[0].keys())
-        with open(csv_file_path, 'w', newline='', encoding='utf-8') as csvfile:
+        with open(csv_file_path, "w", newline="", encoding="utf-8") as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=headers)
             writer.writeheader()
             writer.writerows(results)
@@ -65,11 +65,7 @@ async def handle_csv_download():
         file_size_kb = file_size_bytes / 1024
 
         # Create file element
-        file_element = cl.File(
-            name=csv_filename,
-            path=csv_file_path,
-            display="inline"
-        )
+        file_element = cl.File(name=csv_filename, path=csv_file_path, display="inline")
 
         # Send personalized response
         await csv_ready_message(
@@ -77,7 +73,7 @@ async def handle_csv_download():
             row_count=len(results),
             column_count=len(headers),
             file_size_kb=file_size_kb,
-            file_element=file_element
+            file_element=file_element,
         )
 
     except Exception as e:
@@ -91,6 +87,7 @@ async def handle_execute():
     Called when user confirms query execution.
     """
     from .queries import execute_pending_query
+
     await execute_pending_query()
 
 
@@ -126,9 +123,27 @@ async def handle_reset_confirm():
     try:
         result = await call_api("/data/reset", method="POST", data={"confirm": True})
 
-        await send_message(MSG_DATABASE_RESET_COMPLETE.format(
-            message=result.get('message', 'All data has been cleared')
-        ))
+        # Build tables section dynamically from active dataset
+        try:
+            from datasets import get_active_dataset
+
+            ds = get_active_dataset()
+            if ds:
+                table_names = ds.get_main_table_names()
+                tables_section = "**Tables Reset:**\n" + "\n".join(
+                    f"- {name.replace('_', ' ').title()}" for name in table_names
+                )
+            else:
+                tables_section = ""
+        except Exception:
+            tables_section = ""
+
+        await send_message(
+            MSG_DATABASE_RESET_COMPLETE.format(
+                message=result.get("message", "All data has been cleared"),
+                tables_section=tables_section,
+            )
+        )
 
     except Exception as e:
         await send_error(f"Error resetting database: {str(e)}")
@@ -157,27 +172,25 @@ async def handle_file_load(filename: str):
 
     try:
         # Extract fiscal year from filename
-        fy_match = re.search(r'fy(\d{4})', filename, re.IGNORECASE)
+        fy_match = re.search(r"fy(\d{4})", filename, re.IGNORECASE)
         if fy_match:
             fiscal_year = int(fy_match.group(1))
         else:
-            year_match = re.search(r'20(\d{2})', filename)
-            fiscal_year = int('20' + year_match.group(1)) if year_match else DEFAULT_FISCAL_YEAR
+            year_match = re.search(r"20(\d{2})", filename)
+            fiscal_year = int("20" + year_match.group(1)) if year_match else DEFAULT_FISCAL_YEAR
 
-        result = await call_api(
-            "/data/load",
-            method="POST",
-            data={"fiscal_year": fiscal_year, "filename": filename}
+        result = await call_api("/data/load", method="POST", data={"fiscal_year": fiscal_year, "filename": filename})
+
+        job_id = result.get("job_id")
+
+        await send_message(
+            MSG_DATA_LOADING_INITIATED.format(
+                job_id=job_id or "N/A",
+                status=result.get("status", "Unknown"),
+                filename=filename,
+                fiscal_year=fiscal_year,
+            )
         )
-
-        job_id = result.get('job_id')
-
-        await send_message(MSG_DATA_LOADING_INITIATED.format(
-            job_id=job_id or 'N/A',
-            status=result.get('status', 'Unknown'),
-            filename=filename,
-            fiscal_year=fiscal_year
-        ))
 
         # Start background task to monitor job and refresh filters when done
         if job_id:
@@ -192,8 +205,9 @@ async def handle_refresh_database():
     Handle database stats refresh action.
     Called when user clicks the refresh button on database stats.
     """
-    from .commands.info_commands import handle_database
-    await handle_database()
+    from .commands.info_commands import handle_database_panel
+
+    await handle_database_panel()
 
 
 async def handle_feedback_positive(response_id: str):
@@ -240,6 +254,7 @@ async def handle_feedback_negative(response_id: str):
 # MEMORY MANAGEMENT ACTION HANDLERS
 # =============================================================================
 
+
 async def handle_memreset_confirm():
     """Handle memory reset confirmation."""
     try:
@@ -248,9 +263,9 @@ async def handle_memreset_confirm():
         await send_message(
             f"""✅ **AI Memory Reset Complete!**
 
-**Freed:** {result.get('chromadb_size_mb', 0):.2f} MB
-**Training Time:** {result.get('training_time_seconds', 0):.1f} seconds
-**Entries Trained:** {result.get('entries_trained', 0)}
+**Freed:** {result.get("chromadb_size_mb", 0):.2f} MB
+**Training Time:** {result.get("training_time_seconds", 0):.1f} seconds
+**Entries Trained:** {result.get("entries_trained", 0)}
 
 The AI has been re-trained with:
 - Database schema (DDL)
@@ -273,14 +288,13 @@ async def handle_memreset_cancel():
 # VANNA SQL TRAINING ACTION HANDLERS
 # =============================================================================
 
+
 async def handle_vanna_reset_confirm():
     """Handle Vanna SQL training reset confirmation (always reloads training data)."""
     try:
         await send_message("Resetting Vanna SQL training... This may take a moment.")
 
-        result = await call_api(
-            "/llm/vanna/reset", method="POST", data={"reload_training_data": True}, timeout=120.0
-        )
+        result = await call_api("/llm/vanna/reset", method="POST", data={"reload_training_data": True}, timeout=120.0)
 
         counts = result.get("counts", {})
         training_time = result.get("training_time_seconds", 0)
@@ -293,12 +307,12 @@ async def handle_vanna_reset_confirm():
 **Training Data:**
 | Type | Count |
 |------|-------|
-| DDL (schema) | {counts.get('ddl', 0)} |
-| Documentation | {counts.get('documentation', 0)} |
-| SQL (question-SQL pairs) | {counts.get('sql', 0)} |
+| DDL (schema) | {counts.get("ddl", 0)} |
+| Documentation | {counts.get("documentation", 0)} |
+| SQL (question-SQL pairs) | {counts.get("sql", 0)} |
 | **Total** | **{sum(counts.values())}** |
 
-Use `/memsql stats` to verify."""
+Use **Settings > Knowledge SQL** to verify."""
         )
 
     except Exception as e:

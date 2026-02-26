@@ -1,14 +1,11 @@
 """
-LLM Training Management API Router (Vanna 2.x Compatible)
+LLM Training Management API Router
 
-Endpoints for managing Vanna AI agent memory and configuration.
-
-VANNA 2.X CHANGES:
-- Training is now automatic through agent memory
-- No direct ChromaDB access for SQL training
-- Agent learns from successful query executions
-- Some endpoints are stubs for backward compatibility
+Endpoints for managing Vanna 0.x ChromaDB training data and configuration.
+Training data (DDL, documentation, query examples) is stored in ChromaDB
+and used for RAG-based SQL generation.
 """
+
 import time
 from datetime import datetime
 from pathlib import Path
@@ -25,16 +22,13 @@ logger = get_logger(__name__)
 
 router = APIRouter(tags=["llm"])
 
-# Vanna 2.x compatibility flag
-VANNA_2X = True
-
-
 # Import response models from chatbot for LLM management endpoints (after router to avoid circular imports)
 from src.api.routers.chatbot import LLMHealthResponse, ProviderInfoResponse  # noqa: E402
 
 
 class TrainingStatusResponse(BaseModel):
     """Training status response"""
+
     enabled: bool
     chromadb_path: str
     chromadb_exists: bool
@@ -44,6 +38,7 @@ class TrainingStatusResponse(BaseModel):
 
 class TrainingToggleResponse(BaseModel):
     """Training toggle response"""
+
     success: bool
     enabled: bool
     message: str
@@ -52,6 +47,7 @@ class TrainingToggleResponse(BaseModel):
 
 class MemoryResetResponse(BaseModel):
     """Memory reset response"""
+
     success: bool
     message: str
     chromadb_size_mb: float
@@ -61,6 +57,7 @@ class MemoryResetResponse(BaseModel):
 
 class MemoryAddResponse(BaseModel):
     """Memory add documentation response"""
+
     success: bool
     message: str
     files_processed: int = 0
@@ -71,6 +68,7 @@ class MemoryAddResponse(BaseModel):
 
 class FileUploadResult(BaseModel):
     """Result of a single file upload"""
+
     filename: str
     success: bool
     chars_added: int = 0
@@ -81,6 +79,7 @@ class FileUploadResult(BaseModel):
 
 class MemoryStatsResponse(BaseModel):
     """Memory statistics response"""
+
     chromadb_path: str
     chromadb_exists: bool
     chromadb_size_mb: float
@@ -90,6 +89,7 @@ class MemoryStatsResponse(BaseModel):
 
 class DocumentEntry(BaseModel):
     """Document entry in ChromaDB"""
+
     id: str
     type: str
     content_preview: str
@@ -101,15 +101,148 @@ class DocumentEntry(BaseModel):
 
 class MemoryListResponse(BaseModel):
     """Memory list response"""
+
     total_entries: int
     entries: list[DocumentEntry]
 
 
 class MemoryDeleteResponse(BaseModel):
     """Memory delete response"""
+
     success: bool
     message: str
     doc_id: str
+
+
+class ModelInfoResponse(BaseModel):
+    """Response for model info lookup."""
+
+    model_name: str
+    found: bool
+    context_window: int | None = None
+    max_output_tokens: int | None = None
+    source: str | None = None
+
+
+class ModelTestRequest(BaseModel):
+    """Request for testing a model."""
+
+    model: str = Field(..., description="Model name to test")
+    mode: str = Field(
+        default="sql",
+        pattern="^(sql|insights|knowledge|summary)$",
+        description="Mode: sql, insights, knowledge, or summary",
+    )
+
+
+class ModelTestResponse(BaseModel):
+    """Response for model test."""
+
+    success: bool
+    model: str
+    message: str
+    context_window: int | None = None
+    max_output_tokens: int | None = None
+
+
+@router.get("/model-info/{model_name:path}", response_model=ModelInfoResponse)
+async def get_model_info_endpoint(model_name: str) -> ModelInfoResponse:
+    """
+    Look up model info from the LiteLLM model registry.
+
+    Returns context window and max output tokens for the given model.
+    """
+    from src.services.model_registry import get_context_window, get_max_output_tokens, get_model_info
+
+    info = get_model_info(model_name)
+    if info is None:
+        return ModelInfoResponse(model_name=model_name, found=False)
+
+    return ModelInfoResponse(
+        model_name=model_name,
+        found=True,
+        context_window=get_context_window(model_name),
+        max_output_tokens=get_max_output_tokens(model_name),
+        source=info.get("source", "litellm"),
+    )
+
+
+@router.post("/model-test", response_model=ModelTestResponse)
+async def test_model(request: ModelTestRequest) -> ModelTestResponse:
+    """
+    Test that a model is reachable by sending a minimal prompt.
+
+    Returns success/failure plus model info from the registry.
+    """
+    import asyncio
+
+    from src.services.model_registry import get_context_window, get_max_output_tokens
+
+    model = request.model
+
+    try:
+        # Send a minimal prompt to validate the model works
+        def _test():
+            provider = settings.llm_provider
+
+            if provider == "openai":
+                from openai import OpenAI
+
+                client = OpenAI(api_key=settings.openai_api_key)
+                client.chat.completions.create(
+                    model=model,
+                    max_tokens=5,
+                    messages=[{"role": "user", "content": "Say OK"}],
+                )
+            elif provider == "anthropic":
+                from anthropic import Anthropic
+
+                client = Anthropic(api_key=settings.anthropic_api_key)
+                client.messages.create(
+                    model=model,
+                    max_tokens=5,
+                    messages=[{"role": "user", "content": "Say OK"}],
+                )
+            elif provider == "azure_openai":
+                from openai import OpenAI
+
+                client = OpenAI(
+                    base_url=settings.azure_openai_endpoint,
+                    api_key=settings.azure_openai_api_key,
+                )
+                client.chat.completions.create(
+                    model=model,
+                    max_tokens=5,
+                    messages=[{"role": "user", "content": "Say OK"}],
+                )
+            elif provider == "ollama":
+                import ollama
+
+                client = ollama.Client(host=settings.ollama_base_url)
+                client.chat(model=model, messages=[{"role": "user", "content": "Say OK"}])
+            else:
+                raise ValueError(f"Unsupported provider: {provider}")
+
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, _test)
+
+        return ModelTestResponse(
+            success=True,
+            model=model,
+            message=f"Model '{model}' is reachable and working",
+            context_window=get_context_window(model),
+            max_output_tokens=get_max_output_tokens(model),
+        )
+
+    except Exception as e:
+        logger.warning(f"Model test failed for {model}: {e}")
+        return ModelTestResponse(
+            success=False,
+            model=model,
+            message=f"Model test failed: {str(e)}",
+            context_window=get_context_window(model),
+            max_output_tokens=get_max_output_tokens(model),
+        )
 
 
 @router.get("/provider", response_model=ProviderInfoResponse)
@@ -148,13 +281,7 @@ async def check_llm_health() -> LLMHealthResponse:
         return LLMHealthResponse(**health)
     except Exception as e:
         logger.error(f"Failed to check LLM health: {e}")
-        return LLMHealthResponse(
-            healthy=False,
-            provider="UNKNOWN",
-            model="unknown",
-            status="error",
-            error=str(e)
-        )
+        return LLMHealthResponse(healthy=False, provider="UNKNOWN", model="unknown", status="error", error=str(e))
 
 
 @router.post("/train", response_model=TrainingStatusResponse)
@@ -178,7 +305,7 @@ async def retrain_service() -> TrainingStatusResponse:
             chromadb_path=str(settings.vanna_chromadb_path),
             chromadb_exists=True,
             chromadb_size_mb=0.0,
-            message="LLM service retrained successfully"
+            message="LLM service retrained successfully",
         )
     except Exception as e:
         logger.error(f"Failed to retrain service: {e}")
@@ -200,11 +327,7 @@ async def get_training_status():
         # Calculate size if exists
         size_mb = 0.0
         if chromadb_exists:
-            total_size = sum(
-                f.stat().st_size
-                for f in chromadb_path.rglob('*')
-                if f.is_file()
-            )
+            total_size = sum(f.stat().st_size for f in chromadb_path.rglob("*") if f.is_file())
             size_mb = total_size / (1024 * 1024)  # Convert to MB
 
         return TrainingStatusResponse(
@@ -212,7 +335,7 @@ async def get_training_status():
             chromadb_path=str(chromadb_path),
             chromadb_exists=chromadb_exists,
             chromadb_size_mb=round(size_mb, 2),
-            message="Initial training always enabled (required for Vanna to work)"
+            message="Initial training always enabled (required for Vanna to work)",
         )
 
     except Exception as e:
@@ -239,7 +362,7 @@ async def enable_training():
             success=True,
             enabled=True,  # Always enabled
             message="Initial training is always enabled (required for Vanna). Training happens during startup or on first query.",
-            chromadb_cleaned=False
+            chromadb_cleaned=False,
         )
 
     except Exception as e:
@@ -259,21 +382,33 @@ async def disable_training():
         cleaned = False
         deleted_count = 0
 
-        # Clean ChromaDB using API
-        # NOTE: Vanna 2.x uses agent memory, not direct ChromaDB access
-        if llm_service._initialized and hasattr(llm_service, 'vanna') and llm_service.vanna:
+        # Clean ChromaDB training data
+        if llm_service._initialized:
             try:
-                # Vanna 2.x doesn't expose chroma_client - agent memory is different
-                logger.warning("ChromaDB cleaning not supported in Vanna 2.x (agent memory is automatic)")
-                cleaned = False
+                from src.services.llm_providers import _get_vanna_instance
+
+                vn = _get_vanna_instance()
+                existing_data = vn.get_training_data()
+                if not existing_data.empty:
+                    ids_to_remove = existing_data["id"].tolist()
+                    for training_id in ids_to_remove:
+                        try:
+                            vn.remove_training_data(id=training_id)
+                            deleted_count += 1
+                        except Exception:
+                            pass
+                    cleaned = True
+                    logger.info(f"Cleaned {deleted_count} ChromaDB training entries")
             except Exception as e:
                 logger.warning(f"Could not clean ChromaDB: {e}")
 
         return TrainingToggleResponse(
             success=True,
             enabled=False,
-            message=f"Training disabled and {deleted_count} documents cleaned" if cleaned else "Training disabled (ChromaDB was already empty)",
-            chromadb_cleaned=cleaned
+            message=f"Training disabled and {deleted_count} documents cleaned"
+            if cleaned
+            else "Training disabled (ChromaDB was already empty)",
+            chromadb_cleaned=cleaned,
         )
 
     except Exception as e:
@@ -297,37 +432,32 @@ async def clean_chromadb():
             llm_service = get_llm_service()
 
         deleted_count = 0
-        collections_cleared = []
 
-        # Clean ChromaDB using API
-        # NOTE: Vanna 2.x uses agent memory, not direct ChromaDB access
+        # Clean ChromaDB training data via Vanna instance
         try:
-            if hasattr(llm_service, 'vanna') and llm_service.vanna:
-                # Vanna 2.x doesn't expose chroma_client directly
-                logger.warning("ChromaDB cleaning not supported in Vanna 2.x")
-                return TrainingToggleResponse(
-                    success=True,
-                    enabled=True,
-                    message="Vanna 2.x uses automatic agent memory (manual cleaning not needed)",
-                    chromadb_cleaned=False
-                )
-            else:
-                return TrainingToggleResponse(
-                    success=True,
-                    enabled=settings.vanna_pretrain_on_startup,
-                    message="LLM service not initialized",
-                    chromadb_cleaned=False
-                )
+            from src.services.llm_providers import _get_vanna_instance
+
+            vn = _get_vanna_instance()
+            existing_data = vn.get_training_data()
+            if not existing_data.empty:
+                ids_to_remove = existing_data["id"].tolist()
+                for training_id in ids_to_remove:
+                    try:
+                        vn.remove_training_data(id=training_id)
+                        deleted_count += 1
+                    except Exception:
+                        pass
+                logger.info(f"Cleaned {deleted_count} ChromaDB training entries")
+
+            return TrainingToggleResponse(
+                success=True,
+                enabled=True,
+                message=f"Cleaned {deleted_count} training entries from ChromaDB",
+                chromadb_cleaned=deleted_count > 0,
+            )
         except Exception as e:
             logger.warning(f"Could not clean ChromaDB: {e}")
             raise
-
-        return TrainingToggleResponse(
-            success=True,
-            enabled=True,  # Training will happen on next startup or first query
-            message=f"ChromaDB cleaned: {deleted_count} documents deleted from {len(collections_cleared)} collections. Training will happen on next startup.",
-            chromadb_cleaned=deleted_count > 0
-        )
 
     except Exception as e:
         logger.error(f"Error cleaning ChromaDB: {e}")
@@ -365,6 +495,7 @@ async def get_llm_info() -> dict:
 # MEMORY MANAGEMENT ENDPOINTS
 # =============================================================================
 
+
 @router.post("/memory/reset", response_model=MemoryResetResponse)
 async def reset_memory():
     """
@@ -378,7 +509,7 @@ async def reset_memory():
     from src.services.kb_chromadb import reset_kb
 
     try:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         deleted_count = await loop.run_in_executor(None, reset_kb)
 
         return MemoryResetResponse(
@@ -386,7 +517,7 @@ async def reset_memory():
             message=f"Knowledge Base reset. Deleted {deleted_count} document(s).",
             chromadb_size_mb=0.0,
             training_time_seconds=0.0,
-            entries_trained=0
+            entries_trained=0,
         )
 
     except Exception as e:
@@ -399,8 +530,8 @@ async def add_memory_documentation(
     files: list[UploadFile] = File(...),
     category: str | None = Form(None),
     tags: str | None = Form(None),
-    user_id: str = Form("anonymous@snapanalyst.com"),
-    is_private: bool = Form(False)
+    user_id: str | None = Form(None),
+    is_private: bool = Form(False),
 ):
     """
     Add custom documentation to KB ChromaDB (supports multiple files).
@@ -419,6 +550,13 @@ async def add_memory_documentation(
     Returns:
         Status and results for each file
     """
+    # Resolve anonymous email default
+    if user_id is None:
+        from datasets import get_active_dataset
+
+        ds = get_active_dataset()
+        user_id = ds.get_anonymous_email() if ds else "anonymous@app.com"
+
     results = []
     files_processed = 0
     files_failed = 0
@@ -433,11 +571,7 @@ async def add_memory_documentation(
     try:
         for file in files:
             result = await _process_single_file_kb(
-                file=file,
-                category=category_name,
-                tags=tags_list,
-                user_id=user_id,
-                is_private=is_private
+                file=file, category=category_name, tags=tags_list, user_id=user_id, is_private=is_private
             )
 
             results.append(result)
@@ -457,7 +591,7 @@ async def add_memory_documentation(
             files_processed=files_processed,
             files_failed=files_failed,
             total_chars_added=total_chars,
-            results=results
+            results=results,
         )
 
     except Exception as e:
@@ -468,8 +602,9 @@ async def add_memory_documentation(
 def _parse_tags_from_string(tags: str) -> list[str]:
     """Parse and validate tags from string input."""
     import re
-    tags_clean = re.sub(r'[,\s]+', ' ', tags).strip()
-    raw_tags = [t.lstrip('#') for t in tags_clean.split() if t]
+
+    tags_clean = re.sub(r"[,\s]+", " ", tags).strip()
+    raw_tags = [t.lstrip("#") for t in tags_clean.split() if t]
     return validate_tags(raw_tags)
 
 
@@ -481,11 +616,7 @@ def _clean_category(category: str | None) -> str:
 
 
 async def _process_single_file_kb(
-    file: UploadFile,
-    category: str,
-    tags: list[str],
-    user_id: str,
-    is_private: bool
+    file: UploadFile, category: str, tags: list[str], user_id: str, is_private: bool
 ) -> dict:
     """Process a single file upload to KB ChromaDB."""
     from src.services.kb_chromadb import add_document
@@ -497,7 +628,7 @@ async def _process_single_file_kb(
         "error": None,
         "category": f"user:{user_id}" if is_private else category,
         "tags": tags,
-        "visibility": "private" if is_private else "shared"
+        "visibility": "private" if is_private else "shared",
     }
 
     try:
@@ -515,7 +646,7 @@ async def _process_single_file_kb(
             return file_result
 
         # Decode content
-        text = content.decode('utf-8')
+        text = content.decode("utf-8")
 
         if not text or not text.strip():
             file_result["error"] = "File is empty"
@@ -523,12 +654,7 @@ async def _process_single_file_kb(
 
         # Add to KB ChromaDB (NOT Vanna)
         doc_id = add_document(
-            text=text,
-            filename=file.filename,
-            category=category,
-            tags=tags,
-            user_id=user_id,
-            is_private=is_private
+            text=text, filename=file.filename, category=category, tags=tags, user_id=user_id, is_private=is_private
         )
 
         # Success
@@ -571,7 +697,7 @@ async def get_memory_stats():
 
         # Get KB stats
         kb_stats = get_stats()
-        kb_path = Path(kb_stats.get('path', f"{settings.vanna_chromadb_path}/kb"))
+        kb_path = Path(kb_stats.get("path", f"{settings.vanna_chromadb_path}/kb"))
         kb_exists = kb_path.exists()
 
         # Calculate size (run in thread pool to avoid blocking)
@@ -583,19 +709,12 @@ async def get_memory_stats():
 
             def get_dir_size():
                 """Calculate directory size synchronously."""
-                return sum(
-                    f.stat().st_size
-                    for f in kb_path.rglob('*')
-                    if f.is_file()
-                )
+                return sum(f.stat().st_size for f in kb_path.rglob("*") if f.is_file())
 
             def get_last_modified():
                 """Get last modified time synchronously."""
                 try:
-                    latest_file = max(
-                        kb_path.rglob('*'),
-                        key=lambda f: f.stat().st_mtime if f.is_file() else 0
-                    )
+                    latest_file = max(kb_path.rglob("*"), key=lambda f: f.stat().st_mtime if f.is_file() else 0)
                     if latest_file.is_file():
                         return latest_file.stat().st_mtime
                 except Exception:
@@ -603,7 +722,7 @@ async def get_memory_stats():
                 return None
 
             # Run blocking I/O in thread pool
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             total_size = await loop.run_in_executor(None, get_dir_size)
             size_mb = total_size / (1024 * 1024)
 
@@ -612,11 +731,11 @@ async def get_memory_stats():
                 last_modified = datetime.fromtimestamp(timestamp).isoformat()
 
         # Include document count in training_stats for display
-        total_documents = kb_stats.get('total_documents', 0)
-        total_chunks = kb_stats.get('total_chunks', 0)
+        total_documents = kb_stats.get("total_documents", 0)
+        total_chunks = kb_stats.get("total_chunks", 0)
         training_stats = {
-            'total_documents': total_documents,
-            'total_chunks': total_chunks,
+            "total_documents": total_documents,
+            "total_chunks": total_chunks,
         }
 
         # Show 0 MB when KB is empty (ChromaDB keeps index files on disk even after reset)
@@ -627,7 +746,7 @@ async def get_memory_stats():
             chromadb_exists=kb_exists,
             chromadb_size_mb=display_size_mb,
             last_modified=last_modified,
-            training_stats=training_stats
+            training_stats=training_stats,
         )
 
     except Exception as e:
@@ -650,23 +769,23 @@ async def list_memory_entries():
 
         entries = []
         for doc in documents:
-            metadata = doc.get('metadata', {})
-            tags_str = metadata.get('tags', '')
-            tags = [t.strip() for t in tags_str.split(',') if t.strip()] if tags_str else []
+            metadata = doc.get("metadata", {})
+            tags_str = metadata.get("tags", "")
+            tags = [t.strip() for t in tags_str.split(",") if t.strip()] if tags_str else []
 
-            entries.append(DocumentEntry(
-                id=doc['id'],
-                type="documentation",
-                content_preview=doc['content_preview'],
-                category=metadata.get('category', 'general'),
-                tags=tags,
-                filename=metadata.get('filename')
-            ))
+            entries.append(
+                DocumentEntry(
+                    id=doc["id"],
+                    type="documentation",
+                    content_preview=doc["content_preview"],
+                    category=metadata.get("category", "general"),
+                    tags=tags,
+                    filename=metadata.get("filename"),
+                )
+            )
 
         return MemoryListResponse(
-            total_entries=len(entries),
-            entries=entries,
-            message=f"Showing {len(entries)} documents from Knowledge Base"
+            total_entries=len(entries), entries=entries, message=f"Showing {len(entries)} documents from Knowledge Base"
         )
 
     except Exception as e:
@@ -680,7 +799,7 @@ async def delete_memory_entry(doc_id: str):
     Delete a document from the User Knowledge Base.
 
     Args:
-        doc_id: Document ID to delete (from /mem list)
+        doc_id: Document ID to delete (from Knowledge Base panel or /mem list)
 
     Returns:
         Deletion status
@@ -692,15 +811,13 @@ async def delete_memory_entry(doc_id: str):
 
         if success:
             return MemoryDeleteResponse(
-                success=True,
-                message=f"Document '{doc_id}' deleted from Knowledge Base",
-                doc_id=doc_id
+                success=True, message=f"Document '{doc_id}' deleted from Knowledge Base", doc_id=doc_id
             )
         else:
             return MemoryDeleteResponse(
                 success=False,
                 message=f"Could not delete document '{doc_id}' - not found or error occurred",
-                doc_id=doc_id
+                doc_id=doc_id,
             )
 
     except Exception as e:
@@ -715,6 +832,7 @@ async def delete_memory_entry(doc_id: str):
 
 class PromptGetResponse(BaseModel):
     """Response for getting a prompt."""
+
     prompt_text: str
     is_custom: bool
     char_count: int
@@ -723,11 +841,13 @@ class PromptGetResponse(BaseModel):
 
 class PromptSetRequest(BaseModel):
     """Request body for setting a prompt."""
+
     prompt_text: str = Field(..., min_length=20, max_length=5000)
 
 
 class PromptSetResponse(BaseModel):
     """Response for setting a prompt."""
+
     success: bool
     message: str
     char_count: int
@@ -735,6 +855,7 @@ class PromptSetResponse(BaseModel):
 
 class PromptResetResponse(BaseModel):
     """Response for resetting a prompt."""
+
     success: bool
     message: str
 
@@ -752,8 +873,8 @@ async def get_prompt(prompt_type: str, request: Request) -> PromptGetResponse:
     Args:
         prompt_type: 'sql' or 'kb'
     """
-    if prompt_type not in ("sql", "kb"):
-        raise HTTPException(status_code=400, detail=f"Invalid prompt_type: {prompt_type}. Use 'sql' or 'kb'.")
+    if prompt_type not in ("sql", "kb", "summary"):
+        raise HTTPException(status_code=400, detail=f"Invalid prompt_type: {prompt_type}. Use 'sql', 'kb', or 'summary'.")
 
     from src.database.prompt_manager import get_user_prompt, has_custom_prompt
 
@@ -781,8 +902,8 @@ async def set_prompt(prompt_type: str, body: PromptSetRequest, request: Request)
         prompt_type: 'sql' or 'kb'
         body: JSON body with prompt_text (20-5000 chars)
     """
-    if prompt_type not in ("sql", "kb"):
-        raise HTTPException(status_code=400, detail=f"Invalid prompt_type: {prompt_type}. Use 'sql' or 'kb'.")
+    if prompt_type not in ("sql", "kb", "summary"):
+        raise HTTPException(status_code=400, detail=f"Invalid prompt_type: {prompt_type}. Use 'sql', 'kb', or 'summary'.")
 
     from src.database.prompt_manager import set_user_prompt
 
@@ -790,7 +911,7 @@ async def set_prompt(prompt_type: str, body: PromptSetRequest, request: Request)
     try:
         success = set_user_prompt(user_id, prompt_type, body.prompt_text)
         if success:
-            prompt_name = "SQL generation" if prompt_type == "sql" else "KB insight"
+            prompt_name = {"sql": "SQL generation", "kb": "KB insight", "summary": "Results summary"}[prompt_type]
             return PromptSetResponse(
                 success=True,
                 message=f"{prompt_name} prompt updated successfully",
@@ -815,8 +936,8 @@ async def reset_prompt(prompt_type: str, request: Request) -> PromptResetRespons
     Args:
         prompt_type: 'sql' or 'kb'
     """
-    if prompt_type not in ("sql", "kb"):
-        raise HTTPException(status_code=400, detail=f"Invalid prompt_type: {prompt_type}. Use 'sql' or 'kb'.")
+    if prompt_type not in ("sql", "kb", "summary"):
+        raise HTTPException(status_code=400, detail=f"Invalid prompt_type: {prompt_type}. Use 'sql', 'kb', or 'summary'.")
 
     from src.database.prompt_manager import reset_user_prompt
 
@@ -824,7 +945,7 @@ async def reset_prompt(prompt_type: str, request: Request) -> PromptResetRespons
     try:
         success = reset_user_prompt(user_id, prompt_type)
         if success:
-            prompt_name = "SQL generation" if prompt_type == "sql" else "KB insight"
+            prompt_name = {"sql": "SQL generation", "kb": "KB insight", "summary": "Results summary"}[prompt_type]
             return PromptResetResponse(
                 success=True,
                 message=f"{prompt_name} prompt reset to default",
@@ -847,6 +968,7 @@ async def reset_prompt(prompt_type: str, request: Request) -> PromptResetRespons
 
 class VannaTrainingEntry(BaseModel):
     """Single entry from Vanna training data."""
+
     id: str
     training_data_type: str
     question: str | None = None
@@ -855,6 +977,7 @@ class VannaTrainingEntry(BaseModel):
 
 class VannaStatsResponse(BaseModel):
     """Vanna ChromaDB per-collection statistics."""
+
     success: bool
     ddl_count: int = 0
     documentation_count: int = 0
@@ -864,6 +987,7 @@ class VannaStatsResponse(BaseModel):
 
 class VannaListResponse(BaseModel):
     """Vanna training data list grouped by type."""
+
     success: bool
     ddl: list[VannaTrainingEntry] = Field(default_factory=list)
     documentation: list[VannaTrainingEntry] = Field(default_factory=list)
@@ -873,6 +997,7 @@ class VannaListResponse(BaseModel):
 
 class VannaAddResponse(BaseModel):
     """Response from adding training data to Vanna."""
+
     success: bool
     message: str
     files_processed: int = 0
@@ -883,6 +1008,7 @@ class VannaAddResponse(BaseModel):
 
 class VannaDeleteResponse(BaseModel):
     """Response from deleting a single Vanna training entry."""
+
     success: bool
     message: str
     entry_id: str
@@ -890,11 +1016,13 @@ class VannaDeleteResponse(BaseModel):
 
 class VannaResetRequest(BaseModel):
     """Request body for Vanna reset."""
+
     reload_training_data: bool = True  # Whether to reload docs + examples from training folder
 
 
 class VannaResetResponse(BaseModel):
     """Response from Vanna reset operation."""
+
     success: bool
     message: str
     reload_training_data: bool = True
@@ -905,6 +1033,7 @@ class VannaResetResponse(BaseModel):
 def _get_vanna_training_data():
     """Get Vanna training data DataFrame (sync helper)."""
     from src.services.llm_providers import _get_vanna_instance
+
     vn = _get_vanna_instance()
     return vn.get_training_data()
 
@@ -915,7 +1044,7 @@ async def get_vanna_stats():
     import asyncio
 
     try:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         df = await loop.run_in_executor(None, _get_vanna_training_data)
 
         if df.empty:
@@ -944,7 +1073,7 @@ async def list_vanna_training_data():
     import asyncio
 
     try:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         df = await loop.run_in_executor(None, _get_vanna_training_data)
 
         if df.empty:
@@ -994,11 +1123,12 @@ async def delete_vanna_entry(entry_id: str):
 
     def _do_delete():
         from src.services.llm_providers import _get_vanna_instance
+
         vn = _get_vanna_instance()
         vn.remove_training_data(id=entry_id)
 
     try:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, _do_delete)
 
         return VannaDeleteResponse(
@@ -1055,6 +1185,7 @@ async def add_vanna_training_data(
 
                 def _train_json_examples(ex_list):
                     from src.services.llm_providers import _get_vanna_instance
+
                     vn = _get_vanna_instance()
                     count = 0
                     for ex in ex_list:
@@ -1067,7 +1198,7 @@ async def add_vanna_training_data(
                             count += 1
                     return count
 
-                loop = asyncio.get_event_loop()
+                loop = asyncio.get_running_loop()
                 count = await loop.run_in_executor(None, _train_json_examples, examples)
                 file_result["success"] = True
                 file_result["entries"] = count
@@ -1086,7 +1217,7 @@ async def add_vanna_training_data(
                         vn.train(documentation=chunk)
                     return len(chunks)
 
-                loop = asyncio.get_event_loop()
+                loop = asyncio.get_running_loop()
                 count = await loop.run_in_executor(None, _train_doc_chunked, text, file.filename)
                 file_result["success"] = True
                 file_result["entries"] = count
@@ -1135,10 +1266,11 @@ async def reset_vanna_training(request: VannaResetRequest):
 
     def _do_reset():
         from src.services.llm_providers import train_vanna
+
         return train_vanna(force_retrain=True, reload_training_data=reload)
 
     try:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         start_time = time.time()
         counts = await loop.run_in_executor(None, _do_reset)
         training_time = time.time() - start_time

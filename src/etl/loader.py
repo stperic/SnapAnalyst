@@ -3,6 +3,7 @@ SnapAnalyst ETL Orchestrator
 
 Coordinates the complete ETL pipeline: Read → Transform → Validate → Write
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -31,6 +32,7 @@ def check_references_ready() -> tuple[bool, list[str]]:
     """
     try:
         from src.database.init_database import check_references_populated
+
         return check_references_populated()
     except Exception as e:
         logger.warning(f"Could not check reference tables: {e}")
@@ -80,7 +82,7 @@ class ETLStatus:
             "validation": {
                 "errors_count": len(self.validation_errors),
                 "warnings_count": len(self.validation_warnings),
-            }
+            },
         }
 
 
@@ -113,8 +115,7 @@ class ETLLoader:
         self.validator = DataValidator(strict=strict_validation)
 
         logger.info(
-            f"ETL Loader initialized (fiscal_year={fiscal_year}, "
-            f"batch_size={batch_size}, strict={strict_validation})"
+            f"ETL Loader initialized (fiscal_year={fiscal_year}, batch_size={batch_size}, strict={strict_validation})"
         )
 
     def load_from_file(
@@ -169,10 +170,7 @@ class ETLLoader:
             # Step 2: Process file (all at once or in chunks)
             if status.total_rows <= 100000:  # Files under 100K rows - read all at once to avoid schema issues
                 # Small/medium file - process all at once
-                result = self._process_batch(
-                    self.reader.read_csv(),
-                    status
-                )
+                result = self._process_batch(self.reader.read_csv(), status)
             else:
                 # Large file - process in chunks
                 result = self._process_in_chunks(status)
@@ -224,11 +222,7 @@ class ETLLoader:
             status.completed_at = datetime.now()
             raise
 
-    def _process_batch(
-        self,
-        df: pl.DataFrame,
-        status: ETLStatus
-    ) -> dict:
+    def _process_batch(self, df: pl.DataFrame, status: ETLStatus) -> dict:
         """
         Process a batch of data using bulk transformations and efficient database writes.
 
@@ -261,12 +255,7 @@ class ETLLoader:
             # Write to database in one operation with internal batching
             logger.info("Writing transformed data to database...")
             with DatabaseWriter(batch_size=10000) as writer:
-                write_stats = writer.write_all(
-                    households_df,
-                    members_df,
-                    errors_df,
-                    self.fiscal_year
-                )
+                write_stats = writer.write_all(households_df, members_df, errors_df, self.fiscal_year)
 
             # Update status
             status.rows_processed = total_rows
@@ -336,7 +325,7 @@ class ETLLoader:
 
             logger.info(
                 f"Progress: {status.rows_processed:,}/{status.total_rows:,} rows "
-                f"({status.rows_processed/status.total_rows*100:.1f}%)"
+                f"({status.rows_processed / status.total_rows * 100:.1f}%)"
             )
 
         return total_stats
@@ -361,7 +350,7 @@ class ETLJobManager:
 
     def __init__(self):
         self.jobs: dict[str, ETLStatus] = {}
-        logger.info("ETL Job Manager initialized")
+        logger.debug("ETL Job Manager initialized")
 
     def create_job(self, job_id: str) -> ETLStatus:
         """

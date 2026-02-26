@@ -17,16 +17,22 @@ Structure:
 # CRITICAL: Multiple settings to completely disable CPU affinity in LXC containers
 # See: https://github.com/chroma-core/chroma/issues/1420
 import os  # noqa: I001 - Must be first to configure ONNX before other imports
-if not os.environ.get('OMP_NUM_THREADS') or os.environ.get('OMP_NUM_THREADS') == '0':
-    os.environ['OMP_NUM_THREADS'] = '4'
-if not os.environ.get('ORT_DISABLE_CPU_EP_AFFINITY'):
-    os.environ['ORT_DISABLE_CPU_EP_AFFINITY'] = '1'
-if not os.environ.get('ORT_DISABLE_THREAD_AFFINITY'):
-    os.environ['ORT_DISABLE_THREAD_AFFINITY'] = '1'
-if not os.environ.get('OMP_WAIT_POLICY'):
-    os.environ['OMP_WAIT_POLICY'] = 'PASSIVE'
-if not os.environ.get('OMP_PROC_BIND'):
-    os.environ['OMP_PROC_BIND'] = 'false'
+
+if not os.environ.get("OMP_NUM_THREADS") or os.environ.get("OMP_NUM_THREADS") == "0":
+    os.environ["OMP_NUM_THREADS"] = "4"
+if not os.environ.get("ORT_DISABLE_CPU_EP_AFFINITY"):
+    os.environ["ORT_DISABLE_CPU_EP_AFFINITY"] = "1"
+if not os.environ.get("ORT_DISABLE_THREAD_AFFINITY"):
+    os.environ["ORT_DISABLE_THREAD_AFFINITY"] = "1"
+if not os.environ.get("OMP_WAIT_POLICY"):
+    os.environ["OMP_WAIT_POLICY"] = "PASSIVE"
+if not os.environ.get("OMP_PROC_BIND"):
+    os.environ["OMP_PROC_BIND"] = "false"
+
+# Suppress noisy library warnings before imports
+import warnings
+
+warnings.filterwarnings("ignore", message="urllib3.*doesn't match a supported version")
 
 # Suppress noisy libraries BEFORE importing chainlit
 # This must happen first to catch loggers before they're configured
@@ -39,6 +45,18 @@ logging.getLogger("websockets.server").setLevel(logging.ERROR)
 logging.getLogger("websockets.client").setLevel(logging.ERROR)
 logging.getLogger("engineio").setLevel(logging.ERROR)
 logging.getLogger("socketio").setLevel(logging.ERROR)
+
+
+# Filter out noisy Chainlit warnings (e.g. "SQLAlchemyDataLayer storage client is not initialized")
+class _ChainlitLogFilter(logging.Filter):
+    _suppressed = ("storage client is not initialized",)
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        return not any(s in msg for s in self._suppressed)
+
+
+logging.getLogger("chainlit").addFilter(_ChainlitLogFilter())
 
 import chainlit as cl
 from chainlit.types import ThreadDict
@@ -63,70 +81,112 @@ except Exception as e:
 
 from chainlit.data.sql_alchemy import SQLAlchemyDataLayer
 
+from ui.services.feedback_training import handle_feedback_training
+
+
+class TrainingFeedbackDataLayer(SQLAlchemyDataLayer):
+    """Extends SQLAlchemyDataLayer to trigger Vanna training on feedback."""
+
+    async def upsert_feedback(self, feedback) -> str:
+        # Persist to PostgreSQL first (parent handles all DB logic)
+        result = await super().upsert_feedback(feedback)
+        # Trigger Vanna training (non-blocking, errors logged but not raised)
+        await handle_feedback_training(
+            feedback_for_id=feedback.forId,
+            feedback_value=feedback.value,
+            comment=getattr(feedback, "comment", None),
+        )
+        return result
+
 
 @cl.data_layer
 def get_data_layer():
     """Configure SQLAlchemy data layer for chat history persistence."""
     # Use the same DATABASE_URL from environment
-    db_url = os.getenv("DATABASE_URL", "postgresql+asyncpg://snapanalyst:snapanalyst_dev_password@localhost:5432/snapanalyst_db")
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        raise ValueError("DATABASE_URL environment variable is required")
     # Convert to asyncpg format if needed
     if db_url.startswith("postgresql://"):
         db_url = db_url.replace("postgresql://", "postgresql+asyncpg://")
-    return SQLAlchemyDataLayer(conninfo=db_url)
+    return TrainingFeedbackDataLayer(conninfo=db_url)
 
 
 # =============================================================================
 # AUTHENTICATION (First Login = Registration)
 # =============================================================================
 
+import asyncio
+
 import asyncpg
 import bcrypt
 
+# Lazy-initialized connection pool for auth operations
+_auth_pool: asyncpg.Pool | None = None
+_auth_pool_lock: asyncio.Lock | None = None
 
-async def get_db_connection():
-    """Get async database connection."""
-    db_url = os.getenv("DATABASE_URL", "postgresql://snapanalyst:snapanalyst_dev_password@localhost:5432/snapanalyst_db")
-    # Convert to asyncpg format
-    if db_url.startswith("postgresql://"):
-        db_url = db_url.replace("postgresql://", "postgres://")
-    return await asyncpg.connect(db_url)
+
+def _get_auth_pool_lock() -> asyncio.Lock:
+    """Get or create the auth pool lock (handles event loop lifecycle)."""
+    global _auth_pool_lock
+    if _auth_pool_lock is None:
+        _auth_pool_lock = asyncio.Lock()
+    return _auth_pool_lock
+
+
+async def _get_auth_pool() -> asyncpg.Pool:
+    """Get or create the auth connection pool (lazy-initialized, min=1, max=5)."""
+    global _auth_pool
+    if _auth_pool is not None and not _auth_pool._closed:
+        return _auth_pool
+    async with _get_auth_pool_lock():
+        # Double-check after acquiring lock
+        if _auth_pool is not None and not _auth_pool._closed:
+            return _auth_pool
+        db_url = os.getenv("DATABASE_URL")
+        if not db_url:
+            raise ValueError("DATABASE_URL environment variable is required")
+        if db_url.startswith("postgresql://"):
+            db_url = db_url.replace("postgresql://", "postgres://")
+        _auth_pool = await asyncpg.create_pool(db_url, min_size=1, max_size=5)
+    return _auth_pool
+
 
 async def get_user_by_email(email: str) -> dict | None:
     """Fetch user from database by email/identifier."""
     try:
-        conn = await get_db_connection()
-        row = await conn.fetchrow(
-            "SELECT id, identifier, password_hash, metadata FROM users WHERE identifier = $1",
-            email.lower()
-        )
-        await conn.close()
-        if row:
-            return dict(row)
-        return None
+        pool = await _get_auth_pool()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT id, identifier, password_hash, metadata FROM users WHERE identifier = $1", email.lower()
+            )
+            if row:
+                return dict(row)
+            return None
     except Exception as e:
         logging.getLogger(__name__).error(f"Error fetching user: {e}")
         return None
 
+
 async def save_password_hash(email: str, password: str) -> bool:
     """Save password hash for a user (creates or updates)."""
     try:
-        conn = await get_db_connection()
-        # Hash the password
-        password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        pool = await _get_auth_pool()
+        async with pool.acquire() as conn:
+            # Hash the password
+            password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
-        # Update existing user or this will be called after Chainlit creates the user
-        await conn.execute(
-            """UPDATE users SET password_hash = $1 WHERE identifier = $2""",
-            password_hash,
-            email.lower()
-        )
+            # Update existing user or this will be called after Chainlit creates the user
+            await conn.execute(
+                """UPDATE users SET password_hash = $1 WHERE identifier = $2""", password_hash, email.lower()
+            )
 
-        await conn.close()
         logging.getLogger(__name__).info(f"Saved password hash for user: {email}")
         return True
     except Exception as e:
         logging.getLogger(__name__).error(f"Error saving password hash: {e}")
         return False
+
 
 @cl.password_auth_callback
 async def auth_callback(email: str, password: str) -> cl.User | None:
@@ -149,47 +209,47 @@ async def auth_callback(email: str, password: str) -> cl.User | None:
     if user is None:
         # First login = Registration
         # Return user object - Chainlit will create the user in DB
-        # Then save password hash (after a small delay to let Chainlit create the user first)
-        import asyncio
-        async def save_password_delayed():
-            await asyncio.sleep(0.5)  # Wait for Chainlit to create user
-            await save_password_hash(email, password)
-        asyncio.create_task(save_password_delayed())
+        # Save password hash after Chainlit creates the user record.
+        # We retry briefly since the user row is created asynchronously by Chainlit.
+        # IMPORTANT: We await this to ensure the password is saved before returning.
+        # A fire-and-forget approach risks the password never being saved, which would
+        # allow any password on subsequent login via the legacy-user path.
+        saved = False
+        for _ in range(10):
+            await asyncio.sleep(0.3)
+            if await save_password_hash(email, password):
+                saved = True
+                break
+        if not saved:
+            logging.getLogger(__name__).error(f"Failed to save password hash for new user: {email}")
 
-        return cl.User(
-            identifier=email,
-            metadata={"role": "user", "provider": "credentials", "is_new": True}
-        )
+        return cl.User(identifier=email, metadata={"role": "user", "provider": "credentials", "is_new": True})
 
     # Existing user - validate password
     stored_hash = user.get("password_hash")
 
     if stored_hash is None:
-        # Legacy user without password - update with new password
+        # Legacy user without password — check if this user was just created (within last 30s)
+        # and the password save may have failed. For safety, only allow password set
+        # for users created by Chainlit's data layer (no password_hash column yet).
+        # Log a warning so admins can investigate.
+        logging.getLogger(__name__).warning(
+            f"User {email} has no password hash — setting password on first post-migration login"
+        )
         try:
-            conn = await get_db_connection()
-            password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-            await conn.execute(
-                "UPDATE users SET password_hash = $1 WHERE identifier = $2",
-                password_hash,
-                email
-            )
-            await conn.close()
-            return cl.User(
-                identifier=email,
-                metadata={"role": "user", "provider": "credentials"}
-            )
+            pool = await _get_auth_pool()
+            async with pool.acquire() as conn:
+                password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+                await conn.execute("UPDATE users SET password_hash = $1 WHERE identifier = $2", password_hash, email)
+            return cl.User(identifier=email, metadata={"role": "user", "provider": "credentials"})
         except Exception as e:
             logging.getLogger(__name__).error(f"Error updating legacy user: {e}")
             return None
 
     # Validate password
     try:
-        if bcrypt.checkpw(password.encode('utf-8'), stored_hash.encode('utf-8')):
-            return cl.User(
-                identifier=email,
-                metadata={"role": "user", "provider": "credentials"}
-            )
+        if bcrypt.checkpw(password.encode("utf-8"), stored_hash.encode("utf-8")):
+            return cl.User(identifier=email, metadata={"role": "user", "provider": "credentials"})
     except Exception as e:
         logging.getLogger(__name__).error(f"Password validation error: {e}")
 
@@ -211,13 +271,14 @@ from ui.handlers.actions import (
     handle_vanna_reset_confirm,
 )
 from ui.handlers.commands import handle_command
-from ui.handlers.queries import handle_chat_query, handle_insight_request
-from ui.handlers.settings import handle_settings_update
+from ui.handlers.queries import handle_chat_query, handle_insight_query
+from ui.responses import send_message
 from ui.services.startup import initialize_session, setup_filter_settings
 
 # =============================================================================
 # CHAT RESUME (Restore previous chat sessions)
 # =============================================================================
+
 
 @cl.on_chat_resume
 async def on_chat_resume(thread: ThreadDict):
@@ -227,66 +288,70 @@ async def on_chat_resume(thread: ThreadDict):
     We just need to restore our session state.
     """
     import logging
+
     logger = logging.getLogger(__name__)
-    logger.info(f"on_chat_resume called for thread: {thread.get('id')}, name: {thread.get('name')}")
-    logger.info(f"Thread has {len(thread.get('steps', []))} steps")
+    logger.debug(f"Resuming thread {thread.get('id')} ({len(thread.get('steps', []))} steps)")
 
     # Initialize session for resumed chat
     await initialize_session()
     await setup_filter_settings()
 
+    # Register native slash commands for autocomplete
+    await register_commands()
+
     # Restore chat history to session
     for step in thread.get("steps", []):
         step_type = step.get("type")
         if step_type == "user_message":
-            cl.user_session.get("chat_history").append({
-                "timestamp": step.get("createdAt"),
-                "role": "user",
-                "content": step.get("output", "")
-            })
+            cl.user_session.get("chat_history").append(
+                {"timestamp": step.get("createdAt"), "role": "user", "content": step.get("output", "")}
+            )
         elif step_type == "assistant_message":
-            cl.user_session.get("chat_history").append({
-                "timestamp": step.get("createdAt"),
-                "role": "assistant",
-                "content": step.get("output", "")
-            })
+            cl.user_session.get("chat_history").append(
+                {"timestamp": step.get("createdAt"), "role": "assistant", "content": step.get("output", "")}
+            )
 
-    logger.info(f"Restored {len(cl.user_session.get('chat_history', []))} messages to session")
+    logger.debug(f"Restored {len(cl.user_session.get('chat_history', []))} messages to session")
 
 
 # =============================================================================
 # STARTERS - Centered prompts on empty chat (replaces show_readme_as_default)
 # =============================================================================
 
+
 @cl.set_starters
 async def set_starters():
     """
     Display starter prompts when chat is empty.
-    This creates the centered input experience shown in Chainlit GitHub screenshots.
+    Prompts are defined in the active dataset configuration.
     """
-    return [
-        cl.Starter(
-            label="Payment Error Rates",
-            message="What is the payment error rate by state for FY2023, including overpayment and underpayment rates?",
-        ),
-        cl.Starter(
-            label="Top Overpayment Drivers",
-            message="Which error elements drive the most overpayment dollars in FY2023? Rank by weighted dollar impact for corrective action prioritization.",
-        ),
-        cl.Starter(
-            label="Year-over-Year Trends",
-            message="Which states improved their payment error rate from FY2022 to FY2023, and by how much?",
-        ),
-        cl.Starter(
-            label="Corrective Action ROI",
-            message="Rank each error element by its contribution to the FY2023 overpayment rate with cumulative impact, so I can see which errors to fix first.",
-        ),
-    ]
+    from datasets import get_active_dataset
+
+    ds = get_active_dataset()
+    prompts = ds.get_starter_prompts() if ds else []
+    if not prompts:
+        return None
+    return [cl.Starter(label=p["label"], message=p["message"]) for p in prompts]
 
 
 # =============================================================================
 # CHAINLIT EVENT HANDLERS
 # =============================================================================
+
+
+async def register_commands():
+    """Register native Chainlit tools as persistent buttons in the composer bar.
+
+    Two mode buttons: Insights and Knowledge (they modify message handling).
+    Settings is a push button injected via custom JS next to the attachment icon.
+    """
+    await cl.context.emitter.set_commands(
+        [
+            {"id": "Insights", "icon": "lightbulb", "description": "Analyze with previous query data", "button": True},
+            {"id": "Knowledge", "icon": "book-open", "description": "Search knowledge base only", "button": True},
+        ]
+    )
+
 
 @cl.on_chat_start
 async def start():
@@ -297,14 +362,8 @@ async def start():
     # Set up filter settings UI
     await setup_filter_settings()
 
-    # Clean startup - no system status display
-    # (System health checks still happen in the background via API calls)
-
-
-@cl.on_settings_update
-async def on_settings_update(settings: dict):
-    """Handle filter settings updates."""
-    await handle_settings_update(settings)
+    # Register native slash commands for autocomplete
+    await register_commands()
 
 
 @cl.on_message
@@ -317,26 +376,33 @@ async def main(message: cl.Message):
     if message.elements:
         for element in message.elements:
             # Check if element is a file (has path attribute)
-            if hasattr(element, 'path') and hasattr(element, 'name'):
+            if hasattr(element, "path") and hasattr(element, "name"):
                 attached_files.append(element)
 
-    # Store files in session for /memadd command
+    # Store files in session for panel upload actions
     cl.user_session.set("message_files", attached_files)
 
     # Update chat history
     history = cl.user_session.get("chat_history")
-    history.append({
-        "timestamp": datetime.now().isoformat(),
-        "role": "user",
-        "content": user_input
-    })
+    history.append({"timestamp": datetime.now().isoformat(), "role": "user", "content": user_input})
 
-    # Handle insight requests (/? or /??)
-    if user_input.startswith("/?"):
-        await handle_insight_request(user_input)
-        return
+    # Mode-based routing via native Chainlit tools (Insights / Knowledge)
+    if message.command:
+        cmd = message.command.lower()
+        if cmd == "insights":
+            if not user_input:
+                await send_message("Please type your question with the Insights mode selected.")
+                return
+            await handle_insight_query(user_input, include_thread=True)
+            return
+        elif cmd == "knowledge":
+            if not user_input:
+                await send_message("Please type your question with the Knowledge mode selected.")
+                return
+            await handle_insight_query(user_input, include_thread=False)
+            return
 
-    # Handle special commands
+    # Handle slash commands (text-based /command + Enter)
     if user_input.startswith("/"):
         parts = user_input.split(maxsplit=1)
         command = parts[0].lower()
@@ -344,13 +410,14 @@ async def main(message: cl.Message):
         await handle_command(command, args)
         return
 
-    # Normal chat query - send to LLM
+    # Default: SQL mode
     await handle_chat_query(user_input)
 
 
 # =============================================================================
 # ACTION CALLBACKS
 # =============================================================================
+
 
 @cl.action_callback("download_csv")
 async def on_download_csv(action: cl.Action):
@@ -374,7 +441,6 @@ async def on_cancel(action: cl.Action):
 async def on_followup(action: cl.Action):
     """Handle follow-up question click."""
     await handle_followup(action.payload.get("question"))
-
 
 
 @cl.action_callback("load_*")
@@ -407,6 +473,7 @@ async def on_feedback_negative(action: cl.Action):
 # (cl.AskActionMessage has known bugs causing buttons to become unresponsive)
 # =============================================================================
 
+
 @cl.action_callback("confirm_action")
 async def on_confirm_action(action: cl.Action):
     """Handle confirmation for destructive operations (reset, memreset, prompt update)."""
@@ -416,6 +483,7 @@ async def on_confirm_action(action: cl.Action):
         handle_reset_cancel,
         handle_reset_confirm,
     )
+
     # Remove buttons immediately to prevent double-clicks
     await action.remove()
 
@@ -450,6 +518,7 @@ async def on_confirm_action(action: cl.Action):
 # PANEL ACTION CALLBACK (CustomElement JSX → Python via callAction)
 # =============================================================================
 
+
 @cl.action_callback("panel_action")
 async def on_panel_action(action: cl.Action):
     """Handle actions from sidebar CustomElement panels (MemPanel, MemsqlPanel).
@@ -464,11 +533,78 @@ async def on_panel_action(action: cl.Action):
 
     if panel_type == "memsql" and panel_action == "refresh":
         from ui.handlers.commands.memsql_commands import handle_memsql_panel
+
         await handle_memsql_panel()
 
     elif panel_type == "mem" and panel_action == "refresh":
         from ui.handlers.commands.memory_commands import handle_mem_panel
+
         await handle_mem_panel()
+
+
+@cl.action_callback("filter_applied")
+async def on_filter_applied(action: cl.Action):
+    """Handle filter change from FilterPanel sidebar."""
+    payload = action.payload or {}
+    state = payload.get("state")
+    year = payload.get("fiscal_year")
+    cl.user_session.set("current_state_filter", state or "All States")
+    cl.user_session.set("current_year_filter", str(year) if year else "All Years")
+
+
+@cl.action_callback("llm_settings_changed")
+async def on_llm_settings_changed(action: cl.Action):
+    """Handle LLM settings change from LlmPanel sidebar."""
+    payload = action.payload or {}
+    mode = payload.get("mode")  # "sql", "insights", or "knowledge"
+    settings = payload.get("settings", {})
+    if mode in ("sql", "insights", "knowledge", "summary"):
+        cl.user_session.set(f"llm_{mode}_settings", settings)
+
+
+@cl.action_callback("open_settings_panel")
+async def on_open_settings_panel(action: cl.Action):
+    """Dispatch from SettingsPanel navigation to the correct sub-panel."""
+    payload = action.payload or {}
+    panel = payload.get("panel", "settings")
+    if panel == "settings":
+        from ui.handlers.commands.info_commands import handle_settings_panel
+
+        await handle_settings_panel()
+    elif panel == "filter":
+        from ui.handlers.commands.utility_commands import handle_filter
+
+        await handle_filter()
+    elif panel == "llm":
+        from ui.handlers.commands.info_commands import handle_llm
+
+        await handle_llm()
+    elif panel == "mem":
+        from ui.handlers.commands.memory_commands import handle_mem_panel
+
+        await handle_mem_panel()
+    elif panel == "memsql":
+        from ui.handlers.commands.memsql_commands import handle_memsql_panel
+
+        await handle_memsql_panel()
+    elif panel == "database":
+        from ui.handlers.commands.info_commands import handle_database_panel
+
+        await handle_database_panel()
+
+
+@cl.action_callback("open_readme_panel")
+async def on_open_readme_panel(action: cl.Action):
+    """Open the Readme panel in the sidebar."""
+    from ui.handlers.commands.info_commands import handle_readme_panel
+
+    await handle_readme_panel()
+
+
+@cl.action_callback("close_sidebar")
+async def on_close_sidebar(action: cl.Action):
+    """Close the sidebar."""
+    await cl.ElementSidebar.set_elements([])
 
 
 # =============================================================================

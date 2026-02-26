@@ -6,7 +6,6 @@ For business logic services, see src/services/.
 """
 
 from .startup import (
-    check_system_health,
     initialize_session,
     refresh_filter_settings,
     setup_filter_settings,
@@ -19,7 +18,6 @@ from .thread_context import (
 )
 
 __all__ = [
-    "check_system_health",
     "initialize_session",
     "refresh_filter_settings",
     "setup_filter_settings",

@@ -3,6 +3,7 @@ SnapAnalyst Pydantic Schemas
 
 Data validation and serialization schemas for API requests/responses.
 """
+
 from datetime import datetime
 from decimal import Decimal
 
@@ -19,6 +20,7 @@ class BaseSchema(BaseModel):
 # Household Schemas
 class HouseholdBase(BaseSchema):
     """Base household schema"""
+
     case_id: str
     fiscal_year: int
     state_code: str | None = None
@@ -30,11 +32,13 @@ class HouseholdBase(BaseSchema):
 
 class HouseholdCreate(HouseholdBase):
     """Schema for creating a household"""
+
     pass
 
 
 class HouseholdResponse(HouseholdBase):
     """Schema for household API responses"""
+
     year_month: str | None = None
     certified_household_size: int | None = None
     num_children: int | None = None
@@ -45,6 +49,7 @@ class HouseholdResponse(HouseholdBase):
 # Member Schemas
 class HouseholdMemberBase(BaseSchema):
     """Base member schema"""
+
     case_id: str
     fiscal_year: int
     member_number: int = Field(ge=1, le=17)
@@ -57,11 +62,13 @@ class HouseholdMemberBase(BaseSchema):
 
 class HouseholdMemberCreate(HouseholdMemberBase):
     """Schema for creating a household member"""
+
     pass
 
 
 class HouseholdMemberResponse(HouseholdMemberBase):
     """Schema for member API responses"""
+
     snap_affiliation_code: int | None = None
     total_income: Decimal | None = None
     created_at: datetime
@@ -70,6 +77,7 @@ class HouseholdMemberResponse(HouseholdMemberBase):
 # QC Error Schemas
 class QCErrorBase(BaseSchema):
     """Base QC error schema"""
+
     case_id: str
     fiscal_year: int
     error_number: int = Field(ge=1, le=9)
@@ -80,17 +88,20 @@ class QCErrorBase(BaseSchema):
 
 class QCErrorCreate(QCErrorBase):
     """Schema for creating a QC error"""
+
     pass
 
 
 class QCErrorResponse(QCErrorBase):
     """Schema for QC error API responses"""
+
     created_at: datetime
 
 
 # Load History Schemas
 class DataLoadHistoryResponse(BaseSchema):
     """Schema for load history API responses"""
+
     id: int
     fiscal_year: int
     filename: str
@@ -106,6 +117,7 @@ class DataLoadHistoryResponse(BaseSchema):
 # API Request/Response Schemas
 class LoadRequest(BaseModel):
     """Schema for data load API request"""
+
     fiscal_year: int = Field(..., ge=2000, le=2100)
     filename: str | None = None
     skip_validation: bool = False
@@ -115,6 +127,7 @@ class LoadRequest(BaseModel):
 
 class LoadResponse(BaseModel):
     """Schema for data load API response"""
+
     status: str
     job_id: str
     message: str
@@ -125,6 +138,7 @@ class LoadResponse(BaseModel):
 
 class LoadStatusResponse(BaseModel):
     """Schema for load status API response"""
+
     job_id: str
     status: str  # queued, in_progress, completed, failed
     progress: dict | None = None
@@ -136,6 +150,7 @@ class LoadStatusResponse(BaseModel):
 
 class FileInfoResponse(BaseModel):
     """Schema for file information"""
+
     filename: str
     fiscal_year: int
     size_mb: float
@@ -147,11 +162,13 @@ class FileInfoResponse(BaseModel):
 
 class FilesListResponse(BaseModel):
     """Schema for files list API response"""
+
     files: list[FileInfoResponse]
 
 
 class ResetRequest(BaseModel):
     """Schema for database reset request"""
+
     confirm: bool = Field(..., description="Must be true to confirm reset")
     fiscal_years: list[int] | None = Field(None, description="Specific years to reset")
     backup: bool = Field(default=True, description="Create backup before reset")
@@ -159,6 +176,7 @@ class ResetRequest(BaseModel):
 
 class ResetResponse(BaseModel):
     """Schema for database reset response"""
+
     status: str
     message: str
     backup_file: str | None = None
@@ -167,6 +185,7 @@ class ResetResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     """Schema for health check response"""
+
     status: str
     database: dict
     tables: dict | None = None

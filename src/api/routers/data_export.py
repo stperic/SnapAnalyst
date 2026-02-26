@@ -6,6 +6,7 @@ Provides endpoints to export actual database data (not just schema):
 - Filtered by fiscal year
 - With row limits for testing
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -22,12 +23,27 @@ from src.database.engine import get_db
 logger = get_logger(__name__)
 router = APIRouter()
 
-# Path to data mapping (now in datasets/snap/)
 WORKSPACE_ROOT = Path(__file__).parent.parent.parent.parent
-DATA_MAPPING_PATH = WORKSPACE_ROOT / "datasets" / "snap" / "data_mapping.json"
 
-# Default tables to export (backward compatibility)
-DEFAULT_TABLES = ["households", "household_members", "qc_errors"]
+
+def _get_data_mapping_path() -> Path:
+    """Get data_mapping.json path from active dataset."""
+    from datasets import get_active_dataset
+
+    ds = get_active_dataset()
+    if ds:
+        return ds.get_data_mapping_path()
+    return WORKSPACE_ROOT / "datasets" / "snap" / "data_mapping.json"
+
+
+def _get_default_tables() -> list[str]:
+    """Get default table names from active dataset."""
+    from datasets import get_active_dataset
+
+    ds = get_active_dataset()
+    if ds:
+        return ds.get_main_table_names()
+    return ["households", "household_members", "qc_errors"]
 
 
 def _validate_and_parse_tables(tables_param: str | None) -> list[str]:
@@ -45,13 +61,13 @@ def _validate_and_parse_tables(tables_param: str | None) -> list[str]:
     """
     # Use default tables if no parameter provided (backward compatibility)
     if not tables_param:
-        return DEFAULT_TABLES
+        return _get_default_tables()
 
     # Parse comma-separated list
     requested_tables = [t.strip() for t in tables_param.split(",") if t.strip()]
 
     if not requested_tables:
-        return DEFAULT_TABLES
+        return _get_default_tables()
 
     # Discover all valid tables (exclude views - only base tables for export)
     try:
@@ -68,10 +84,7 @@ def _validate_and_parse_tables(tables_param: str | None) -> list[str]:
         available_tables_str = ", ".join(sorted(all_tables))
         raise HTTPException(
             status_code=400,
-            detail=(
-                f"Invalid table names: {', '.join(invalid_tables)}. "
-                f"Available tables: {available_tables_str}"
-            )
+            detail=(f"Invalid table names: {', '.join(invalid_tables)}. Available tables: {available_tables_str}"),
         )
 
     return requested_tables
@@ -80,7 +93,9 @@ def _validate_and_parse_tables(tables_param: str | None) -> list[str]:
 @router.get("/export/excel", summary="Export all data to Excel with README")
 async def export_data_to_excel(
     fiscal_year: int | None = Query(None, description="Filter by fiscal year (e.g., 2023)"),
-    tables: str | None = Query(None, description="Comma-separated table names (default: households,household_members,qc_errors)"),
+    tables: str | None = Query(
+        None, description="Comma-separated table names (default: households,household_members,qc_errors)"
+    ),
     limit: int | None = Query(None, description="Limit rows per table (for testing)"),
     db: Session = Depends(get_db),
 ):
@@ -126,6 +141,7 @@ async def export_data_to_excel(
 
         # Check global filter if no explicit parameters provided
         from src.core.filter_manager import get_filter_manager
+
         filter_manager = get_filter_manager()
         current_filter = filter_manager.get_filter()
 
@@ -138,17 +154,17 @@ async def export_data_to_excel(
         # The DataExporter queries will automatically include state filter via SQL
 
         # Create exporter
-        exporter = DataExporter(db, DATA_MAPPING_PATH)
+        exporter = DataExporter(db, _get_data_mapping_path())
 
         # Generate Excel file with specified tables
-        buffer = exporter.create_excel_export(
-            tables=tables_list,
-            fiscal_year=fiscal_year,
-            limit=limit
-        )
+        buffer = exporter.create_excel_export(tables=tables_list, fiscal_year=fiscal_year, limit=limit)
 
         # Generate filename
-        filename_parts = ["snapanalyst_data"]
+        from datasets import get_active_dataset
+
+        ds = get_active_dataset()
+        export_prefix = ds.get_export_prefix() if ds else "snapanalyst"
+        filename_parts = [f"{export_prefix}_data"]
         if current_filter.state:
             # Add state to filename if filtered
             state_short = current_filter.state.replace(" ", "_")[:10]
@@ -164,9 +180,7 @@ async def export_data_to_excel(
         return StreamingResponse(
             iter([buffer.getvalue()]),
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={
-                "Content-Disposition": f"attachment; filename={filename}"
-            }
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
         )
 
     except Exception as e:
@@ -181,12 +195,15 @@ async def data_export_root():
 
     Returns available endpoints and usage examples.
     """
+    from datasets import get_active_dataset
+
+    ds = get_active_dataset()
+    ds_name = ds.display_name if ds else "SnapAnalyst"
+
     return {
-        "name": "SnapAnalyst Data Export API",
+        "name": f"{ds_name} Data Export API",
         "description": "Export database data to Excel with comprehensive README",
-        "endpoints": {
-            "/export/excel": "Export complete data to Excel with README"
-        },
+        "endpoints": {"/export/excel": "Export complete data to Excel with README"},
         "features": [
             "README sheet with complete documentation",
             "Data sheets (households, members, errors)",
@@ -194,13 +211,13 @@ async def data_export_root():
             "Code lookup tables",
             "Professional formatting",
             "Optional fiscal year filtering",
-            "Optional row limits for testing"
+            "Optional row limits for testing",
         ],
         "examples": {
             "all_data": "GET /export/excel",
             "fiscal_year_2023": "GET /export/excel?fiscal_year=2023",
             "sample_1000": "GET /export/excel?limit=1000",
-            "fy2023_sample": "GET /export/excel?fiscal_year=2023&limit=1000"
+            "fy2023_sample": "GET /export/excel?fiscal_year=2023&limit=1000",
         },
-        "note": "Large exports may take 10-30 seconds. Use 'limit' parameter for testing."
+        "note": "Large exports may take 10-30 seconds. Use 'limit' parameter for testing.",
     }

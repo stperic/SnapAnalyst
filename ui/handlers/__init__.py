@@ -20,8 +20,7 @@ from .actions import (
     handle_reset_confirm,
 )
 from .commands import handle_command
-from .queries import handle_chat_query, handle_insight_request
-from .settings import handle_settings_update
+from .queries import handle_chat_query
 
 __all__ = [
     "handle_cancel",
@@ -33,6 +32,4 @@ __all__ = [
     "handle_reset_confirm",
     "handle_command",
     "handle_chat_query",
-    "handle_insight_request",
-    "handle_settings_update",
 ]

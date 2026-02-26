@@ -3,6 +3,7 @@ SnapAnalyst Statistics Service
 
 Provides statistical analysis and aggregation functions.
 """
+
 from typing import Any
 
 from sqlalchemy import and_, case, func
@@ -39,9 +40,7 @@ class StatisticsService:
             self.session.close()
 
     def get_overview_statistics(
-        self,
-        fiscal_years: list[int] | None = None,
-        states: list[str] | None = None
+        self, fiscal_years: list[int] | None = None, states: list[str] | None = None
     ) -> dict[str, Any]:
         """
         Get overview statistics across households.
@@ -65,13 +64,13 @@ class StatisticsService:
 
             # Calculate summary statistics
             summary = self.session.query(
-                func.count(Household.id).label('total_households'),
-                func.sum(Household.snap_benefit).label('total_benefits'),
-                func.avg(Household.snap_benefit).label('avg_benefit'),
-                func.avg(Household.certified_household_size).label('avg_household_size'),
-                func.sum(case((Household.num_elderly > 0, 1), else_=0)).label('households_with_elderly'),
-                func.sum(case((Household.num_children > 0, 1), else_=0)).label('households_with_children'),
-                func.sum(case((Household.num_disabled > 0, 1), else_=0)).label('households_with_disabled'),
+                func.count(Household.id).label("total_households"),
+                func.sum(Household.snap_benefit).label("total_benefits"),
+                func.avg(Household.snap_benefit).label("avg_benefit"),
+                func.avg(Household.certified_household_size).label("avg_household_size"),
+                func.sum(case((Household.num_elderly > 0, 1), else_=0)).label("households_with_elderly"),
+                func.sum(case((Household.num_children > 0, 1), else_=0)).label("households_with_children"),
+                func.sum(case((Household.num_disabled > 0, 1), else_=0)).label("households_with_disabled"),
             )
 
             # Apply same filters to summary
@@ -109,10 +108,7 @@ class StatisticsService:
             logger.error(f"Error calculating overview statistics: {e}")
             raise
 
-    def get_by_state_statistics(
-        self,
-        fiscal_years: list[int] | None = None
-    ) -> list[dict[str, Any]]:
+    def get_by_state_statistics(self, fiscal_years: list[int] | None = None) -> list[dict[str, Any]]:
         """
         Get statistics by state.
 
@@ -126,10 +122,10 @@ class StatisticsService:
             query = self.session.query(
                 Household.state_code,
                 Household.state_name,
-                func.count(Household.id).label('household_count'),
-                func.sum(Household.snap_benefit).label('total_benefits'),
-                func.avg(Household.snap_benefit).label('average_benefit'),
-                func.avg(Household.certified_household_size).label('avg_household_size'),
+                func.count(Household.id).label("household_count"),
+                func.sum(Household.snap_benefit).label("total_benefits"),
+                func.avg(Household.snap_benefit).label("average_benefit"),
+                func.avg(Household.certified_household_size).label("avg_household_size"),
             ).group_by(Household.state_code, Household.state_name)
 
             if fiscal_years:
@@ -153,11 +149,7 @@ class StatisticsService:
             logger.error(f"Error calculating by-state statistics: {e}")
             raise
 
-    def get_income_statistics(
-        self,
-        fiscal_year: int,
-        state: str | None = None
-    ) -> dict[str, Any]:
+    def get_income_statistics(self, fiscal_year: int, state: str | None = None) -> dict[str, Any]:
         """
         Get income statistics by source.
 
@@ -191,8 +183,8 @@ class StatisticsService:
 
             for source_name, source_func in income_sources.items():
                 result = query.with_entities(
-                    source_func.label('total'),
-                    func.count(case((HouseholdMember.__table__.c[source_name] > 0, 1))).label('household_count')
+                    source_func.label("total"),
+                    func.count(case((HouseholdMember.__table__.c[source_name] > 0, 1))).label("household_count"),
                 ).first()
 
                 source_total = float(result.total or 0)
@@ -214,9 +206,7 @@ class StatisticsService:
                 )
 
             # Get household count
-            household_count = self.session.query(func.count(Household.id)).filter(
-                Household.fiscal_year == fiscal_year
-            )
+            household_count = self.session.query(func.count(Household.id)).filter(Household.fiscal_year == fiscal_year)
             if state:
                 household_count = household_count.filter(Household.state_code == state)
             household_count = household_count.scalar()
@@ -233,11 +223,7 @@ class StatisticsService:
             logger.error(f"Error calculating income statistics: {e}")
             raise
 
-    def get_demographics_statistics(
-        self,
-        fiscal_year: int,
-        state: str | None = None
-    ) -> dict[str, Any]:
+    def get_demographics_statistics(self, fiscal_year: int, state: str | None = None) -> dict[str, Any]:
         """
         Get demographic statistics.
 
@@ -258,21 +244,21 @@ class StatisticsService:
 
             # Age distribution
             age_dist = query.with_entities(
-                func.count(case((HouseholdMember.age.between(0, 17), 1))).label('children'),
-                func.count(case((HouseholdMember.age.between(18, 64), 1))).label('adults'),
-                func.count(case((HouseholdMember.age >= 65, 1))).label('elderly'),
+                func.count(case((HouseholdMember.age.between(0, 17), 1))).label("children"),
+                func.count(case((HouseholdMember.age.between(18, 64), 1))).label("adults"),
+                func.count(case((HouseholdMember.age >= 65, 1))).label("elderly"),
             ).first()
 
             # Sex distribution
             sex_dist = query.with_entities(
-                func.count(case((HouseholdMember.sex == 1, 1))).label('male'),
-                func.count(case((HouseholdMember.sex == 2, 1))).label('female'),
+                func.count(case((HouseholdMember.sex == 1, 1))).label("male"),
+                func.count(case((HouseholdMember.sex == 2, 1))).label("female"),
             ).first()
 
             # Disability and other indicators
             indicators = query.with_entities(
-                func.count(case((HouseholdMember.disability_indicator.is_(True), 1))).label('with_disability'),
-                func.count(case((HouseholdMember.working_indicator.is_(True), 1))).label('working'),
+                func.count(case((HouseholdMember.disability_indicator.is_(True), 1))).label("with_disability"),
+                func.count(case((HouseholdMember.working_indicator.is_(True), 1))).label("working"),
             ).first()
 
             total_members = query.count()
@@ -306,11 +292,7 @@ class StatisticsService:
             logger.error(f"Error calculating demographics statistics: {e}")
             raise
 
-    def get_benefits_statistics(
-        self,
-        fiscal_year: int,
-        state: str | None = None
-    ) -> dict[str, Any]:
+    def get_benefits_statistics(self, fiscal_year: int, state: str | None = None) -> dict[str, Any]:
         """
         Get benefit statistics.
 
@@ -322,20 +304,18 @@ class StatisticsService:
             Benefit statistics
         """
         try:
-            query = self.session.query(Household).filter(
-                Household.fiscal_year == fiscal_year
-            )
+            query = self.session.query(Household).filter(Household.fiscal_year == fiscal_year)
 
             if state:
                 query = query.filter(Household.state_code == state)
 
             # Summary statistics
             summary = query.with_entities(
-                func.sum(Household.snap_benefit).label('total_benefits'),
-                func.avg(Household.snap_benefit).label('avg_benefit'),
-                func.min(Household.snap_benefit).label('min_benefit'),
-                func.max(Household.snap_benefit).label('max_benefit'),
-                func.count(Household.id).label('households_receiving'),
+                func.sum(Household.snap_benefit).label("total_benefits"),
+                func.avg(Household.snap_benefit).label("avg_benefit"),
+                func.min(Household.snap_benefit).label("min_benefit"),
+                func.max(Household.snap_benefit).label("max_benefit"),
+                func.count(Household.id).label("households_receiving"),
             ).first()
 
             # Benefit distribution by range
@@ -364,10 +344,10 @@ class StatisticsService:
 
             # By household size
             by_size = self.session.query(
-                Household.certified_household_size.label('size'),
-                func.count(Household.id).label('households'),
-                func.avg(Household.snap_benefit).label('average_benefit'),
-                func.sum(Household.snap_benefit).label('total_benefits'),
+                Household.certified_household_size.label("size"),
+                func.count(Household.id).label("households"),
+                func.avg(Household.snap_benefit).label("average_benefit"),
+                func.sum(Household.snap_benefit).label("total_benefits"),
             ).filter(Household.fiscal_year == fiscal_year)
 
             if state:
@@ -393,7 +373,8 @@ class StatisticsService:
                         "average_benefit": float(r.average_benefit or 0),
                         "total_benefits": float(r.total_benefits or 0),
                     }
-                    for r in by_size if r.size
+                    for r in by_size
+                    if r.size
                 ],
             }
 
@@ -401,11 +382,7 @@ class StatisticsService:
             logger.error(f"Error calculating benefits statistics: {e}")
             raise
 
-    def get_error_statistics(
-        self,
-        fiscal_year: int,
-        state: str | None = None
-    ) -> dict[str, Any]:
+    def get_error_statistics(self, fiscal_year: int, state: str | None = None) -> dict[str, Any]:
         """
         Get QC error statistics.
 
@@ -418,18 +395,16 @@ class StatisticsService:
         """
         try:
             # Get households for filter
-            hh_query = self.session.query(
-                Household.case_id,
-                Household.fiscal_year
-            ).filter(
+            hh_query = self.session.query(Household.case_id, Household.fiscal_year).filter(
                 Household.fiscal_year == fiscal_year
             )
             if state:
                 hh_query = hh_query.filter(Household.state_code == state)
 
-            # Get case IDs for filtering errors
-            household_keys = [(hh.case_id, hh.fiscal_year) for hh in hh_query.all()]
-            total_households = len(household_keys)
+            # Use subquery for case_ids instead of materializing all IDs into memory.
+            # This scales to millions of households without Python memory pressure.
+            case_id_subquery = hh_query.with_entities(Household.case_id).subquery()
+            total_households = hh_query.count()
 
             if total_households == 0:
                 return {
@@ -442,44 +417,37 @@ class StatisticsService:
                         "total_error_amount": 0,
                         "average_error_amount": 0,
                     },
-                    "by_error_type": {}
+                    "by_error_type": {},
                 }
 
-            # Build filter for errors using case_id and fiscal_year
-            case_ids = [hh[0] for hh in household_keys]
-
-            # Error summary - filter by case_id and fiscal_year
+            # Error summary - filter by subquery and fiscal_year
             error_query = self.session.query(QCError).filter(
-                QCError.case_id.in_(case_ids),
-                QCError.fiscal_year == fiscal_year
+                QCError.case_id.in_(case_id_subquery), QCError.fiscal_year == fiscal_year
             )
 
             total_errors = error_query.count()
-            households_with_errors = self.session.query(
-                func.count(func.distinct(QCError.case_id))
-            ).filter(
-                QCError.case_id.in_(case_ids),
-                QCError.fiscal_year == fiscal_year
-            ).scalar()
+            households_with_errors = (
+                self.session.query(func.count(func.distinct(QCError.case_id)))
+                .filter(QCError.case_id.in_(case_id_subquery), QCError.fiscal_year == fiscal_year)
+                .scalar()
+            )
 
-            total_error_amount = error_query.with_entities(
-                func.sum(QCError.error_amount)
-            ).scalar() or 0
+            total_error_amount = error_query.with_entities(func.sum(QCError.error_amount)).scalar() or 0
 
-            avg_error_amount = error_query.with_entities(
-                func.avg(QCError.error_amount)
-            ).scalar() or 0
+            avg_error_amount = error_query.with_entities(func.avg(QCError.error_amount)).scalar() or 0
 
             # By error type (element code)
-            by_element = self.session.query(
-                QCError.element_code,
-                func.count().label('count'),
-                func.sum(QCError.error_amount).label('total_amount'),
-                func.avg(QCError.error_amount).label('average_amount'),
-            ).filter(
-                QCError.case_id.in_(case_ids),
-                QCError.fiscal_year == fiscal_year
-            ).group_by(QCError.element_code).all()
+            by_element = (
+                self.session.query(
+                    QCError.element_code,
+                    func.count().label("count"),
+                    func.sum(QCError.error_amount).label("total_amount"),
+                    func.avg(QCError.error_amount).label("average_amount"),
+                )
+                .filter(QCError.case_id.in_(case_id_subquery), QCError.fiscal_year == fiscal_year)
+                .group_by(QCError.element_code)
+                .all()
+            )
 
             return {
                 "fiscal_year": fiscal_year,
@@ -487,7 +455,9 @@ class StatisticsService:
                 "error_summary": {
                     "total_errors": total_errors,
                     "households_with_errors": households_with_errors or 0,
-                    "error_rate_percent": (households_with_errors / total_households * 100) if total_households > 0 else 0,
+                    "error_rate_percent": (households_with_errors / total_households * 100)
+                    if total_households > 0
+                    else 0,
                     "total_error_amount": float(total_error_amount),
                     "average_error_amount": float(avg_error_amount),
                 },
@@ -497,7 +467,8 @@ class StatisticsService:
                         "total_amount": float(r.total_amount or 0),
                         "average_amount": float(r.average_amount or 0),
                     }
-                    for r in by_element if r.element_code
+                    for r in by_element
+                    if r.element_code
                 },
             }
 

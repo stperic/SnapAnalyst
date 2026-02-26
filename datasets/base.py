@@ -177,6 +177,81 @@ class DatasetConfig(ABC):
     # SCHEMA OPERATIONS
     # =========================================================================
 
+    # =========================================================================
+    # CODE ENRICHMENT
+    # =========================================================================
+
+    def get_code_column_mappings(self) -> dict[str, str]:
+        """Map result column names to lookup keys in data_mapping.json.
+
+        Returns:
+            Dict mapping column name -> code_lookups key.
+            Example: {"element_code": "element_codes", "status": "status_codes"}
+        """
+        return {}
+
+    # =========================================================================
+    # EXPORT / IDENTITY
+    # =========================================================================
+
+    def get_anonymous_email(self) -> str:
+        """Default anonymous user email."""
+        app = (self.display_name or self.name or "app").lower().replace(" ", "")
+        return f"anonymous@{app}.com"
+
+    def get_export_prefix(self) -> str:
+        """Filename prefix for data/schema exports."""
+        return (self.display_name or self.name or "data").lower().replace(" ", "_")
+
+    def get_code_lookup_names(self) -> list[str]:
+        """List of code lookup keys available in data_mapping.json."""
+        try:
+            lookups = self.get_code_lookups()
+            return sorted(lookups.keys())
+        except Exception:
+            return []
+
+    def get_table_descriptions(self) -> dict[str, str]:
+        """Human-readable descriptions for main tables (used in exports)."""
+        return {}
+
+    def get_starter_prompts(self) -> list[dict[str, str]]:
+        """Starter prompts for Chainlit empty-chat UI. Each: {label, message}."""
+        return []
+
+    def get_filter_dimensions(self) -> list[dict]:
+        """Filterable dimensions. Each: {name, column, table, type, join_column (optional)}."""
+        return []
+
+    def get_model_classes(self) -> dict[str, type]:
+        """Map table names to SQLAlchemy model classes for queries."""
+        return {}
+
+    # =========================================================================
+    # UI / PRESENTATION
+    # =========================================================================
+
+    def get_personas(self) -> dict[str, str]:
+        """Get persona names for UI display.
+
+        Returns:
+            Dict with 'app' and 'ai' keys for system and AI persona names.
+        """
+        label = self.display_name or self.name
+        return {"app": label, "ai": f"{label} AI"}
+
+    def get_example_questions(self) -> list[str]:
+        """Get example questions for this dataset."""
+        return []
+
+    def get_no_results_message(self) -> str:
+        """Get the no-results message for this dataset."""
+        return "No matching records found. Try adjusting your filters or rephrasing your question."
+
+    # =========================================================================
+    # SCHEMA OPERATIONS
+    # =========================================================================
+
     def get_schema_prefix(self) -> str:
         """Get SQL prefix for schema-qualified table names."""
         if self.schema_name and self.schema_name != "public":
@@ -228,6 +303,7 @@ class DatasetConfigFromYAML(DatasetConfig):
     def get_models_module(self):
         # Import dynamically based on dataset name
         import importlib
+
         try:
             return importlib.import_module(f"datasets.{self.name}.models")
         except ImportError:
@@ -236,6 +312,7 @@ class DatasetConfigFromYAML(DatasetConfig):
 
     def get_reference_models_module(self):
         import importlib
+
         try:
             return importlib.import_module(f"datasets.{self.name}.reference_models")
         except ImportError:
@@ -243,6 +320,7 @@ class DatasetConfigFromYAML(DatasetConfig):
 
     def get_column_mapping(self) -> dict[str, dict[str, str]]:
         import importlib
+
         try:
             mapping_module = importlib.import_module(f"datasets.{self.name}.column_mapping")
             return {
@@ -256,6 +334,7 @@ class DatasetConfigFromYAML(DatasetConfig):
                 HOUSEHOLD_LEVEL_VARIABLES,
                 PERSON_LEVEL_VARIABLES,
             )
+
             return {
                 "household": HOUSEHOLD_LEVEL_VARIABLES,
                 "person": PERSON_LEVEL_VARIABLES,
@@ -264,11 +343,13 @@ class DatasetConfigFromYAML(DatasetConfig):
 
     def get_transformer_class(self) -> type:
         import importlib
+
         try:
             transformer_module = importlib.import_module(f"datasets.{self.name}.transformer")
             return transformer_module.DataTransformer
         except ImportError:
             from src.etl.transformer import DataTransformer
+
             return DataTransformer
 
     def get_business_context(self) -> str:

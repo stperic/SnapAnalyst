@@ -4,7 +4,6 @@ Unit tests for Column Mapping
 Tests column name generation and mapping dictionaries.
 """
 
-
 from src.utils.column_mapping import (
     ERROR_LEVEL_VARIABLES,
     HOUSEHOLD_LEVEL_VARIABLES,
@@ -23,20 +22,20 @@ class TestGetPersonColumnName:
 
     def test_member_1(self):
         """Test column name for first member"""
-        assert get_person_column_name('WAGES', 1) == 'WAGES1'
-        assert get_person_column_name('AGE', 1) == 'AGE1'
-        assert get_person_column_name('SEX', 1) == 'SEX1'
+        assert get_person_column_name("WAGES", 1) == "WAGES1"
+        assert get_person_column_name("AGE", 1) == "AGE1"
+        assert get_person_column_name("SEX", 1) == "SEX1"
 
     def test_member_17(self):
         """Test column name for last member (17)"""
-        assert get_person_column_name('WAGES', 17) == 'WAGES17'
-        assert get_person_column_name('AGE', 17) == 'AGE17'
-        assert get_person_column_name('SEX', 17) == 'SEX17'
+        assert get_person_column_name("WAGES", 17) == "WAGES17"
+        assert get_person_column_name("AGE", 17) == "AGE17"
+        assert get_person_column_name("SEX", 17) == "SEX17"
 
     def test_middle_members(self):
         """Test column names for middle members"""
-        assert get_person_column_name('WAGES', 5) == 'WAGES5'
-        assert get_person_column_name('WAGES', 10) == 'WAGES10'
+        assert get_person_column_name("WAGES", 5) == "WAGES5"
+        assert get_person_column_name("WAGES", 10) == "WAGES10"
 
     def test_all_person_variables(self):
         """Test with all person-level variable names"""
@@ -51,20 +50,20 @@ class TestGetErrorColumnName:
 
     def test_error_1(self):
         """Test column name for first error"""
-        assert get_error_column_name('ELEMENT', 1) == 'ELEMENT1'
-        assert get_error_column_name('NATURE', 1) == 'NATURE1'
-        assert get_error_column_name('AMOUNT', 1) == 'AMOUNT1'
+        assert get_error_column_name("ELEMENT", 1) == "ELEMENT1"
+        assert get_error_column_name("NATURE", 1) == "NATURE1"
+        assert get_error_column_name("AMOUNT", 1) == "AMOUNT1"
 
     def test_error_9(self):
         """Test column name for last error (9)"""
-        assert get_error_column_name('ELEMENT', 9) == 'ELEMENT9'
-        assert get_error_column_name('NATURE', 9) == 'NATURE9'
-        assert get_error_column_name('AMOUNT', 9) == 'AMOUNT9'
+        assert get_error_column_name("ELEMENT", 9) == "ELEMENT9"
+        assert get_error_column_name("NATURE", 9) == "NATURE9"
+        assert get_error_column_name("AMOUNT", 9) == "AMOUNT9"
 
     def test_middle_errors(self):
         """Test column names for middle errors"""
-        assert get_error_column_name('ELEMENT', 5) == 'ELEMENT5'
-        assert get_error_column_name('NATURE', 3) == 'NATURE3'
+        assert get_error_column_name("ELEMENT", 5) == "ELEMENT5"
+        assert get_error_column_name("NATURE", 3) == "NATURE3"
 
     def test_all_error_variables(self):
         """Test with all error-level variable names"""
@@ -92,17 +91,17 @@ class TestGetAllPersonColumns:
     def test_includes_first_member_columns(self):
         """Test includes all first member columns"""
         result = get_all_person_columns()
-        assert 'WAGES1' in result
-        assert 'AGE1' in result
-        assert 'SEX1' in result
-        assert 'FSAFIL1' in result
+        assert "WAGES1" in result
+        assert "AGE1" in result
+        assert "SEX1" in result
+        assert "FSAFIL1" in result
 
     def test_includes_last_member_columns(self):
         """Test includes all last member (17) columns"""
         result = get_all_person_columns()
-        assert 'WAGES17' in result
-        assert 'AGE17' in result
-        assert 'SEX17' in result
+        assert "WAGES17" in result
+        assert "AGE17" in result
+        assert "SEX17" in result
 
     def test_all_variables_represented(self):
         """Test all person variables are represented"""
@@ -130,16 +129,16 @@ class TestGetAllErrorColumns:
     def test_includes_first_error_columns(self):
         """Test includes all first error columns"""
         result = get_all_error_columns()
-        assert 'ELEMENT1' in result
-        assert 'NATURE1' in result
-        assert 'AMOUNT1' in result
+        assert "ELEMENT1" in result
+        assert "NATURE1" in result
+        assert "AMOUNT1" in result
 
     def test_includes_last_error_columns(self):
         """Test includes all last error (9) columns"""
         result = get_all_error_columns()
-        assert 'ELEMENT9' in result
-        assert 'NATURE9' in result
-        assert 'AMOUNT9' in result
+        assert "ELEMENT9" in result
+        assert "NATURE9" in result
+        assert "AMOUNT9" in result
 
     def test_all_variables_represented(self):
         """Test all error variables are represented"""
@@ -160,22 +159,22 @@ class TestGetRequiredHouseholdColumns:
     def test_includes_case_id(self):
         """Test includes case ID column"""
         result = get_required_household_columns()
-        assert 'HHLDNO' in result
+        assert "HHLDNO" in result
 
     def test_includes_state(self):
         """Test includes state column"""
         result = get_required_household_columns()
-        assert 'STATE' in result
+        assert "STATE" in result
 
     def test_includes_year_month(self):
         """Test includes year_month column"""
         result = get_required_household_columns()
-        assert 'YRMONTH' in result
+        assert "YRMONTH" in result
 
     def test_includes_benefit(self):
         """Test includes SNAP benefit column"""
         result = get_required_household_columns()
-        assert 'FSBEN' in result
+        assert "FSBEN" in result
 
     def test_non_empty(self):
         """Test returns non-empty list"""
@@ -194,12 +193,12 @@ class TestGetRequiredPersonColumns:
     def test_includes_affiliation(self):
         """Test includes first member affiliation"""
         result = get_required_person_columns()
-        assert 'FSAFIL1' in result
+        assert "FSAFIL1" in result
 
     def test_includes_age(self):
         """Test includes first member age"""
         result = get_required_person_columns()
-        assert 'AGE1' in result
+        assert "AGE1" in result
 
     def test_non_empty(self):
         """Test returns non-empty list"""
@@ -220,16 +219,16 @@ class TestPersonLevelVariables:
 
     def test_includes_demographics(self):
         """Test includes demographic variables"""
-        assert 'AGE' in PERSON_LEVEL_VARIABLES
-        assert 'SEX' in PERSON_LEVEL_VARIABLES
-        assert 'RACETH' in PERSON_LEVEL_VARIABLES
+        assert "AGE" in PERSON_LEVEL_VARIABLES
+        assert "SEX" in PERSON_LEVEL_VARIABLES
+        assert "RACETH" in PERSON_LEVEL_VARIABLES
 
     def test_includes_income_variables(self):
         """Test includes income variables"""
-        assert 'WAGES' in PERSON_LEVEL_VARIABLES
-        assert 'SOCSEC' in PERSON_LEVEL_VARIABLES
-        assert 'SSI' in PERSON_LEVEL_VARIABLES
-        assert 'UNEMP' in PERSON_LEVEL_VARIABLES
+        assert "WAGES" in PERSON_LEVEL_VARIABLES
+        assert "SOCSEC" in PERSON_LEVEL_VARIABLES
+        assert "SSI" in PERSON_LEVEL_VARIABLES
+        assert "UNEMP" in PERSON_LEVEL_VARIABLES
 
     def test_all_values_are_strings(self):
         """Test all mapped values are strings"""
@@ -255,15 +254,15 @@ class TestErrorLevelVariables:
 
     def test_includes_element(self):
         """Test includes element code"""
-        assert 'ELEMENT' in ERROR_LEVEL_VARIABLES
+        assert "ELEMENT" in ERROR_LEVEL_VARIABLES
 
     def test_includes_nature(self):
         """Test includes nature code"""
-        assert 'NATURE' in ERROR_LEVEL_VARIABLES
+        assert "NATURE" in ERROR_LEVEL_VARIABLES
 
     def test_includes_amount(self):
         """Test includes error amount"""
-        assert 'AMOUNT' in ERROR_LEVEL_VARIABLES
+        assert "AMOUNT" in ERROR_LEVEL_VARIABLES
 
     def test_correct_count(self):
         """Test has correct number of error variables"""
@@ -289,31 +288,31 @@ class TestHouseholdLevelVariables:
 
     def test_includes_case_id(self):
         """Test includes case ID"""
-        assert 'HHLDNO' in HOUSEHOLD_LEVEL_VARIABLES
-        assert HOUSEHOLD_LEVEL_VARIABLES['HHLDNO'] == 'case_id'
+        assert "HHLDNO" in HOUSEHOLD_LEVEL_VARIABLES
+        assert HOUSEHOLD_LEVEL_VARIABLES["HHLDNO"] == "case_id"
 
     def test_includes_geographic(self):
         """Test includes geographic variables"""
-        assert 'STATE' in HOUSEHOLD_LEVEL_VARIABLES
-        assert 'STATENAME' in HOUSEHOLD_LEVEL_VARIABLES
-        assert 'REGIONCD' in HOUSEHOLD_LEVEL_VARIABLES
+        assert "STATE" in HOUSEHOLD_LEVEL_VARIABLES
+        assert "STATENAME" in HOUSEHOLD_LEVEL_VARIABLES
+        assert "REGIONCD" in HOUSEHOLD_LEVEL_VARIABLES
 
     def test_includes_financial(self):
         """Test includes financial variables"""
-        assert 'RAWGROSS' in HOUSEHOLD_LEVEL_VARIABLES
-        assert 'RAWNET' in HOUSEHOLD_LEVEL_VARIABLES
-        assert 'FSBEN' in HOUSEHOLD_LEVEL_VARIABLES
+        assert "RAWGROSS" in HOUSEHOLD_LEVEL_VARIABLES
+        assert "RAWNET" in HOUSEHOLD_LEVEL_VARIABLES
+        assert "FSBEN" in HOUSEHOLD_LEVEL_VARIABLES
 
     def test_includes_composition(self):
         """Test includes household composition variables"""
-        assert 'CERTHHSZ' in HOUSEHOLD_LEVEL_VARIABLES
-        assert 'FSELDER' in HOUSEHOLD_LEVEL_VARIABLES
-        assert 'FSKID' in HOUSEHOLD_LEVEL_VARIABLES
+        assert "CERTHHSZ" in HOUSEHOLD_LEVEL_VARIABLES
+        assert "FSELDER" in HOUSEHOLD_LEVEL_VARIABLES
+        assert "FSKID" in HOUSEHOLD_LEVEL_VARIABLES
 
     def test_includes_weights(self):
         """Test includes statistical weights"""
-        assert 'HWGT' in HOUSEHOLD_LEVEL_VARIABLES
-        assert 'FYWGT' in HOUSEHOLD_LEVEL_VARIABLES
+        assert "HWGT" in HOUSEHOLD_LEVEL_VARIABLES
+        assert "FYWGT" in HOUSEHOLD_LEVEL_VARIABLES
 
     def test_all_values_are_strings(self):
         """Test all mapped values are strings"""

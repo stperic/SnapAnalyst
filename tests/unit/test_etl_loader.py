@@ -14,7 +14,7 @@ from src.etl.loader import ETLStatus, check_references_ready
 class TestCheckReferencesReady:
     """Test check_references_ready function"""
 
-    @patch('src.database.init_database.check_references_populated')
+    @patch("src.database.init_database.check_references_populated")
     def test_references_ready(self, mock_check):
         """Test when references are populated"""
         mock_check.return_value = (True, [])
@@ -24,19 +24,19 @@ class TestCheckReferencesReady:
         assert ready is True
         assert empty == []
 
-    @patch('src.database.init_database.check_references_populated')
+    @patch("src.database.init_database.check_references_populated")
     def test_references_not_ready(self, mock_check):
         """Test when references are not populated"""
-        mock_check.return_value = (False, ['ref_status', 'ref_element'])
+        mock_check.return_value = (False, ["ref_status", "ref_element"])
 
         ready, empty = check_references_ready()
 
         assert ready is False
         assert len(empty) == 2
-        assert 'ref_status' in empty
-        assert 'ref_element' in empty
+        assert "ref_status" in empty
+        assert "ref_element" in empty
 
-    @patch('src.database.init_database.check_references_populated')
+    @patch("src.database.init_database.check_references_populated")
     def test_check_fails_gracefully(self, mock_check):
         """Test graceful failure when check raises exception"""
         mock_check.side_effect = Exception("Database error")
@@ -229,10 +229,10 @@ class TestETLStatus:
 class TestETLLoaderInit:
     """Test ETLLoader initialization"""
 
-    @patch('src.etl.loader.DatabaseWriter')
-    @patch('src.etl.loader.DataValidator')
-    @patch('src.etl.loader.DataTransformer')
-    @patch('src.etl.loader.CSVReader')
+    @patch("src.etl.loader.DatabaseWriter")
+    @patch("src.etl.loader.DataValidator")
+    @patch("src.etl.loader.DataTransformer")
+    @patch("src.etl.loader.CSVReader")
     def test_init_basic(self, mock_reader, mock_transformer, mock_validator, mock_writer):
         """Test basic initialization"""
         from src.etl.loader import ETLLoader
@@ -244,30 +244,25 @@ class TestETLLoaderInit:
         assert loader.strict_validation is False
         assert loader.skip_validation is False
 
-    @patch('src.etl.loader.DatabaseWriter')
-    @patch('src.etl.loader.DataValidator')
-    @patch('src.etl.loader.DataTransformer')
-    @patch('src.etl.loader.CSVReader')
+    @patch("src.etl.loader.DatabaseWriter")
+    @patch("src.etl.loader.DataValidator")
+    @patch("src.etl.loader.DataTransformer")
+    @patch("src.etl.loader.CSVReader")
     def test_init_custom_params(self, mock_reader, mock_transformer, mock_validator, mock_writer):
         """Test initialization with custom parameters"""
         from src.etl.loader import ETLLoader
 
-        loader = ETLLoader(
-            fiscal_year=2022,
-            batch_size=5000,
-            strict_validation=True,
-            skip_validation=True
-        )
+        loader = ETLLoader(fiscal_year=2022, batch_size=5000, strict_validation=True, skip_validation=True)
 
         assert loader.fiscal_year == 2022
         assert loader.batch_size == 5000
         assert loader.strict_validation is True
         assert loader.skip_validation is True
 
-    @patch('src.etl.loader.DatabaseWriter')
-    @patch('src.etl.loader.DataValidator')
-    @patch('src.etl.loader.DataTransformer')
-    @patch('src.etl.loader.CSVReader')
+    @patch("src.etl.loader.DatabaseWriter")
+    @patch("src.etl.loader.DataValidator")
+    @patch("src.etl.loader.DataTransformer")
+    @patch("src.etl.loader.CSVReader")
     def test_has_required_attributes(self, mock_reader, mock_transformer, mock_validator, mock_writer):
         """Test that ETLLoader has required attributes"""
         from src.etl.loader import ETLLoader
@@ -275,19 +270,19 @@ class TestETLLoaderInit:
         loader = ETLLoader(fiscal_year=2023)
 
         # Should have all required attributes
-        assert hasattr(loader, 'fiscal_year')
-        assert hasattr(loader, 'batch_size')
-        assert hasattr(loader, 'strict_validation')
-        assert hasattr(loader, 'skip_validation')
+        assert hasattr(loader, "fiscal_year")
+        assert hasattr(loader, "batch_size")
+        assert hasattr(loader, "strict_validation")
+        assert hasattr(loader, "skip_validation")
 
 
 class TestETLLoaderValidation:
     """Test ETLLoader validation configuration"""
 
-    @patch('src.etl.loader.DatabaseWriter')
-    @patch('src.etl.loader.DataValidator')
-    @patch('src.etl.loader.DataTransformer')
-    @patch('src.etl.loader.CSVReader')
+    @patch("src.etl.loader.DatabaseWriter")
+    @patch("src.etl.loader.DataValidator")
+    @patch("src.etl.loader.DataTransformer")
+    @patch("src.etl.loader.CSVReader")
     def test_validation_enabled_by_default(self, mock_reader, mock_transformer, mock_validator, mock_writer):
         """Test validation is enabled by default"""
         from src.etl.loader import ETLLoader
@@ -296,10 +291,10 @@ class TestETLLoaderValidation:
 
         assert loader.skip_validation is False
 
-    @patch('src.etl.loader.DatabaseWriter')
-    @patch('src.etl.loader.DataValidator')
-    @patch('src.etl.loader.DataTransformer')
-    @patch('src.etl.loader.CSVReader')
+    @patch("src.etl.loader.DatabaseWriter")
+    @patch("src.etl.loader.DataValidator")
+    @patch("src.etl.loader.DataTransformer")
+    @patch("src.etl.loader.CSVReader")
     def test_can_skip_validation(self, mock_reader, mock_transformer, mock_validator, mock_writer):
         """Test can skip validation"""
         from src.etl.loader import ETLLoader
@@ -308,10 +303,10 @@ class TestETLLoaderValidation:
 
         assert loader.skip_validation is True
 
-    @patch('src.etl.loader.DatabaseWriter')
-    @patch('src.etl.loader.DataValidator')
-    @patch('src.etl.loader.DataTransformer')
-    @patch('src.etl.loader.CSVReader')
+    @patch("src.etl.loader.DatabaseWriter")
+    @patch("src.etl.loader.DataValidator")
+    @patch("src.etl.loader.DataTransformer")
+    @patch("src.etl.loader.CSVReader")
     def test_strict_validation_disabled_by_default(self, mock_reader, mock_transformer, mock_validator, mock_writer):
         """Test strict validation is disabled by default"""
         from src.etl.loader import ETLLoader
@@ -320,10 +315,10 @@ class TestETLLoaderValidation:
 
         assert loader.strict_validation is False
 
-    @patch('src.etl.loader.DatabaseWriter')
-    @patch('src.etl.loader.DataValidator')
-    @patch('src.etl.loader.DataTransformer')
-    @patch('src.etl.loader.CSVReader')
+    @patch("src.etl.loader.DatabaseWriter")
+    @patch("src.etl.loader.DataValidator")
+    @patch("src.etl.loader.DataTransformer")
+    @patch("src.etl.loader.CSVReader")
     def test_can_enable_strict_validation(self, mock_reader, mock_transformer, mock_validator, mock_writer):
         """Test can enable strict validation"""
         from src.etl.loader import ETLLoader
@@ -336,10 +331,10 @@ class TestETLLoaderValidation:
 class TestETLLoaderBatching:
     """Test ETLLoader batch configuration"""
 
-    @patch('src.etl.loader.DatabaseWriter')
-    @patch('src.etl.loader.DataValidator')
-    @patch('src.etl.loader.DataTransformer')
-    @patch('src.etl.loader.CSVReader')
+    @patch("src.etl.loader.DatabaseWriter")
+    @patch("src.etl.loader.DataValidator")
+    @patch("src.etl.loader.DataTransformer")
+    @patch("src.etl.loader.CSVReader")
     def test_default_batch_size(self, mock_reader, mock_transformer, mock_validator, mock_writer):
         """Test default batch size"""
         from src.etl.loader import ETLLoader
@@ -348,10 +343,10 @@ class TestETLLoaderBatching:
 
         assert loader.batch_size == 10000
 
-    @patch('src.etl.loader.DatabaseWriter')
-    @patch('src.etl.loader.DataValidator')
-    @patch('src.etl.loader.DataTransformer')
-    @patch('src.etl.loader.CSVReader')
+    @patch("src.etl.loader.DatabaseWriter")
+    @patch("src.etl.loader.DataValidator")
+    @patch("src.etl.loader.DataTransformer")
+    @patch("src.etl.loader.CSVReader")
     def test_custom_batch_size(self, mock_reader, mock_transformer, mock_validator, mock_writer):
         """Test custom batch size"""
         from src.etl.loader import ETLLoader
@@ -360,10 +355,10 @@ class TestETLLoaderBatching:
 
         assert loader.batch_size == 1000
 
-    @patch('src.etl.loader.DatabaseWriter')
-    @patch('src.etl.loader.DataValidator')
-    @patch('src.etl.loader.DataTransformer')
-    @patch('src.etl.loader.CSVReader')
+    @patch("src.etl.loader.DatabaseWriter")
+    @patch("src.etl.loader.DataValidator")
+    @patch("src.etl.loader.DataTransformer")
+    @patch("src.etl.loader.CSVReader")
     def test_large_batch_size(self, mock_reader, mock_transformer, mock_validator, mock_writer):
         """Test large batch size"""
         from src.etl.loader import ETLLoader
@@ -372,10 +367,10 @@ class TestETLLoaderBatching:
 
         assert loader.batch_size == 50000
 
-    @patch('src.etl.loader.DatabaseWriter')
-    @patch('src.etl.loader.DataValidator')
-    @patch('src.etl.loader.DataTransformer')
-    @patch('src.etl.loader.CSVReader')
+    @patch("src.etl.loader.DatabaseWriter")
+    @patch("src.etl.loader.DataValidator")
+    @patch("src.etl.loader.DataTransformer")
+    @patch("src.etl.loader.CSVReader")
     def test_small_batch_size(self, mock_reader, mock_transformer, mock_validator, mock_writer):
         """Test small batch size"""
         from src.etl.loader import ETLLoader
@@ -388,13 +383,11 @@ class TestETLLoaderBatching:
 class TestETLLoaderErrorHandling:
     """Test ETLLoader error handling"""
 
-    @patch('src.etl.loader.DatabaseWriter')
-    @patch('src.etl.loader.DataValidator')
-    @patch('src.etl.loader.DataTransformer')
-    @patch('src.etl.loader.CSVReader')
-    def test_load_validation_error(
-        self, mock_reader_cls, mock_transformer, mock_validator, mock_writer
-    ):
+    @patch("src.etl.loader.DatabaseWriter")
+    @patch("src.etl.loader.DataValidator")
+    @patch("src.etl.loader.DataTransformer")
+    @patch("src.etl.loader.CSVReader")
+    def test_load_validation_error(self, mock_reader_cls, mock_transformer, mock_validator, mock_writer):
         """Test load handles ValidationError"""
         from src.core.exceptions import ValidationError
         from src.etl.loader import ETLLoader
@@ -410,13 +403,11 @@ class TestETLLoaderErrorHandling:
         with pytest.raises(ValidationError):
             loader.load_from_file("/fake/path.csv")
 
-    @patch('src.etl.loader.DatabaseWriter')
-    @patch('src.etl.loader.DataValidator')
-    @patch('src.etl.loader.DataTransformer')
-    @patch('src.etl.loader.CSVReader')
-    def test_load_database_error(
-        self, mock_reader_cls, mock_transformer, mock_validator, mock_writer
-    ):
+    @patch("src.etl.loader.DatabaseWriter")
+    @patch("src.etl.loader.DataValidator")
+    @patch("src.etl.loader.DataTransformer")
+    @patch("src.etl.loader.CSVReader")
+    def test_load_database_error(self, mock_reader_cls, mock_transformer, mock_validator, mock_writer):
         """Test load handles DatabaseError"""
         from src.core.exceptions import DatabaseError
         from src.etl.loader import ETLLoader
@@ -424,7 +415,7 @@ class TestETLLoaderErrorHandling:
         # Mock reader
         mock_reader = Mock()
         mock_reader.get_row_count.return_value = 50
-        mock_reader.read_csv.return_value = Mock(spec=['__len__'], __len__=Mock(return_value=50))
+        mock_reader.read_csv.return_value = Mock(spec=["__len__"], __len__=Mock(return_value=50))
         mock_reader_cls.return_value = mock_reader
 
         # Mock transformer
@@ -437,13 +428,11 @@ class TestETLLoaderErrorHandling:
         with pytest.raises(DatabaseError):
             loader.load_from_file("/fake/path.csv")
 
-    @patch('src.etl.loader.DatabaseWriter')
-    @patch('src.etl.loader.DataValidator')
-    @patch('src.etl.loader.DataTransformer')
-    @patch('src.etl.loader.CSVReader')
-    def test_load_unexpected_error(
-        self, mock_reader_cls, mock_transformer, mock_validator, mock_writer
-    ):
+    @patch("src.etl.loader.DatabaseWriter")
+    @patch("src.etl.loader.DataValidator")
+    @patch("src.etl.loader.DataTransformer")
+    @patch("src.etl.loader.CSVReader")
+    def test_load_unexpected_error(self, mock_reader_cls, mock_transformer, mock_validator, mock_writer):
         """Test load handles unexpected exceptions"""
         from src.etl.loader import ETLLoader
 

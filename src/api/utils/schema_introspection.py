@@ -84,11 +84,11 @@ class SchemaIntrospector:
         columns = {}
         try:
             for col in self.inspector.get_columns(view_name):
-                col_name = col['name']
+                col_name = col["name"]
                 columns[col_name] = {
-                    'name': col_name,
-                    'type': str(col['type']),
-                    'nullable': col['nullable'],
+                    "name": col_name,
+                    "type": str(col["type"]),
+                    "nullable": col["nullable"],
                 }
         except Exception as e:
             logger.warning(f"Could not get columns for view {view_name}: {e}")
@@ -111,11 +111,11 @@ class SchemaIntrospector:
         row_count = self._get_row_count(view_name)
 
         return {
-            'name': view_name,
-            'type': 'view',
-            'columns': columns,
-            'definition': view_definition,
-            'row_count': row_count,
+            "name": view_name,
+            "type": "view",
+            "columns": columns,
+            "definition": view_definition,
+            "row_count": row_count,
         }
 
     def get_table_structure(self, table_name: str) -> dict[str, Any]:
@@ -131,47 +131,51 @@ class SchemaIntrospector:
         # Get columns
         columns = {}
         for col in self.inspector.get_columns(table_name):
-            col_name = col['name']
+            col_name = col["name"]
             columns[col_name] = {
-                'name': col_name,
-                'type': str(col['type']),
-                'nullable': col['nullable'],
-                'default': str(col['default']) if col['default'] is not None else None,
-                'autoincrement': col.get('autoincrement', False),
+                "name": col_name,
+                "type": str(col["type"]),
+                "nullable": col["nullable"],
+                "default": str(col["default"]) if col["default"] is not None else None,
+                "autoincrement": col.get("autoincrement", False),
             }
 
         # Get primary keys
         pk_constraint = self.inspector.get_pk_constraint(table_name)
-        primary_keys = pk_constraint.get('constrained_columns', []) if pk_constraint else []
+        primary_keys = pk_constraint.get("constrained_columns", []) if pk_constraint else []
 
         # Get foreign keys
         foreign_keys = []
         for fk in self.inspector.get_foreign_keys(table_name):
-            foreign_keys.append({
-                'constrained_columns': fk['constrained_columns'],
-                'referred_table': fk['referred_table'],
-                'referred_columns': fk['referred_columns'],
-            })
+            foreign_keys.append(
+                {
+                    "constrained_columns": fk["constrained_columns"],
+                    "referred_table": fk["referred_table"],
+                    "referred_columns": fk["referred_columns"],
+                }
+            )
 
         # Get indexes
         indexes = []
         for idx in self.inspector.get_indexes(table_name):
-            indexes.append({
-                'name': idx['name'],
-                'columns': idx['column_names'],
-                'unique': idx['unique'],
-            })
+            indexes.append(
+                {
+                    "name": idx["name"],
+                    "columns": idx["column_names"],
+                    "unique": idx["unique"],
+                }
+            )
 
         # Get row count
         row_count = self._get_row_count(table_name)
 
         return {
-            'name': table_name,
-            'columns': columns,
-            'primary_keys': primary_keys,
-            'foreign_keys': foreign_keys,
-            'indexes': indexes,
-            'row_count': row_count,
+            "name": table_name,
+            "columns": columns,
+            "primary_keys": primary_keys,
+            "foreign_keys": foreign_keys,
+            "indexes": indexes,
+            "row_count": row_count,
         }
 
     def _get_row_count(self, table_name: str) -> int:
@@ -185,6 +189,12 @@ class SchemaIntrospector:
             Approximate number of rows
         """
         try:
+            # Validate table_name against known tables to prevent SQL injection
+            import re
+
+            if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_.]*$", table_name):
+                logger.warning(f"Invalid table name rejected: {table_name}")
+                return 0
             with self.engine.connect() as conn:
                 result = conn.execute(text(f"SELECT COUNT(*) FROM {table_name}"))
                 return result.scalar()
@@ -242,11 +252,11 @@ class SchemaIntrospector:
             for fk in fks:
                 rel_name = f"{table_name}_to_{fk['referred_table']}"
                 relationships[rel_name] = {
-                    'from_table': table_name,
-                    'to_table': fk['referred_table'],
-                    'from_columns': fk['constrained_columns'],
-                    'to_columns': fk['referred_columns'],
-                    'type': 'many-to-one',  # Most common case
+                    "from_table": table_name,
+                    "to_table": fk["referred_table"],
+                    "from_columns": fk["constrained_columns"],
+                    "to_columns": fk["referred_columns"],
+                    "type": "many-to-one",  # Most common case
                 }
 
         return relationships
@@ -274,19 +284,17 @@ class SchemaIntrospector:
             logger.warning(f"Could not get PostgreSQL version: {e}")
 
         return {
-            'database_name': self.engine.url.database,
-            'host': self.engine.url.host,
-            'port': self.engine.url.port,
-            'tables': tables,
-            'table_count': len(tables),
-            'total_rows': total_rows,
-            'postgresql_version': pg_version,
+            "database_name": self.engine.url.database,
+            "host": self.engine.url.host,
+            "port": self.engine.url.port,
+            "tables": tables,
+            "table_count": len(tables),
+            "total_rows": total_rows,
+            "postgresql_version": pg_version,
         }
 
     def merge_with_static_metadata(
-        self,
-        dynamic_schema: dict[str, Any],
-        static_metadata: dict[str, Any]
+        self, dynamic_schema: dict[str, Any], static_metadata: dict[str, Any]
     ) -> dict[str, Any]:
         """
         Merge dynamic schema from database with static metadata from JSON.
@@ -304,19 +312,19 @@ class SchemaIntrospector:
         merged = dynamic_schema.copy()
 
         # For each table in dynamic schema
-        for table_name, table_info in dynamic_schema.get('columns', {}).items():
+        for table_name, table_info in dynamic_schema.get("columns", {}).items():
             # Get static metadata for this table if it exists
-            static_table = static_metadata.get('tables', {}).get(table_name, {})
-            static_columns = static_table.get('columns', {})
+            static_table = static_metadata.get("tables", {}).get(table_name, {})
+            static_columns = static_table.get("columns", {})
 
             # Merge column metadata
             for col_name, col_info in table_info.items():
                 if col_name in static_columns:
                     # Add rich metadata from static file
                     static_col = static_columns[col_name]
-                    col_info['description'] = static_col.get('description', '')
-                    col_info['range'] = static_col.get('range', '')
-                    col_info['example'] = static_col.get('example', '')
-                    col_info['source_field'] = static_col.get('source_field', '')
+                    col_info["description"] = static_col.get("description", "")
+                    col_info["range"] = static_col.get("range", "")
+                    col_info["example"] = static_col.get("example", "")
+                    col_info["source_field"] = static_col.get("source_field", "")
 
         return merged

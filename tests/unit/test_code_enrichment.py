@@ -24,7 +24,7 @@ class TestLoadCodeLookups:
             "code_lookups": {
                 "element_codes": {"311": "Wages and salaries", "333": "SSI"},
                 "nature_codes": {"35": "Unreported income"},
-                "status_codes": {"1": "Amount correct", "2": "Overissuance"}
+                "status_codes": {"1": "Amount correct", "2": "Overissuance"},
             }
         }
 
@@ -32,6 +32,7 @@ class TestLoadCodeLookups:
             with patch("pathlib.Path.exists", return_value=True):
                 # Clear cache first
                 import src.services.code_enrichment
+
                 src.services.code_enrichment._CODE_LOOKUPS_CACHE = None
 
                 result = load_code_lookups()
@@ -44,6 +45,7 @@ class TestLoadCodeLookups:
     def test_load_code_lookups_uses_cache(self):
         """Test that subsequent loads use cache"""
         import src.services.code_enrichment
+
         cached_data = {"test": "data"}
         src.services.code_enrichment._CODE_LOOKUPS_CACHE = cached_data
 
@@ -55,6 +57,7 @@ class TestLoadCodeLookups:
         """Test handling when data_mapping.json not found"""
         with patch("pathlib.Path.exists", return_value=False):
             import src.services.code_enrichment
+
             src.services.code_enrichment._CODE_LOOKUPS_CACHE = None
 
             result = load_code_lookups()
@@ -66,6 +69,7 @@ class TestLoadCodeLookups:
         with patch("builtins.open", mock_open(read_data="invalid json")):
             with patch("pathlib.Path.exists", return_value=True):
                 import src.services.code_enrichment
+
                 src.services.code_enrichment._CODE_LOOKUPS_CACHE = None
 
                 result = load_code_lookups()
@@ -76,20 +80,12 @@ class TestLoadCodeLookups:
 class TestEnrichResultsWithCodeDescriptions:
     """Test code enrichment for query results"""
 
-    @patch('src.services.code_enrichment.load_code_lookups')
+    @patch("src.services.code_enrichment.load_code_lookups")
     def test_enrich_single_code_column(self, mock_load):
         """Test enriching results with a single code column"""
-        mock_load.return_value = {
-            "element_codes": {
-                "311": "Wages and salaries",
-                "333": "SSI"
-            }
-        }
+        mock_load.return_value = {"element_codes": {"311": "Wages and salaries", "333": "SSI"}}
 
-        results = [
-            {"element_code": 311, "error_amount": 150.00},
-            {"element_code": 333, "error_amount": 200.00}
-        ]
+        results = [{"element_code": 311, "error_amount": 150.00}, {"element_code": 333, "error_amount": 200.00}]
 
         lookups = enrich_results_with_code_descriptions(results)
 
@@ -97,22 +93,16 @@ class TestEnrichResultsWithCodeDescriptions:
         assert lookups["element_code"]["311"] == "Wages and salaries"
         assert lookups["element_code"]["333"] == "SSI"
 
-    @patch('src.services.code_enrichment.load_code_lookups')
+    @patch("src.services.code_enrichment.load_code_lookups")
     def test_enrich_multiple_code_columns(self, mock_load):
         """Test enriching results with multiple code columns"""
         mock_load.return_value = {
             "element_codes": {"311": "Wages and salaries"},
             "nature_codes": {"35": "Unreported income"},
-            "status_codes": {"2": "Overissuance"}
+            "status_codes": {"2": "Overissuance"},
         }
 
-        results = [
-            {
-                "element_code": 311,
-                "nature_code": 35,
-                "status": 2
-            }
-        ]
+        results = [{"element_code": 311, "nature_code": 35, "status": 2}]
 
         lookups = enrich_results_with_code_descriptions(results)
 
@@ -121,12 +111,10 @@ class TestEnrichResultsWithCodeDescriptions:
         assert lookups["nature_code"]["35"] == "Unreported income"
         assert lookups["status"]["2"] == "Overissuance"
 
-    @patch('src.services.code_enrichment.load_code_lookups')
+    @patch("src.services.code_enrichment.load_code_lookups")
     def test_enrich_missing_code(self, mock_load):
         """Test handling of codes not in lookup table"""
-        mock_load.return_value = {
-            "element_codes": {"311": "Wages and salaries"}
-        }
+        mock_load.return_value = {"element_codes": {"311": "Wages and salaries"}}
 
         results = [
             {"element_code": 999}  # Code not in lookup
@@ -138,7 +126,7 @@ class TestEnrichResultsWithCodeDescriptions:
         assert "element_code" in lookups
         assert 999 not in lookups["element_code"]
 
-    @patch('src.services.code_enrichment.load_code_lookups')
+    @patch("src.services.code_enrichment.load_code_lookups")
     def test_enrich_empty_results(self, mock_load):
         """Test enrichment with empty results"""
         mock_load.return_value = {}
@@ -149,32 +137,24 @@ class TestEnrichResultsWithCodeDescriptions:
 
         assert lookups == {}
 
-    @patch('src.services.code_enrichment.load_code_lookups')
+    @patch("src.services.code_enrichment.load_code_lookups")
     def test_enrich_null_code_values(self, mock_load):
         """Test handling of NULL/None code values"""
-        mock_load.return_value = {
-            "element_codes": {"311": "Wages and salaries"}
-        }
+        mock_load.return_value = {"element_codes": {"311": "Wages and salaries"}}
 
-        results = [
-            {"element_code": None, "error_amount": 150.00}
-        ]
+        results = [{"element_code": None, "error_amount": 150.00}]
 
         lookups = enrich_results_with_code_descriptions(results)
 
         # Should handle None gracefully
         assert isinstance(lookups, dict)
 
-    @patch('src.services.code_enrichment.load_code_lookups')
+    @patch("src.services.code_enrichment.load_code_lookups")
     def test_enrich_string_codes(self, mock_load):
         """Test enrichment with string code values"""
-        mock_load.return_value = {
-            "element_codes": {"311": "Wages and salaries"}
-        }
+        mock_load.return_value = {"element_codes": {"311": "Wages and salaries"}}
 
-        results = [
-            {"element_code": "311", "error_amount": 150.00}
-        ]
+        results = [{"element_code": "311", "error_amount": 150.00}]
 
         lookups = enrich_results_with_code_descriptions(results)
 
@@ -188,14 +168,14 @@ class TestCodeColumnMappings:
     def test_all_expected_mappings_present(self):
         """Test that all expected code columns are mapped"""
         expected_columns = [
-            'element_code',
-            'nature_code',
-            'status',
-            'error_finding',
-            'case_classification',
-            'sex',
-            'snap_affiliation_code',
-            'agency_responsibility',
+            "element_code",
+            "nature_code",
+            "status",
+            "error_finding",
+            "case_classification",
+            "sex",
+            "snap_affiliation_code",
+            "agency_responsibility",
         ]
 
         for column in expected_columns:
@@ -203,10 +183,10 @@ class TestCodeColumnMappings:
 
     def test_mappings_point_to_correct_lookup_keys(self):
         """Test that mappings point to expected lookup table names"""
-        assert CODE_COLUMN_MAPPINGS['element_code'] == 'element_codes'
-        assert CODE_COLUMN_MAPPINGS['nature_code'] == 'nature_codes'
-        assert CODE_COLUMN_MAPPINGS['status'] == 'status_codes'
-        assert CODE_COLUMN_MAPPINGS['sex'] == 'sex_codes'
+        assert CODE_COLUMN_MAPPINGS["element_code"] == "element_codes"
+        assert CODE_COLUMN_MAPPINGS["nature_code"] == "nature_codes"
+        assert CODE_COLUMN_MAPPINGS["status"] == "status_codes"
+        assert CODE_COLUMN_MAPPINGS["sex"] == "sex_codes"
 
 
 class TestEnrichResultsEdgeCases:
@@ -214,10 +194,7 @@ class TestEnrichResultsEdgeCases:
 
     def test_no_code_columns_in_results(self):
         """Test enrichment with results that have no code columns"""
-        results = [
-            {"state_name": "California", "count": 100},
-            {"state_name": "Texas", "count": 200}
-        ]
+        results = [{"state_name": "California", "count": 100}, {"state_name": "Texas", "count": 200}]
 
         lookups = enrich_results_with_code_descriptions(results)
 
@@ -226,10 +203,7 @@ class TestEnrichResultsEdgeCases:
 
     def test_results_with_only_non_code_columns(self):
         """Test enrichment with results containing only non-code columns"""
-        results = [
-            {"fiscal_year": 2023, "snap_benefit": 284.50},
-            {"fiscal_year": 2022, "snap_benefit": 300.00}
-        ]
+        results = [{"fiscal_year": 2023, "snap_benefit": 284.50}, {"fiscal_year": 2022, "snap_benefit": 300.00}]
 
         lookups = enrich_results_with_code_descriptions(results)
 

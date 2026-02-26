@@ -2,19 +2,20 @@
 Thread Context Manager
 
 Manages query history storage and retrieval for insight generation.
-Tracks full conversation thread with structured data for /?? command.
+Tracks full conversation thread with structured data for Insights chat mode.
 
 This provides a clean interface for storing and accessing query history
 beyond just the last query.
 """
 
-import logging
 from dataclasses import asdict, dataclass
 from datetime import datetime
 
 import chainlit as cl
 
-logger = logging.getLogger(__name__)
+from src.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -24,6 +25,7 @@ class ThreadQuery:
 
     Stores question, SQL, results, and metadata for a single query execution.
     """
+
     question: str
     sql: str
     results: list[dict]
@@ -42,7 +44,7 @@ class ThreadQuery:
             "sql": self.sql,
             "row_count": self.row_count,
             "timestamp": self.timestamp,
-            "response_id": self.response_id
+            "response_id": self.response_id,
         }
 
 
@@ -56,6 +58,7 @@ class ThreadContext:
 
     SESSION_KEY = "thread_queries"
     MAX_THREAD_SIZE = 20  # Limit to last 20 queries
+    MAX_STORED_ROWS = 50  # Cap stored result rows per query to limit memory
 
     def __init__(self):
         """Initialize thread context from session."""
@@ -67,12 +70,7 @@ class ThreadContext:
             cl.user_session.set(self.SESSION_KEY, [])
 
     def add_query(
-        self,
-        question: str,
-        sql: str,
-        results: list[dict],
-        row_count: int,
-        response_id: str | None = None
+        self, question: str, sql: str, results: list[dict], row_count: int, response_id: str | None = None
     ) -> None:
         """
         Add a query to the thread history.
@@ -86,13 +84,16 @@ class ThreadContext:
         """
         self._ensure_session_exists()
 
+        # Truncate results to cap memory usage while preserving enough for insight generation
+        stored_results = results[: self.MAX_STORED_ROWS] if results else []
+
         query = ThreadQuery(
             question=question,
             sql=sql,
-            results=results,
+            results=stored_results,
             row_count=row_count,
             timestamp=datetime.now().isoformat(),
-            response_id=response_id or "unknown"
+            response_id=response_id or "unknown",
         )
 
         queries = cl.user_session.get(self.SESSION_KEY)
@@ -100,7 +101,7 @@ class ThreadContext:
 
         # Keep only last MAX_THREAD_SIZE queries
         if len(queries) > self.MAX_THREAD_SIZE:
-            queries = queries[-self.MAX_THREAD_SIZE:]
+            queries = queries[-self.MAX_THREAD_SIZE :]
             cl.user_session.set(self.SESSION_KEY, queries)
 
         logger.info(f"Added query to thread: {question[:60]}... (total: {len(queries)} queries)")
@@ -115,9 +116,7 @@ class ThreadContext:
         self._ensure_session_exists()
         queries_data = cl.user_session.get(self.SESSION_KEY)
 
-        return [
-            ThreadQuery(**q) for q in queries_data
-        ]
+        return [ThreadQuery(**q) for q in queries_data]
 
     def get_last_query(self) -> ThreadQuery | None:
         """
@@ -141,13 +140,9 @@ class ThreadContext:
         return {
             "total_queries": len(queries),
             "recent_queries": [
-                {
-                    "question": q.question[:100],
-                    "row_count": q.row_count,
-                    "timestamp": q.timestamp
-                }
+                {"question": q.question[:100], "row_count": q.row_count, "timestamp": q.timestamp}
                 for q in queries[-10:]  # Last 10 queries
-            ]
+            ],
         }
 
     def get_queries_for_insight(self, max_queries: int | None = None) -> list[ThreadQuery]:

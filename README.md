@@ -65,6 +65,7 @@ SnapAnalyst leverages [**Vanna.AI**](https://vanna.ai/) for intelligent natural 
 - **Direct SQL Support**: Power users can execute SQL directly (read-only for safety)
 - **AI-Powered Insights**: Get intelligent summaries and analysis of query results
 - **Code Translation**: Automatically translates numeric codes to meaningful descriptions
+- **Feedback-Driven Training**: Thumbs up/down on SQL results trains the AI — good queries are learned, bad ones are removed from training data
 
 ### Data Management
 - **Smart Filtering**: Filter all queries by state and/or fiscal year using the settings panel. Filters apply automatically to all subsequent queries and exports. Easily switch between states (e.g., Connecticut, Maryland) or years (FY2021-FY2023) without rewriting questions.
@@ -91,12 +92,15 @@ SnapAnalyst leverages [**Vanna.AI**](https://vanna.ai/) for intelligent natural 
 - **Program Administrators**: Monitor error rates, export data for internal reporting and corrective action planning, augment federal data with state-specific datasets
 - **Researchers**: Query SNAP QC microdata without data preparation, explore income and eligibility patterns across fiscal years
 
+> **Note**: This release has been tested with **Azure OpenAI** only. OpenAI, Anthropic, and Ollama providers are supported but have not been fully validated. Please report any issues.
+
 ## Quick Start with Docker
 
 ### Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) and Docker Compose
 - An LLM provider:
+  - **Azure OpenAI** endpoint + API key (tested), OR
   - **OpenAI** API key, OR
   - **Anthropic** API key, OR
   - **Ollama** installed locally (free, no API key needed)
@@ -144,69 +148,80 @@ On first run, Docker will automatically:
 1. Open http://localhost:8001 in your browser
 2. Ask questions in plain English (e.g., "What are the top 3 causes of payment errors?")
 3. Set filters using the settings icon to focus on specific states or fiscal years
-4. Export data with `/export` command or download query results using the CSV button
+4. Export data via **Settings > Database** panel or download query results using the CSV button
 
-## Chat Commands
+## Chat Interface
+
+### Chat Commands
 
 | Command | Description |
 |---------|-------------|
-| `/help` | Show all available commands |
-| `/export` | Export full database with comprehensive README |
-| `/export 2023` | Export FY2023 data only |
-| `/export tables=snap_my_table` | Export custom tables |
-| `/filter status` | Check active state/year filters |
-| `/database` | View database statistics |
-| `/schema` | Explore database structure |
-| `/llm` | View LLM configuration |
 | `/clear` | Clear chat history |
-| `/?` | Full thread insight with conversation context |
-| `/??` | Knowledge base lookup only |
-| `/mem` | Manage AI knowledge base (insights/docs) |
-| `/memsql` | Manage Vanna SQL training data |
 
-### Advanced Insight Commands
+### Chat Modes
 
-**Full Thread Insight (`/?`)**
-Ask questions that consider your entire conversation history:
-```
-/? Compare the error patterns across all my previous queries
-/? What trends do you see in the data I've analyzed so far?
-```
+The chat input has a mode selector for switching between query types:
 
-**Knowledge Base Lookup (`/??`)**
-Query the knowledge base directly without thread context:
-```
-/?? What does status code 2 mean?
-/?? Explain element code 311
-```
+- **SQL** (default) — Natural language to SQL queries
+- **Insights** — Ask questions with full conversation context
+- **Knowledge** — Query the knowledge base directly
+- **Settings** — Open the Settings sidebar panel
 
-### AI Memory Commands
+### Settings Sidebar
 
-SnapAnalyst has two separate AI memory stores, each managed through a self-contained sidebar panel:
+Click the **Settings** toolbar button (or select Settings mode) to access all configuration panels:
 
-**Knowledge Base (`/mem`)** — Powers `/??` insights and documentation lookups
+| Panel | Description |
+|-------|-------------|
+| **Filters** | Set state and fiscal year filters |
+| **LLM Params** | Configure LLM provider, model, temperature, and max tokens |
+| **Knowledge SQL** | Manage Vanna ChromaDB — view stats, upload/delete training data, reset |
+| **Knowledge** | Manage KB ChromaDB — view stats, upload/delete documents, reset |
+| **Database** | View database statistics, export data |
 
-Type `/mem` to open the sidebar panel where you can:
+### AI Memory Stores
+
+SnapAnalyst has two separate AI memory stores, each managed through a self-contained sidebar panel accessible via **Settings**:
+
+**Knowledge** — Powers Knowledge mode insights and documentation lookups
+
+Open via Settings > Knowledge to:
 - View statistics (status, document count, size)
 - Browse and delete individual documents
 - Upload `.md` / `.txt` files with optional category and tags
 - Reset the entire knowledge base
 
-**SQL Training (`/memsql`)** — Powers natural language to SQL generation via Vanna.AI
+**Knowledge SQL** — Powers natural language to SQL generation via Vanna.AI
 
-Type `/memsql` to open the sidebar panel where you can:
+Open via Settings > Knowledge SQL to:
 - View statistics (DDL, documentation, SQL pairs)
 - Browse and delete individual training entries
 - Upload training files (`.md`/`.txt` for docs, `.json` for question-SQL pairs)
 - Reset training data with option to reload from training folder
 - View and update the SQL system prompt
 
-**Upload file formats for `/memsql`:**
+**Upload file formats for Knowledge SQL:**
 - `.md` / `.txt` — Added as documentation context for SQL generation
 - `.json` — Must contain `{"example_queries": [{"question": "...", "sql": "..."}]}`
 
-**Reset (available in the `/memsql` panel):**
+**Reset (available in the Knowledge SQL panel):**
 The Reset button clears all Vanna training data (DDL, docs, SQL pairs) and retrains DDL from the database schema. A **"Reload SNAP training data"** checkbox (checked by default) controls whether documentation and query examples from the training folder (`datasets/snap/training/`) are also reloaded automatically. Uncheck it to start with DDL only and add training data manually via Upload.
+
+### Feedback-Driven Training
+
+SQL query results include Chainlit's built-in thumbs up/down feedback icons. This feedback directly improves the AI's SQL generation over time:
+
+| Action | Effect |
+|--------|--------|
+| **Thumbs up** | Adds the question + generated SQL pair to Vanna's ChromaDB training data. Future similar questions will use this as a reference example. |
+| **Thumbs down** | Removes the question + SQL pair from ChromaDB training data (if previously added). Optionally include a comment explaining what was wrong. |
+| **No feedback** | Nothing happens — the query is not stored for training. |
+
+**Scope**: Only SQL mode queries are affected. Feedback on Insights or Knowledge mode messages is a no-op (those modes don't generate SQL).
+
+**Configuration**: Controlled by `VANNA_STORE_USER_QUERIES` (default: `True`). Set to `False` to disable training while still allowing feedback to be recorded in the database.
+
+**Deduplication**: Repeated thumbs-up on the same question+SQL pair is harmless — Vanna uses deterministic IDs, so identical pairs are upserted (overwritten) rather than duplicated.
 
 ### Training Data & System Prompts (Advanced)
 
@@ -222,7 +237,8 @@ datasets/snap/
 │   └── query_examples.json       # Example question/SQL pairs
 └── prompts/                      # System prompts (SYSTEM_PROMPTS_PATH)
     ├── sql_system_prompt.txt     # SQL generation system prompt
-    └── kb_system_prompt.txt      # Knowledge base insight prompt
+    ├── kb_system_prompt.txt      # Knowledge base insight prompt
+    └── summary_system_prompt.txt # AI result summary prompt
 ```
 
 #### Training Data Folder
@@ -241,7 +257,8 @@ The optional `explanation` field in query examples is stored for documentation p
 | File | Purpose | Fallback if missing |
 |------|---------|---------------------|
 | `sql_system_prompt.txt` | System prompt sent to the LLM for SQL generation. Include domain-specific calculations, business rules, field naming conventions, and SQL guidelines. | Generic "expert data analyst and PostgreSQL specialist" prompt |
-| `kb_system_prompt.txt` | System prompt for `/??` knowledge base insights. Sets the LLM's persona and response style. | Generic "data analyst" prompt |
+| `kb_system_prompt.txt` | System prompt for Knowledge mode insights. Sets the LLM's persona and response style. | Generic "data analyst" prompt |
+| `summary_system_prompt.txt` | System prompt for AI-powered result summaries. Controls how query results are summarized. | Generic summary prompt |
 
 #### Customizing System Prompts
 
@@ -289,36 +306,26 @@ To use SnapAnalyst with your own data:
    SYSTEM_PROMPTS_PATH=./datasets/mydata/prompts
    ```
 
-5. **Load your data** into PostgreSQL and retrain via `/memsql` → Reset Full
+5. **Load your data** into PostgreSQL and retrain via Settings > Knowledge SQL > Reset
 
 If you omit the prompt files or the prompts folder, generic defaults are used — the system never assumes SNAP-specific terminology.
 
 #### Runtime Prompt Customization
 
-Users can override prompts per-user without editing files, using the sidebar panels:
-- `/memsql` panel → **System Prompt** section — Upload a `.txt` file to override the SQL generation prompt, or reset to default
-- `/mem` panel → **System Prompt** section — Upload a `.txt` file to override the KB insight prompt, or reset to default
-- `/prompt sql` or `/prompt kb` — View the current prompt (custom or default)
+Users can override prompts per-user without editing files, using the sidebar panels (accessible via Settings):
+- **Knowledge SQL** panel → **System Prompt** section — Upload a `.txt` file to override the SQL generation prompt, or reset to default
+- **Knowledge** panel → **System Prompt** section — Upload a `.txt` file to override the KB insight prompt, or reset to default
 
 Custom prompts are stored in the database per user and take priority over the prompts folder files.
 
-### Data Export Commands
+### Data Export
 
-**Export Full Database (`/export`)**
-Download complete database with comprehensive README documentation:
-```
-/export                                    # Default: 3 core tables (households, members, errors)
-/export 2023                               # FY2023 only
-/export tables=households                  # Single table
-/export tables=households,snap_my_table    # Multiple tables (including custom)
-/export 2023 tables=snap_my_table          # Combine filters
-```
+**Database Export (via Settings > Database panel)**
 
-**What's Included:**
-- **README Sheet**: Complete documentation, column definitions, code lookups
-- **Data Sheets**: Requested tables with proper formatting
-- **Code Translation**: Numeric codes automatically translated to descriptions
-- **Filtered Data**: Respects active state/year filters
+Open the Database panel from Settings to export data as Excel with comprehensive documentation:
+- Select specific fiscal years or export all data
+- Export includes README sheet, data sheets, code translation, and column definitions
+- Respects active state/year filters
 
 **Custom Table Support:**
 Users can export custom tables by name. Tables must follow naming conventions:
@@ -327,7 +334,7 @@ Users can export custom tables by name. Tables must follow naming conventions:
 - Views: `v_*` or `snap_v_*` prefix
 
 **CSV Download Button (Query Results)**
-After running a query, click the "📥 CSV" button to export only that query's results as CSV. This is lighter and faster for ad-hoc analysis of specific queries.
+After running a query, click the "CSV" button to export only that query's results as CSV. This is lighter and faster for ad-hoc analysis of specific queries.
 
 ## Architecture
 
@@ -373,6 +380,23 @@ The ETL pipeline transforms wide-format CSV (1,200+ columns) into a normalized s
 5. **AI Summary** → LLM analyzes results and provides insights
 6. **Response** → Formatted results + SQL + analysis returned to user
 
+## Security
+
+SnapAnalyst is designed as a **self-hosted internal tool** for SNAP QC data analysis. The current security model reflects this:
+
+| Layer | Status | Notes |
+|-------|--------|-------|
+| **UI Authentication** | Implemented | Password-based login via Chainlit with persistent sessions |
+| **REST API Authentication** | Not implemented | API endpoints accept an `X-User-ID` header but do not verify it. JWT support is planned. |
+| **API Rate Limiting** | Not implemented | Suitable for single-team use. Add a reverse proxy (e.g., Nginx, Caddy) for rate limiting in shared deployments. |
+| **SQL Injection Protection** | Implemented | All user queries go through `QueryValidator` (SELECT/WITH only). Filter inputs are regex-validated. |
+| **CORS** | Configurable | Defaults to localhost origins. Set `CORS_ORIGINS` in `.env` for production. |
+
+**Deployment recommendations:**
+- Always set `DATABASE_PASSWORD`, `SECRET_KEY`, and `CHAINLIT_AUTH_SECRET` in `.env` for production
+- Place behind a reverse proxy (Nginx/Caddy) with TLS for any network-exposed deployment
+- Set `ENVIRONMENT=production` to disable API docs and enable startup warnings for insecure defaults
+
 ## Configuration
 
 ### Environment Variables
@@ -391,6 +415,7 @@ Configuration is managed through a `.env` file in the project root (or environme
 | `API_PORT` | API port mapping | `8000` |
 | `CHAINLIT_PORT` | UI port mapping | `8001` |
 | `POSTGRES_PORT` | PostgreSQL port mapping | `5432` |
+| `VANNA_STORE_USER_QUERIES` | Enable feedback-driven training (thumbs up/down trains Vanna) | `True` |
 | `SQL_TRAINING_DATA_PATH` | Training data folder (docs, query examples) | `./datasets/snap/training` |
 | `SYSTEM_PROMPTS_PATH` | System prompts folder (SQL & KB prompts) | `./datasets/snap/prompts` |
 
@@ -778,7 +803,7 @@ After adding custom tables or views:
    - Example: SELECT ... FROM snap_my_analysis WHERE ...';
    ```
 
-2. **Retrain Vanna.AI**: Open the `/memsql` panel and click **Reset**. This clears Vanna's SQL training data and re-extracts DDL from the database schema, automatically discovering your new tables and their comments. With the "Reload SNAP training data" checkbox checked (default), documentation and query examples from the training folder are also reloaded.
+2. **Retrain Vanna.AI**: Open Settings > Knowledge SQL and click **Reset**. This clears Vanna's SQL training data and re-extracts DDL from the database schema, automatically discovering your new tables and their comments. With the "Reload SNAP training data" checkbox checked (default), documentation and query examples from the training folder are also reloaded.
 
 #### Example: Adding State-Specific Analysis
 
@@ -806,7 +831,7 @@ GROUP BY error_category;
 COPY snap_california_errors FROM '/path/to/data.csv' CSV HEADER;
 ```
 
-Then in the chat interface, open `/memsql` and click **Reset**, then ask:
+Then in the chat interface, open Settings > Knowledge SQL and click **Reset**, then ask:
 - "What are the most common error categories in California?"
 - "Show me cases with high severity scores"
 - "Compare California error patterns to national trends"
@@ -816,7 +841,7 @@ Then in the chat interface, open `/memsql` and click **Reset**, then ask:
 - **API Documentation**: Available in development mode at http://localhost:8000/docs
   - Enable by setting `ENVIRONMENT=development` in `.env`
   - In production, API docs are disabled for security
-- **Database Schema**: Use `/schema` command in chat
+- **Database Schema**: Open Settings > Database panel in the chat UI
 - **Issues**: [GitHub Issues](https://github.com/stperic/SnapAnalyst/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/stperic/SnapAnalyst/discussions)
 

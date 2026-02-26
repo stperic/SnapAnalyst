@@ -1,11 +1,8 @@
 """
 Command Handlers Package
 
-Organizes all slash commands into logical modules:
-- data_commands: Data loading and file operations
-- info_commands: System information and status
-- memory_commands: AI memory/ChromaDB management
-- utility_commands: Export, samples, notes, etc.
+Only /clear remains as a slash command.
+All other functionality is accessed via the Settings toolbar button.
 """
 
 from .router import handle_command

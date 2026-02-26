@@ -3,6 +3,7 @@ SnapAnalyst Files API Router
 
 Endpoints for discovering and managing CSV files.
 """
+
 from __future__ import annotations
 
 import re
@@ -23,6 +24,7 @@ router = APIRouter(tags=["files"])
 
 class FileInfo(BaseModel):
     """Information about a CSV file"""
+
     filename: str
     fiscal_year: int | None
     size_mb: float
@@ -35,6 +37,7 @@ class FileInfo(BaseModel):
 
 class FilesResponse(BaseModel):
     """Response with file list"""
+
     files: list[FileInfo]
     snapdata_path: str
     total_files: int
@@ -54,9 +57,9 @@ def _extract_fiscal_year(filename: str) -> int | None:
     """
     # Try pattern: fy2023, FY2023, fy23, FY23
     patterns = [
-        r'fy(\d{4})',  # fy2023
-        r'fy(\d{2})',  # fy23
-        r'20(\d{2})',  # 2023
+        r"fy(\d{4})",  # fy2023
+        r"fy(\d{2})",  # fy23
+        r"20(\d{2})",  # 2023
     ]
 
     for pattern in patterns:
@@ -65,7 +68,7 @@ def _extract_fiscal_year(filename: str) -> int | None:
             year = match.group(1)
             # Convert 2-digit to 4-digit
             if len(year) == 2:
-                year = '20' + year
+                year = "20" + year
             return int(year)
 
     return None
@@ -80,13 +83,10 @@ async def list_files():
         List of CSV files with metadata
     """
     try:
-        snapdata_path = Path(settings.snapdata_path)
+        snapdata_path = Path(settings.resolved_data_path)
 
         if not snapdata_path.exists():
-            raise HTTPException(
-                status_code=404,
-                detail=f"Snapdata directory not found: {snapdata_path}"
-            )
+            raise HTTPException(status_code=404, detail=f"Snapdata directory not found: {snapdata_path}")
 
         # Find all CSV files
         csv_files = list(snapdata_path.glob("*.csv"))
@@ -155,19 +155,13 @@ async def get_file_info(filename: str):
         File information
     """
     try:
-        file_path = Path(settings.SNAPDATA_PATH) / filename
+        file_path = Path(settings.resolved_data_path) / filename
 
         if not file_path.exists():
-            raise HTTPException(
-                status_code=404,
-                detail=f"File not found: {filename}"
-            )
+            raise HTTPException(status_code=404, detail=f"File not found: {filename}")
 
-        if not file_path.suffix.lower() == '.csv':
-            raise HTTPException(
-                status_code=400,
-                detail=f"Not a CSV file: {filename}"
-            )
+        if not file_path.suffix.lower() == ".csv":
+            raise HTTPException(status_code=400, detail=f"Not a CSV file: {filename}")
 
         file_stat = file_path.stat()
         fiscal_year = _extract_fiscal_year(filename)
@@ -177,7 +171,7 @@ async def get_file_info(filename: str):
             with open(file_path) as f:
                 # Read first 10MB
                 chunk = f.read(10 * 1024 * 1024)
-                lines_in_chunk = chunk.count('\n')
+                lines_in_chunk = chunk.count("\n")
 
                 # Extrapolate total (rough estimate)
                 if len(chunk) == 10 * 1024 * 1024:
@@ -218,31 +212,33 @@ async def upload_file(file: UploadFile = File(...)):
     """
     try:
         # Validate file type
-        if not file.filename.endswith('.csv'):
-            raise HTTPException(
-                status_code=400,
-                detail="Only CSV files are accepted"
-            )
+        if not file.filename.endswith(".csv"):
+            raise HTTPException(status_code=400, detail="Only CSV files are accepted")
 
-        # Sanitize filename
-        safe_filename = file.filename.replace('..', '').replace('/', '')
+        # Sanitize filename - extract only the basename to prevent path traversal
+        safe_filename = Path(file.filename).name
+        if not safe_filename or safe_filename.startswith("."):
+            raise HTTPException(status_code=400, detail="Invalid filename")
 
         # Save to snapdata directory
-        snapdata_path = Path(settings.snapdata_path)
+        snapdata_path = Path(settings.resolved_data_path)
         snapdata_path.mkdir(parents=True, exist_ok=True)
 
-        file_path = snapdata_path / safe_filename
+        file_path = (snapdata_path / safe_filename).resolve()
+        # Verify the resolved path is still within snapdata_path
+        if not str(file_path).startswith(str(snapdata_path.resolve())):
+            raise HTTPException(status_code=400, detail="Invalid filename")
 
         # Check if file already exists
         if file_path.exists():
             # Add timestamp to make it unique
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            name_parts = safe_filename.rsplit('.', 1)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            name_parts = safe_filename.rsplit(".", 1)
             safe_filename = f"{name_parts[0]}_{timestamp}.csv"
             file_path = snapdata_path / safe_filename
 
         # Save uploaded file
-        with open(file_path, 'wb') as buffer:
+        with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
         # Get file info
@@ -263,7 +259,7 @@ async def upload_file(file: UploadFile = File(...)):
                 loaded=False,
                 loaded_at=None,
                 row_count=None,
-            )
+            ),
         }
 
     except HTTPException:

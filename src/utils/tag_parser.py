@@ -5,10 +5,11 @@ Utilities for parsing and validating tags in /memadd commands.
 Supports hashtag syntax and enforces consistent formatting.
 """
 
-import logging
 import re
 
-logger = logging.getLogger(__name__)
+from src.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def parse_memadd_command(args: str) -> tuple[str, list[str]]:
@@ -35,14 +36,14 @@ def parse_memadd_command(args: str) -> tuple[str, list[str]]:
     args = args.strip()
 
     # Extract all hashtags
-    hashtag_pattern = r'#([a-zA-Z0-9_-]+)'
+    hashtag_pattern = r"#([a-zA-Z0-9_-]+)"
     tags_raw = re.findall(hashtag_pattern, args)
 
     # Normalize tags: lowercase
     tags = [tag.lower() for tag in tags_raw]
 
     # Remove hashtags from args to get category
-    category_text = re.sub(hashtag_pattern, '', args).strip()
+    category_text = re.sub(hashtag_pattern, "", args).strip()
 
     # If no category text, use "general"
     category = category_text if category_text else "general"
@@ -78,7 +79,7 @@ def validate_category(category: str) -> str:
         return "general"
 
     # Remove invalid characters
-    cleaned = re.sub(r'[^a-z0-9_-]', '', category.lower())
+    cleaned = re.sub(r"[^a-z0-9_-]", "", category.lower())
 
     # Truncate if too long
     if len(cleaned) > 50:
@@ -114,7 +115,7 @@ def validate_tags(tags: list[str]) -> list[str]:
 
     for tag in tags:
         # Clean tag
-        cleaned = re.sub(r'[^a-z0-9_-]', '', tag.lower())
+        cleaned = re.sub(r"[^a-z0-9_-]", "", tag.lower())
 
         # Truncate if too long
         if len(cleaned) > 30:
@@ -148,7 +149,7 @@ def validate_file_extension(filename: str, allowed: list[str] | None = None) -> 
     from pathlib import Path
 
     if allowed is None:
-        allowed = ['.md', '.txt']
+        allowed = [".md", ".txt"]
 
     ext = Path(filename).suffix.lower()
     return ext in allowed

@@ -4,19 +4,21 @@ Knowledge Base ChromaDB Module
 Simple, clean interface for KB ChromaDB operations.
 Path: ./chromadb/kb/ | Collection: "kb"
 """
+
 from __future__ import annotations
 
 import os
+import threading
 import uuid
 from collections import defaultdict
-from datetime import datetime
+from datetime import UTC, datetime
 
 # Configure ONNX Runtime before any ChromaDB imports
 # CRITICAL: Explicitly set thread count to prevent CPU affinity errors in LXC containers
 # When thread count is explicit, ONNX Runtime skips automatic CPU affinity (which fails in LXC)
 # See: https://github.com/chroma-core/chroma/issues/1420
-if not os.environ.get('OMP_NUM_THREADS') or os.environ.get('OMP_NUM_THREADS') == '0':
-    os.environ['OMP_NUM_THREADS'] = '4'
+if not os.environ.get("OMP_NUM_THREADS") or os.environ.get("OMP_NUM_THREADS") == "0":
+    os.environ["OMP_NUM_THREADS"] = "4"
 
 import chromadb
 
@@ -26,6 +28,7 @@ from src.core.logging import get_logger
 logger = get_logger(__name__)
 
 _kb_client = None
+_kb_lock = threading.Lock()
 
 
 def get_kb_collection():
@@ -33,14 +36,13 @@ def get_kb_collection():
     global _kb_client
 
     if _kb_client is None:
-        kb_path = f"{settings.vanna_chromadb_path}/kb"
-        # Create ChromaDB client with telemetry explicitly disabled
-        client_settings = chromadb.config.Settings(
-            anonymized_telemetry=False,
-            allow_reset=True
-        )
-        _kb_client = chromadb.PersistentClient(path=kb_path, settings=client_settings)
-        logger.info(f"Initialized KB ChromaDB at {kb_path}")
+        with _kb_lock:
+            if _kb_client is None:
+                kb_path = f"{settings.vanna_chromadb_path}/kb"
+                # Create ChromaDB client with telemetry explicitly disabled
+                client_settings = chromadb.config.Settings(anonymized_telemetry=False, allow_reset=True)
+                _kb_client = chromadb.PersistentClient(path=kb_path, settings=client_settings)
+                logger.info(f"Initialized KB ChromaDB at {kb_path}")
 
     collection = _kb_client.get_or_create_collection(
         name="user_kb",
@@ -56,8 +58,7 @@ def get_kb_collection():
     actual_space = collection.metadata.get("hnsw:space", "l2")
     if actual_space != "cosine":
         logger.warning(
-            "KB collection using '%s' distance (not cosine). "
-            "Run /mem reset and re-upload documents to migrate.",
+            "KB collection using '%s' distance (not cosine). Reset via Settings > Knowledge and re-upload documents to migrate.",
             actual_space,
         )
 
@@ -130,19 +131,29 @@ def _chunk_text(text: str, chunk_size: int = 500, chunk_overlap: int = 50, filen
     return splitter.split_text(text)
 
 
+def _get_anonymous_email() -> str:
+    """Get anonymous email from active dataset config."""
+    from datasets import get_active_dataset
+
+    ds = get_active_dataset()
+    return ds.get_anonymous_email() if ds else "anonymous@app.com"
+
+
 def add_document(
     text: str,
     filename: str,
     category: str = "general",
     tags: list[str] | None = None,
-    user_id: str = "anonymous@snapanalyst.com",
-    is_private: bool = False
+    user_id: str | None = None,
+    is_private: bool = False,
 ) -> str:
     """
     Add document to KB with automatic chunking.
 
     Returns: document ID (parent_id for chunked documents)
     """
+    if user_id is None:
+        user_id = _get_anonymous_email()
     collection = get_kb_collection()
 
     # Set category for private docs
@@ -157,8 +168,8 @@ def add_document(
 
     # Chunk the text (markdown-aware for .md files)
     chunks = _chunk_text(text, filename=filename)
-    parent_id = f"kb_{uuid.uuid4().hex[:12]}"
-    now = datetime.utcnow().isoformat()
+    parent_id = f"kb_{uuid.uuid4().hex}"
+    now = datetime.now(UTC).isoformat()
 
     if len(chunks) == 1:
         # Single chunk — simple entry, no chunk metadata
@@ -209,7 +220,7 @@ _KB_DISTANCE_THRESHOLD = 0.60
 
 def query_documents(
     question: str,
-    user_id: str = "anonymous@snapanalyst.com",
+    user_id: str | None = None,
     tags: list[str] | None = None,
     category: str | None = None,
     user_scope: str = "all",
@@ -226,6 +237,8 @@ def query_documents(
 
     Returns: List of {document, metadata, relevance, source_display}
     """
+    if user_id is None:
+        user_id = _get_anonymous_email()
     collection = get_kb_collection()
     where_filter = _build_where_filter(user_id, tags, category, user_scope)
 
@@ -237,27 +250,29 @@ def query_documents(
             query_texts=[question],
             n_results=fetch_n,
             where=where_filter,
-            include=["documents", "metadatas", "distances"]
+            include=["documents", "metadatas", "distances"],
         )
 
         # Collect raw hits
         raw = []
         for doc, meta, dist in zip(
-            results['documents'][0],
-            results['metadatas'][0],
-            results['distances'][0],
+            results["documents"][0],
+            results["metadatas"][0],
+            results["distances"][0],
             strict=False,
         ):
-            raw.append({
-                'document': doc,
-                'metadata': meta,
-                'distance': dist,
-                'relevance': 1.0 - (dist / 2.0),
-                'source_display': _format_source(meta),
-            })
+            raw.append(
+                {
+                    "document": doc,
+                    "metadata": meta,
+                    "distance": dist,
+                    "relevance": 1.0 - (dist / 2.0),
+                    "source_display": _format_source(meta),
+                }
+            )
 
         # 1. Filter by relevance threshold
-        filtered = [r for r in raw if r['distance'] <= distance_threshold]
+        filtered = [r for r in raw if r["distance"] <= distance_threshold]
         if not filtered:
             logger.debug(f"KB query: all {len(raw)} results exceeded threshold {distance_threshold}")
             return []
@@ -265,12 +280,12 @@ def query_documents(
         # 2. Deduplicate: keep best chunk per source document (lowest distance)
         seen_docs: dict[str, dict] = {}
         for result in filtered:
-            meta = result['metadata']
-            doc_key = meta.get('parent_id') or meta.get('filename', result['document'][:64])
-            if doc_key not in seen_docs or result['distance'] < seen_docs[doc_key]['distance']:
+            meta = result["metadata"]
+            doc_key = meta.get("parent_id") or meta.get("filename", result["document"][:64])
+            if doc_key not in seen_docs or result["distance"] < seen_docs[doc_key]["distance"]:
                 seen_docs[doc_key] = result
 
-        deduplicated = sorted(seen_docs.values(), key=lambda r: r['distance'])
+        deduplicated = sorted(seen_docs.values(), key=lambda r: r["distance"])
 
         logger.debug(
             f"KB query: {len(raw)} fetched, {len(filtered)} passed threshold, "
@@ -278,22 +293,14 @@ def query_documents(
         )
 
         # Return without internal 'distance' key
-        return [
-            {k: v for k, v in r.items() if k != 'distance'}
-            for r in deduplicated[:n_results]
-        ]
+        return [{k: v for k, v in r.items() if k != "distance"} for r in deduplicated[:n_results]]
 
     except Exception as e:
         logger.error(f"KB query error: {e}")
         return []
 
 
-def query_dataset(
-    question: str,
-    dataset_path: str,
-    collections: list[str],
-    n_results: int = 5
-) -> list[dict]:
+def query_dataset(question: str, dataset_path: str, collections: list[str], n_results: int = 5) -> list[dict]:
     """
     Query Vanna dataset ChromaDB collections.
 
@@ -305,58 +312,58 @@ def query_dataset(
 
     Returns: List of {document, metadata, relevance, source_display}
     """
-    from src.services.llm_service import get_llm_service
+    from src.services.llm_providers import _get_vanna_instance
 
     try:
-        llm_service = get_llm_service()
-        vanna = llm_service.get_vanna_for_dataset(dataset_path)
+        vanna = _get_vanna_instance()
 
         results = []
 
         # Query DDL collection
-        if 'ddl' in collections:
+        if "ddl" in collections:
             try:
                 ddl_docs = vanna.get_related_ddl(question, n_results=n_results)
                 for doc in ddl_docs:
-                    results.append({
-                        'document': doc,
-                        'metadata': {'collection': 'ddl', 'dataset': dataset_path},
-                        'relevance': 0.9,
-                        'source_display': f'🗄️ {dataset_path.upper()} Schema'
-                    })
+                    results.append(
+                        {
+                            "document": doc,
+                            "metadata": {"collection": "ddl", "dataset": dataset_path},
+                            "relevance": 0.9,
+                            "source_display": f"🗄️ {dataset_path.upper()} Schema",
+                        }
+                    )
             except Exception as e:
                 logger.warning(f"Error querying DDL: {e}")
 
         # Query documentation collection
-        if 'documentation' in collections:
+        if "documentation" in collections:
             try:
                 doc_docs = vanna.get_related_documentation(question, n_results=n_results)
                 for doc in doc_docs:
-                    results.append({
-                        'document': doc,
-                        'metadata': {'collection': 'documentation', 'dataset': dataset_path},
-                        'relevance': 0.85,
-                        'source_display': f'📖 {dataset_path.upper()} Context'
-                    })
+                    results.append(
+                        {
+                            "document": doc,
+                            "metadata": {"collection": "documentation", "dataset": dataset_path},
+                            "relevance": 0.85,
+                            "source_display": f"📖 {dataset_path.upper()} Context",
+                        }
+                    )
             except Exception as e:
                 logger.warning(f"Error querying documentation: {e}")
 
         # Query SQL collection
-        if 'sql' in collections:
+        if "sql" in collections:
             try:
                 sql_pairs = vanna.get_similar_question_sql(question, n_results=n_results)
                 for q, sql in sql_pairs:
-                    results.append({
-                        'document': f"**Question:** {q}\n\n**SQL:**\n```sql\n{sql}\n```",
-                        'metadata': {
-                            'collection': 'sql',
-                            'dataset': dataset_path,
-                            'question': q,
-                            'sql': sql
-                        },
-                        'relevance': 0.8,
-                        'source_display': f'💡 {dataset_path.upper()} Examples'
-                    })
+                    results.append(
+                        {
+                            "document": f"**Question:** {q}\n\n**SQL:**\n```sql\n{sql}\n```",
+                            "metadata": {"collection": "sql", "dataset": dataset_path, "question": q, "sql": sql},
+                            "relevance": 0.8,
+                            "source_display": f"💡 {dataset_path.upper()} Examples",
+                        }
+                    )
             except Exception as e:
                 logger.warning(f"Error querying SQL: {e}")
 
@@ -368,11 +375,7 @@ def query_dataset(
         return []
 
 
-def query_all(
-    question: str,
-    user_id: str,
-    n_results: int = 10
-) -> list[dict]:
+def query_all(question: str, user_id: str, n_results: int = 10) -> list[dict]:
     """
     Query KB + all datasets.
 
@@ -381,37 +384,35 @@ def query_all(
     all_results = []
 
     # Query KB
-    kb_results = query_documents(
-        question=question,
-        user_id=user_id,
-        n_results=n_results
-    )
+    kb_results = query_documents(question=question, user_id=user_id, n_results=n_results)
     all_results.extend(kb_results)
 
-    # Query all datasets (discover dynamically)
-    datasets = ['snap_qc']  # TODO: Make this dynamic by discovering schemas
+    # Query all datasets (derive from active dataset)
+    try:
+        from datasets import get_active_dataset
+
+        ds = get_active_dataset()
+        dataset_name = f"{ds.name}_qc" if ds else "snap_qc"
+    except Exception:
+        dataset_name = "snap_qc"
+    datasets = [dataset_name]
 
     for dataset in datasets:
         dataset_results = query_dataset(
             question=question,
             dataset_path=dataset,
-            collections=['ddl', 'documentation', 'sql'],
-            n_results=3  # Fewer per dataset when querying all
+            collections=["ddl", "documentation", "sql"],
+            n_results=3,  # Fewer per dataset when querying all
         )
         all_results.extend(dataset_results)
 
     # Sort by relevance
-    all_results.sort(key=lambda x: x['relevance'], reverse=True)
+    all_results.sort(key=lambda x: x["relevance"], reverse=True)
 
     return all_results[:n_results]
 
 
-def _build_where_filter(
-    user_id: str,
-    tags: list[str] | None,
-    category: str | None,
-    user_scope: str
-) -> dict:
+def _build_where_filter(user_id: str, tags: list[str] | None, category: str | None, user_scope: str) -> dict:
     """Build ChromaDB WHERE filter."""
     filters = []
 
@@ -420,12 +421,7 @@ def _build_where_filter(
         filters.append({"user_id": user_id})
     else:
         # Shared OR user's private
-        filters.append({
-            "$or": [
-                {"visibility": "shared"},
-                {"user_id": user_id}
-            ]
-        })
+        filters.append({"$or": [{"visibility": "shared"}, {"user_id": user_id}]})
 
     # Category filter
     if category:
@@ -436,9 +432,7 @@ def _build_where_filter(
         if len(tags) == 1:
             filters.append({"tags": {"$contains": tags[0]}})
         else:
-            filters.append({
-                "$or": [{"tags": {"$contains": tag}} for tag in tags]
-            })
+            filters.append({"$or": [{"tags": {"$contains": tag}} for tag in tags]})
 
     # Combine with AND
     if not filters:
@@ -463,9 +457,9 @@ def list_documents(limit: int = 50) -> list[dict]:
             limit=limit * 5,  # Fetch extra since chunks inflate count
         )
 
-        ids = results.get('ids', [])
-        docs = results.get('documents', [])
-        metas = results.get('metadatas', [])
+        ids = results.get("ids", [])
+        docs = results.get("documents", [])
+        metas = results.get("metadatas", [])
 
         # Group by parent_id (chunked docs) or by id (single docs)
         groups: dict[str, dict] = {}
@@ -509,11 +503,13 @@ def list_documents(limit: int = 50) -> list[dict]:
                 preview = content[:200] + "..." if len(content) > 200 else content
                 meta = group["metadata"]
 
-            documents.append({
-                "id": group["id"],
-                "metadata": meta,
-                "content_preview": preview,
-            })
+            documents.append(
+                {
+                    "id": group["id"],
+                    "metadata": meta,
+                    "content_preview": preview,
+                }
+            )
 
         return documents[:limit]
 
@@ -599,26 +595,26 @@ def get_stats() -> dict:
                     doc_count += 1
 
         return {
-            'total_documents': doc_count,
-            'total_chunks': raw_count,
-            'collection_name': 'kb',
-            'path': f"{settings.vanna_chromadb_path}/kb"
+            "total_documents": doc_count,
+            "total_chunks": raw_count,
+            "collection_name": "kb",
+            "path": f"{settings.vanna_chromadb_path}/kb",
         }
     except Exception as e:
         logger.error(f"Error getting KB stats: {e}")
-        return {'total_documents': 0, 'error': str(e)}
+        return {"total_documents": 0, "error": str(e)}
 
 
 def _format_source(metadata: dict) -> str:
     """Format source display string."""
-    category = metadata.get('category', 'general')
-    filename = metadata.get('filename', 'Unknown')
+    category = metadata.get("category", "general")
+    filename = metadata.get("filename", "Unknown")
 
     # Format category
-    cat_display = "🔒 Private" if category.startswith('user:') else f"📘 {category.title()}"
+    cat_display = "🔒 Private" if category.startswith("user:") else f"📘 {category.title()}"
 
     # Format tags
-    tags = metadata.get('tags', '')
+    tags = metadata.get("tags", "")
     tags_display = f" #{tags.replace(',', ' #')}" if tags else ""
 
     return f"{cat_display} - {filename}{tags_display}"

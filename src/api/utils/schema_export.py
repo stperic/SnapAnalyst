@@ -6,6 +6,7 @@ Provides functions to export schema information in various formats:
 - PDF: Formatted documentation
 - Markdown: Human-readable text format
 """
+
 from __future__ import annotations
 
 import csv
@@ -67,15 +68,17 @@ class SchemaExporter:
             for table_name, table_info in tables.items():
                 columns = table_info.get("columns", {})
                 for col_name, col_info in columns.items():
-                    writer.writerow([
-                        table_name,
-                        col_name,
-                        col_info.get("type", ""),
-                        col_info.get("description", ""),
-                        col_info.get("nullable", ""),
-                        col_info.get("range", ""),
-                        col_info.get("example", "")
-                    ])
+                    writer.writerow(
+                        [
+                            table_name,
+                            col_name,
+                            col_info.get("type", ""),
+                            col_info.get("description", ""),
+                            col_info.get("nullable", ""),
+                            col_info.get("range", ""),
+                            col_info.get("example", ""),
+                        ]
+                    )
 
         elif export_type == "code_lookups":
             # Export code lookup tables
@@ -84,8 +87,7 @@ class SchemaExporter:
             code_lookups = data.get("code_lookups", {})
             for lookup_name, lookup_data in sorted(code_lookups.items()):
                 # Filter out metadata fields and sort codes numerically
-                code_items = [(k, v) for k, v in lookup_data.items()
-                              if k not in ["description", "source_field"]]
+                code_items = [(k, v) for k, v in lookup_data.items() if k not in ["description", "source_field"]]
                 for code, description in sorted(code_items, key=_numeric_sort_key):
                     writer.writerow([lookup_name, code, description])
 
@@ -95,12 +97,9 @@ class SchemaExporter:
 
             relationships = data.get("relationships", {})
             for rel_name, rel_info in relationships.items():
-                writer.writerow([
-                    rel_name,
-                    rel_info.get("type", ""),
-                    rel_info.get("description", ""),
-                    rel_info.get("join", "")
-                ])
+                writer.writerow(
+                    [rel_name, rel_info.get("type", ""), rel_info.get("description", ""), rel_info.get("join", "")]
+                )
 
         buffer.seek(0)
         return buffer
@@ -159,8 +158,7 @@ class SchemaExporter:
                 md_lines.append("|------|-------------|")
 
                 # Filter out metadata fields and sort codes numerically
-                code_items = [(k, v) for k, v in lookup_data.items()
-                              if k not in ["description", "source_field"]]
+                code_items = [(k, v) for k, v in lookup_data.items() if k not in ["description", "source_field"]]
                 for code, description in sorted(code_items, key=_numeric_sort_key):
                     desc_clean = str(description).replace("|", "\\|")
                     md_lines.append(f"| {code} | {desc_clean} |")
@@ -187,10 +185,10 @@ class SchemaExporter:
         doc = SimpleDocTemplate(
             buffer,
             pagesize=letter,
-            rightMargin=0.5*inch,
-            leftMargin=0.5*inch,
-            topMargin=0.75*inch,
-            bottomMargin=0.5*inch
+            rightMargin=0.5 * inch,
+            leftMargin=0.5 * inch,
+            topMargin=0.75 * inch,
+            bottomMargin=0.5 * inch,
         )
 
         # Container for PDF elements
@@ -199,36 +197,33 @@ class SchemaExporter:
         # Styles
         styles = getSampleStyleSheet()
         title_style = ParagraphStyle(
-            'CustomTitle',
-            parent=styles['Heading1'],
+            "CustomTitle",
+            parent=styles["Heading1"],
             fontSize=24,
-            textColor=colors.HexColor('#1f77b4'),
+            textColor=colors.HexColor("#1f77b4"),
             spaceAfter=30,
-            alignment=TA_CENTER
+            alignment=TA_CENTER,
         )
         heading_style = ParagraphStyle(
-            'CustomHeading',
-            parent=styles['Heading2'],
+            "CustomHeading",
+            parent=styles["Heading2"],
             fontSize=16,
-            textColor=colors.HexColor('#2c3e50'),
+            textColor=colors.HexColor("#2c3e50"),
             spaceAfter=12,
-            spaceBefore=12
+            spaceBefore=12,
         )
         subheading_style = ParagraphStyle(
-            'CustomSubheading',
-            parent=styles['Heading3'],
+            "CustomSubheading",
+            parent=styles["Heading3"],
             fontSize=12,
-            textColor=colors.HexColor('#34495e'),
-            spaceAfter=6
+            textColor=colors.HexColor("#34495e"),
+            spaceAfter=6,
         )
 
         # Title
         elements.append(Paragraph("SnapAnalyst Schema Documentation", title_style))
-        elements.append(Paragraph(
-            f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-            styles['Normal']
-        ))
-        elements.append(Spacer(1, 0.3*inch))
+        elements.append(Paragraph(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", styles["Normal"]))
+        elements.append(Spacer(1, 0.3 * inch))
 
         if export_type == "tables":
             tables = data.get("tables", {})
@@ -238,15 +233,11 @@ class SchemaExporter:
                 elements.append(Paragraph(f"Table: {table_name}", heading_style))
 
                 # Table metadata
-                elements.append(Paragraph(
-                    f"<b>Description:</b> {table_info.get('description', 'N/A')}",
-                    styles['Normal']
-                ))
-                elements.append(Paragraph(
-                    f"<b>Row Count:</b> {table_info.get('row_count', 'N/A')}",
-                    styles['Normal']
-                ))
-                elements.append(Spacer(1, 0.15*inch))
+                elements.append(
+                    Paragraph(f"<b>Description:</b> {table_info.get('description', 'N/A')}", styles["Normal"])
+                )
+                elements.append(Paragraph(f"<b>Row Count:</b> {table_info.get('row_count', 'N/A')}", styles["Normal"]))
+                elements.append(Spacer(1, 0.15 * inch))
 
                 # Columns table
                 elements.append(Paragraph("Columns", subheading_style))
@@ -262,27 +253,30 @@ class SchemaExporter:
                         table_data.append([col_name, col_type, col_desc])
 
                     # Create table
-                    col_table = Table(table_data, colWidths=[1.5*inch, 1.5*inch, 3.5*inch])
-                    col_table.setStyle(TableStyle([
-                        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3498db')),
-                        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                        ('FONTSIZE', (0, 0), (-1, 0), 10),
-                        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                        ('GRID', (0, 0), (-1, -1), 1, colors.black),
-                        ('FONTSIZE', (0, 1), (-1, -1), 8),
-                        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                    ]))
+                    col_table = Table(table_data, colWidths=[1.5 * inch, 1.5 * inch, 3.5 * inch])
+                    col_table.setStyle(
+                        TableStyle(
+                            [
+                                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#3498db")),
+                                ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+                                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                                ("FONTSIZE", (0, 0), (-1, 0), 10),
+                                ("BOTTOMPADDING", (0, 0), (-1, 0), 12),
+                                ("BACKGROUND", (0, 1), (-1, -1), colors.beige),
+                                ("GRID", (0, 0), (-1, -1), 1, colors.black),
+                                ("FONTSIZE", (0, 1), (-1, -1), 8),
+                                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                            ]
+                        )
+                    )
 
                     elements.append(col_table)
 
                     if len(columns) > 20:
-                        elements.append(Paragraph(
-                            f"<i>Note: Showing first 20 of {len(columns)} columns</i>",
-                            styles['Normal']
-                        ))
+                        elements.append(
+                            Paragraph(f"<i>Note: Showing first 20 of {len(columns)} columns</i>", styles["Normal"])
+                        )
 
                 elements.append(PageBreak())
 
@@ -294,43 +288,44 @@ class SchemaExporter:
                 elements.append(Paragraph(f"Code Lookup: {lookup_name}", heading_style))
 
                 # Lookup metadata
-                elements.append(Paragraph(
-                    f"<b>Description:</b> {lookup_data.get('description', 'N/A')}",
-                    styles['Normal']
-                ))
-                elements.append(Paragraph(
-                    f"<b>Source Field:</b> {lookup_data.get('source_field', 'N/A')}",
-                    styles['Normal']
-                ))
-                elements.append(Spacer(1, 0.15*inch))
+                elements.append(
+                    Paragraph(f"<b>Description:</b> {lookup_data.get('description', 'N/A')}", styles["Normal"])
+                )
+                elements.append(
+                    Paragraph(f"<b>Source Field:</b> {lookup_data.get('source_field', 'N/A')}", styles["Normal"])
+                )
+                elements.append(Spacer(1, 0.15 * inch))
 
                 # Codes table
                 table_data = [["Code", "Description"]]
 
                 # Filter out metadata fields and sort codes numerically
-                code_items = [(k, v) for k, v in lookup_data.items()
-                              if k not in ["description", "source_field"]]
+                code_items = [(k, v) for k, v in lookup_data.items() if k not in ["description", "source_field"]]
                 for code, description in sorted(code_items, key=_numeric_sort_key):
                     desc_str = str(description)[:80]  # Truncate long descriptions
                     table_data.append([str(code), desc_str])
 
                 if len(table_data) > 1:
-                    lookup_table = Table(table_data, colWidths=[1*inch, 5.5*inch])
-                    lookup_table.setStyle(TableStyle([
-                        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2ecc71')),
-                        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                        ('FONTSIZE', (0, 0), (-1, 0), 10),
-                        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                        ('BACKGROUND', (0, 1), (-1, -1), colors.lightgrey),
-                        ('GRID', (0, 0), (-1, -1), 1, colors.black),
-                        ('FONTSIZE', (0, 1), (-1, -1), 8),
-                        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                    ]))
+                    lookup_table = Table(table_data, colWidths=[1 * inch, 5.5 * inch])
+                    lookup_table.setStyle(
+                        TableStyle(
+                            [
+                                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2ecc71")),
+                                ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+                                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                                ("FONTSIZE", (0, 0), (-1, 0), 10),
+                                ("BOTTOMPADDING", (0, 0), (-1, 0), 12),
+                                ("BACKGROUND", (0, 1), (-1, -1), colors.lightgrey),
+                                ("GRID", (0, 0), (-1, -1), 1, colors.black),
+                                ("FONTSIZE", (0, 1), (-1, -1), 8),
+                                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                            ]
+                        )
+                    )
 
                     elements.append(lookup_table)
-                    elements.append(Spacer(1, 0.2*inch))
+                    elements.append(Spacer(1, 0.2 * inch))
 
         elif export_type == "database_info":
             db_info = data.get("database", {})
@@ -348,8 +343,8 @@ class SchemaExporter:
             ]
 
             for label, value in info_items:
-                elements.append(Paragraph(f"<b>{label}:</b> {value}", styles['Normal']))
-                elements.append(Spacer(1, 0.1*inch))
+                elements.append(Paragraph(f"<b>{label}:</b> {value}", styles["Normal"]))
+                elements.append(Spacer(1, 0.1 * inch))
 
         # Build PDF
         doc.build(elements)

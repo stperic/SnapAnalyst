@@ -59,6 +59,127 @@ class SnapDatasetConfig(DatasetConfig):
         super().__init__(base_path=Path(__file__).parent)
 
     # =========================================================================
+    # EXPORT / IDENTITY
+    # =========================================================================
+
+    def get_anonymous_email(self) -> str:
+        return "anonymous@snapanalyst.com"
+
+    def get_export_prefix(self) -> str:
+        return "snapanalyst"
+
+    def get_code_lookup_names(self) -> list[str]:
+        return [
+            "case_classification_codes",
+            "status_codes",
+            "expedited_service_codes",
+            "categorical_eligibility_codes",
+            "error_finding_codes",
+            "sex_codes",
+            "snap_affiliation_codes",
+            "element_codes",
+            "nature_codes",
+            "agency_responsibility_codes",
+            "discovery_method_codes",
+        ]
+
+    def get_table_descriptions(self) -> dict[str, str]:
+        return {
+            "households": "Household case data (~50k rows per year)",
+            "household_members": "Individual household member data (~120k rows)",
+            "qc_errors": "Quality control errors/variances (~20k rows)",
+        }
+
+    def get_starter_prompts(self) -> list[dict[str, str]]:
+        return [
+            {
+                "label": "Payment Error Rates",
+                "message": "What is the payment error rate by state for FY2023, including overpayment and underpayment rates?",
+            },
+            {
+                "label": "Top Overpayment Drivers",
+                "message": (
+                    "Which error elements drive the most overpayment dollars in FY2023? "
+                    "Rank by weighted dollar impact for corrective action prioritization."
+                ),
+            },
+            {
+                "label": "Year-over-Year Trends",
+                "message": "Which states improved their payment error rate from FY2022 to FY2023, and by how much?",
+            },
+            {
+                "label": "Corrective Action ROI",
+                "message": (
+                    "Rank each error element by its contribution to the FY2023 overpayment rate "
+                    "with cumulative impact, so I can see which errors to fix first."
+                ),
+            },
+        ]
+
+    def get_filter_dimensions(self) -> list[dict]:
+        return [
+            {"name": "state", "column": "state_name", "table": "households", "join_column": "case_id", "type": "string"},
+            {"name": "fiscal_year", "column": "fiscal_year", "table": "*", "type": "integer"},
+        ]
+
+    def get_model_classes(self) -> dict[str, type]:
+        from src.database.models import Household, HouseholdMember, QCError
+
+        return {"households": Household, "household_members": HouseholdMember, "qc_errors": QCError}
+
+    # =========================================================================
+    # UI / PRESENTATION
+    # =========================================================================
+
+    def get_personas(self) -> dict[str, str]:
+        """Get SNAP-specific persona names."""
+        return {"app": "SnapAnalyst", "ai": "SnapAnalyst AI"}
+
+    def get_example_questions(self) -> list[str]:
+        """Get SNAP-specific example questions."""
+        return [
+            "How many households received SNAP benefits in 2023?",
+            "What is the average SNAP benefit amount by state?",
+            "Show me the top 10 states by total SNAP recipients",
+            "How many households have children under 5?",
+            "What percentage of households are elderly?",
+            "What are the most common error types in QC reviews?",
+            "Show me households with income between $1000 and $2000",
+            "How many households received expedited service?",
+            "What is the average household size by region?",
+            "Show me error rates by state",
+            "How many households have disabled members?",
+            "What is the distribution of SNAP benefits by household composition?",
+            "Show me households with overissuance errors",
+            "What percentage of households pass all income tests?",
+            "How many households receive the minimum benefit?",
+        ]
+
+    def get_no_results_message(self) -> str:
+        """Get SNAP-specific no-results message."""
+        return "No matching SNAP QC records found. Try adjusting your filters or rephrasing your question."
+
+    # =========================================================================
+    # CODE ENRICHMENT
+    # =========================================================================
+
+    def get_code_column_mappings(self) -> dict[str, str]:
+        """Map SNAP result column names to lookup keys in data_mapping.json."""
+        return {
+            "element_code": "element_codes",
+            "nature_code": "nature_codes",
+            "status": "status_codes",
+            "error_finding": "error_finding_codes",
+            "case_classification": "case_classification_codes",
+            "expedited_service": "expedited_service_codes",
+            "categorical_eligibility": "categorical_eligibility_codes",
+            "sex": "sex_codes",
+            "snap_affiliation_code": "snap_affiliation_codes",
+            "agency_responsibility": "agency_responsibility_codes",
+            "discovery_method": "discovery_method_codes",
+        }
+
+    # =========================================================================
     # TABLE NAMES (from existing ddl_extractor.py)
     # =========================================================================
 
@@ -78,7 +199,7 @@ class SnapDatasetConfig(DatasetConfig):
 
         all_tables, _ = discover_tables_and_views(self.schema_name, engine)
         # Reference tables follow ref_* naming convention
-        return [t for t in all_tables if t.startswith('ref_')]
+        return [t for t in all_tables if t.startswith("ref_")]
 
     # =========================================================================
     # MODELS (from existing src/database/)
@@ -87,11 +208,13 @@ class SnapDatasetConfig(DatasetConfig):
     def get_models_module(self):
         """Get the existing models module."""
         from src.database import models
+
         return models
 
     def get_reference_models_module(self):
         """Get the existing reference models module."""
         from src.database import reference_models
+
         return reference_models
 
     def get_all_models(self) -> list:
@@ -117,6 +240,7 @@ class SnapDatasetConfig(DatasetConfig):
             HOUSEHOLD_LEVEL_VARIABLES,
             PERSON_LEVEL_VARIABLES,
         )
+
         return {
             "household": HOUSEHOLD_LEVEL_VARIABLES,
             "person": PERSON_LEVEL_VARIABLES,
@@ -126,11 +250,13 @@ class SnapDatasetConfig(DatasetConfig):
     def get_transformer_class(self) -> type:
         """Get the existing SNAP DataTransformer class."""
         from src.etl.transformer import DataTransformer
+
         return DataTransformer
 
     def get_loader_class(self) -> type:
         """Get the existing ETL loader class."""
         from src.etl.loader import ETLLoader
+
         return ETLLoader
 
     # =========================================================================
@@ -202,6 +328,7 @@ class SnapDatasetConfig(DatasetConfig):
         Uses the existing ddl_extractor module.
         """
         from src.database.ddl_extractor import get_all_ddl_statements
+
         return get_all_ddl_statements(include_samples=include_samples)
 
     # =========================================================================

@@ -3,6 +3,7 @@ SnapAnalyst Query API Router
 
 Endpoints for executing SQL queries safely and providing schema information for LLM training.
 """
+
 from __future__ import annotations
 
 import json
@@ -25,6 +26,7 @@ router = APIRouter(tags=["query"])
 
 class SQLQueryRequest(BaseModel):
     """Request to execute SQL query"""
+
     sql: str = Field(..., description="SQL query to execute (SELECT only)")
     limit: int = Field(50000, ge=1, le=100000, description="Maximum rows to return")
     format: str = Field("json", description="Response format: json, markdown, csv")
@@ -32,6 +34,7 @@ class SQLQueryRequest(BaseModel):
 
 class SQLQueryResponse(BaseModel):
     """Response from SQL query execution"""
+
     success: bool
     query: str
     execution_time_ms: float
@@ -41,14 +44,12 @@ class SQLQueryResponse(BaseModel):
     formatted: str | None = None
     error: str | None = None
 
-    @field_serializer('data')
+    @field_serializer("data")
     def serialize_data(self, data: list[dict], _info) -> list[dict]:
         """Convert Decimal values to float in data for JSON serialization"""
         from decimal import Decimal
-        return [
-            {k: float(v) if isinstance(v, Decimal) else v for k, v in row.items()}
-            for row in data
-        ]
+
+        return [{k: float(v) if isinstance(v, Decimal) else v for k, v in row.items()} for row in data]
 
 
 class QueryValidator:
@@ -56,19 +57,64 @@ class QueryValidator:
 
     # Dangerous SQL keywords that should be blocked
     DANGEROUS_KEYWORDS = [
-        'DROP', 'DELETE', 'UPDATE', 'INSERT', 'ALTER', 'CREATE',
-        'TRUNCATE', 'REPLACE', 'GRANT', 'REVOKE',
-        'EXEC', 'EXECUTE', 'CALL', 'PROCEDURE',
-        'INTO OUTFILE', 'INTO DUMPFILE', 'LOAD_FILE'
+        "DROP",
+        "DELETE",
+        "UPDATE",
+        "INSERT",
+        "ALTER",
+        "CREATE",
+        "TRUNCATE",
+        "REPLACE",
+        "GRANT",
+        "REVOKE",
+        "EXEC",
+        "EXECUTE",
+        "CALL",
+        "PROCEDURE",
+        "INTO OUTFILE",
+        "INTO DUMPFILE",
+        "LOAD_FILE",
     ]
 
     # Allowed keywords (whitelist approach)
     ALLOWED_KEYWORDS = [
-        'SELECT', 'FROM', 'WHERE', 'JOIN', 'LEFT', 'RIGHT', 'INNER',
-        'OUTER', 'ON', 'GROUP', 'BY', 'HAVING', 'ORDER', 'LIMIT',
-        'OFFSET', 'AS', 'AND', 'OR', 'NOT', 'IN', 'BETWEEN', 'LIKE',
-        'IS', 'NULL', 'DISTINCT', 'COUNT', 'SUM', 'AVG', 'MIN', 'MAX',
-        'CASE', 'WHEN', 'THEN', 'ELSE', 'END', 'CAST', 'COALESCE'
+        "SELECT",
+        "FROM",
+        "WHERE",
+        "JOIN",
+        "LEFT",
+        "RIGHT",
+        "INNER",
+        "OUTER",
+        "ON",
+        "GROUP",
+        "BY",
+        "HAVING",
+        "ORDER",
+        "LIMIT",
+        "OFFSET",
+        "AS",
+        "AND",
+        "OR",
+        "NOT",
+        "IN",
+        "BETWEEN",
+        "LIKE",
+        "IS",
+        "NULL",
+        "DISTINCT",
+        "COUNT",
+        "SUM",
+        "AVG",
+        "MIN",
+        "MAX",
+        "CASE",
+        "WHEN",
+        "THEN",
+        "ELSE",
+        "END",
+        "CAST",
+        "COALESCE",
     ]
 
     @classmethod
@@ -86,20 +132,20 @@ class QueryValidator:
 
         # Check for dangerous keywords
         for keyword in cls.DANGEROUS_KEYWORDS:
-            if re.search(r'\b' + keyword + r'\b', sql_upper):
+            if re.search(r"\b" + keyword + r"\b", sql_upper):
                 return False, f"Query contains forbidden keyword: {keyword}"
 
         # Must start with SELECT or WITH (for CTEs)
         sql_stripped = sql_upper.strip()
-        if not (sql_stripped.startswith('SELECT') or sql_stripped.startswith('WITH')):
+        if not (sql_stripped.startswith("SELECT") or sql_stripped.startswith("WITH")):
             return False, "Only SELECT and WITH queries are allowed"
 
         # Check for semicolons (multiple statements)
-        if sql.count(';') > 1 or (sql.count(';') == 1 and not sql.strip().endswith(';')):
+        if sql.count(";") > 1 or (sql.count(";") == 1 and not sql.strip().endswith(";")):
             return False, "Multiple statements not allowed"
 
         # Check for comments that might hide dangerous code
-        if '--' in sql or '/*' in sql or '*/' in sql:
+        if "--" in sql or "/*" in sql or "*/" in sql:
             return False, "Comments not allowed in queries"
 
         return True, None
@@ -119,11 +165,11 @@ class QueryValidator:
         sql = sql.strip()
 
         # Remove trailing semicolon
-        if sql.endswith(';'):
+        if sql.endswith(";"):
             sql = sql[:-1]
 
         # Add LIMIT if not present
-        if 'LIMIT' not in sql.upper():
+        if "LIMIT" not in sql.upper():
             sql = f"{sql} LIMIT {limit}"
 
         return sql
@@ -167,11 +213,9 @@ async def get_schema_documentation():
     except Exception as e:
         logger.error(f"Error generating schema documentation: {e}")
         import traceback
+
         logger.error(traceback.format_exc())
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to generate schema documentation: {e}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to generate schema documentation: {e}")
 
 
 def _get_database_schema(inspector) -> dict:
@@ -199,8 +243,8 @@ def _get_database_schema(inspector) -> dict:
         "database": {
             "name": "SnapAnalyst",
             "description": "SNAP Quality Control database (queried from live database)",
-            "source": "PostgreSQL Database"
-        }
+            "source": "PostgreSQL Database",
+        },
     }
 
     # Get all table names
@@ -208,26 +252,23 @@ def _get_database_schema(inspector) -> dict:
 
     for table_name in table_names:
         # Skip internal/excluded tables using shared config
-        if table_name.startswith('_') or table_name in exclude_tables or table_name.startswith(exclude_prefixes):
+        if table_name.startswith("_") or table_name in exclude_tables or table_name.startswith(exclude_prefixes):
             continue
 
-        table_info = {
-            "description": f"Table: {table_name}",
-            "columns": {}
-        }
+        table_info = {"description": f"Table: {table_name}", "columns": {}}
 
         # Get columns
         columns = inspector.get_columns(table_name)
         for col in columns:
-            col_name = col['name']
-            col_type = str(col['type'])
-            nullable = col.get('nullable', True)
-            default = col.get('default')
+            col_name = col["name"]
+            col_type = str(col["type"])
+            nullable = col.get("nullable", True)
+            default = col.get("default")
 
             table_info["columns"][col_name] = {
                 "type": col_type,
                 "nullable": nullable,
-                "description": f"Column: {col_name}"
+                "description": f"Column: {col_name}",
             }
 
             if default is not None:
@@ -235,8 +276,8 @@ def _get_database_schema(inspector) -> dict:
 
         # Get primary keys
         pk_constraint = inspector.get_pk_constraint(table_name)
-        if pk_constraint and pk_constraint.get('constrained_columns'):
-            table_info["primary_key"] = pk_constraint['constrained_columns']
+        if pk_constraint and pk_constraint.get("constrained_columns"):
+            table_info["primary_key"] = pk_constraint["constrained_columns"]
 
         # Get foreign keys
         fk_constraints = inspector.get_foreign_keys(table_name)
@@ -244,18 +285,18 @@ def _get_database_schema(inspector) -> dict:
             table_info["foreign_keys"] = []
             for fk in fk_constraints:
                 fk_info = {
-                    "columns": fk.get('constrained_columns', []),
-                    "referred_table": fk.get('referred_table'),
-                    "referred_columns": fk.get('referred_columns', [])
+                    "columns": fk.get("constrained_columns", []),
+                    "referred_table": fk.get("referred_table"),
+                    "referred_columns": fk.get("referred_columns", []),
                 }
                 table_info["foreign_keys"].append(fk_info)
 
                 # Add to relationships
                 rel_name = f"{table_name}_to_{fk['referred_table']}"
                 schema["relationships"][rel_name] = {
-                    "type": "MANY_TO_ONE" if len(fk['constrained_columns']) == 1 else "MANY_TO_MANY",
+                    "type": "MANY_TO_ONE" if len(fk["constrained_columns"]) == 1 else "MANY_TO_MANY",
                     "join": f"{table_name}.{fk['constrained_columns'][0]} = {fk['referred_table']}.{fk['referred_columns'][0]}",
-                    "description": "Foreign key relationship"
+                    "description": "Foreign key relationship",
                 }
 
         schema["tables"][table_name] = table_info
@@ -369,13 +410,7 @@ async def execute_sql_query(request: SQLQueryRequest):
         if not is_valid:
             logger.warning(f"Invalid query rejected: {error_msg}")
             return SQLQueryResponse(
-                success=False,
-                query=request.sql,
-                execution_time_ms=0,
-                row_count=0,
-                columns=[],
-                data=[],
-                error=error_msg
+                success=False, query=request.sql, execution_time_ms=0, row_count=0, columns=[], data=[], error=error_msg
             )
 
         # Sanitize query
@@ -395,6 +430,7 @@ async def execute_sql_query(request: SQLQueryRequest):
 
             # Limit columns if configured (for SELECT * queries)
             from src.core.config import settings
+
             max_cols = settings.max_result_columns
             if len(columns) > max_cols:
                 logger.info(f"Limiting columns from {len(columns)} to {max_cols}")
@@ -412,9 +448,7 @@ async def execute_sql_query(request: SQLQueryRequest):
             elif request.format == "csv":
                 formatted = _format_as_csv(columns, data)
 
-            logger.info(
-                f"Query executed successfully: {len(data)} rows in {execution_time:.2f}ms"
-            )
+            logger.info(f"Query executed successfully: {len(data)} rows in {execution_time:.2f}ms")
 
             return SQLQueryResponse(
                 success=True,
@@ -423,7 +457,7 @@ async def execute_sql_query(request: SQLQueryRequest):
                 row_count=len(data),
                 columns=columns,
                 data=data,
-                formatted=formatted
+                formatted=formatted,
             )
 
         except SQLAlchemyError as e:
@@ -435,17 +469,14 @@ async def execute_sql_query(request: SQLQueryRequest):
                 row_count=0,
                 columns=[],
                 data=[],
-                error=f"Query execution failed: {str(e)}"
+                error=f"Query execution failed: {str(e)}",
             )
         finally:
             session.close()
 
     except Exception as e:
         logger.error(f"Unexpected error executing query: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to execute query: {e}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to execute query: {e}")
 
 
 @router.get("/examples")
@@ -470,10 +501,7 @@ async def get_example_queries():
 
     except Exception as e:
         logger.error(f"Error loading example queries: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to load examples: {e}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to load examples: {e}")
 
 
 def _format_as_markdown(columns: list[str], data: list[dict]) -> str:

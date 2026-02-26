@@ -247,13 +247,13 @@ class TestValidateFileExtension:
 
     def test_validate_custom_allowed_list(self):
         """Test validation with custom allowed extensions"""
-        result = validate_file_extension("data.csv", allowed=['.csv', '.json'])
+        result = validate_file_extension("data.csv", allowed=[".csv", ".json"])
 
         assert result is True
 
     def test_validate_custom_allowed_list_rejects_others(self):
         """Test that custom list rejects non-allowed extensions"""
-        result = validate_file_extension("document.md", allowed=['.csv', '.json'])
+        result = validate_file_extension("document.md", allowed=[".csv", ".json"])
 
         assert result is False
 

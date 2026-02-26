@@ -1,6 +1,7 @@
 """
 Simplified pytest configuration - no database required for basic tests
 """
+
 from pathlib import Path
 
 import pytest

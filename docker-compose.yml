@@ -20,11 +20,18 @@ services:
   postgres:
     image: postgres:15-alpine
     container_name: postgres
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       POSTGRES_USER: snapanalyst
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-snapanalyst_dev_password}
       POSTGRES_DB: snapanalyst_db
-      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --no-instructions"
+    # Reduce PostgreSQL log verbosity (suppress checkpoint/shutdown details)
+    command: ["postgres", "-c", "log_min_messages=warning", "-c", "log_checkpoints=off"]
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -43,10 +50,16 @@ services:
   # FastAPI Backend API
   # ==========================================================================
   backend-server:
+    init: true
     build:
       context: .
       dockerfile: docker/Dockerfile
     container_name: backend-server
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       # Database
       DATABASE_URL: postgresql://snapanalyst:${DATABASE_PASSWORD:-snapanalyst_dev_password}@postgres:5432/snapanalyst_db
@@ -88,8 +101,12 @@ services:
       SYSTEM_PROMPTS_PATH: ${SYSTEM_PROMPTS_PATH:-./datasets/snap/prompts}
       VANNA_CHROMADB_PATH: /app/chromadb
 
-      # Disable ChromaDB telemetry (reduces log noise)
+      # Disable ChromaDB telemetry and tqdm progress bars
       ANONYMIZED_TELEMETRY: "False"
+      TQDM_DISABLE: "1"
+
+      # Suppress noisy library warnings
+      PYTHONWARNINGS: "ignore::DeprecationWarning,ignore:urllib3.*doesn't match a supported version"
 
       # ONNX Runtime optimization for LXC containers (Proxmox, etc.)
       # CRITICAL: Multiple settings to prevent pthread_setaffinity_np errors
@@ -99,6 +116,7 @@ services:
       ORT_DISABLE_THREAD_AFFINITY: "1"
       OMP_WAIT_POLICY: "PASSIVE"
       OMP_PROC_BIND: "false"
+      ORT_LOG_LEVEL: "ERROR"
     volumes:
       - snapanalyst_data:/data
       - ./docker/logs:/app/logs
@@ -113,7 +131,7 @@ services:
       - network
     restart: unless-stopped
     stop_grace_period: 10s
-    command: ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    command: ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--timeout-keep-alive", "65", "--limit-max-requests", "10000"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
@@ -125,10 +143,16 @@ services:
   # Chainlit Web UI
   # ==========================================================================
   frontend-server:
+    init: true
     build:
       context: .
       dockerfile: docker/Dockerfile
     container_name: frontend-server
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       # API connection (internal Docker network)
       API_BASE_URL: http://backend-server:8000
@@ -144,9 +168,16 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       SNAPDATA_PATH: /data
       
-      # LLM Configuration (for display purposes in UI)
+      # LLM Configuration (needed for AI summary generation in Chainlit process)
       LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
-      
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-}
+      AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY:-}
+      LLM_SQL_MODEL: ${LLM_SQL_MODEL:-}
+      LLM_KB_MODEL: ${LLM_KB_MODEL:-}
+
       # Chainlit settings
       CHAINLIT_HOST: 0.0.0.0
       CHAINLIT_PORT: 8001
@@ -154,6 +185,9 @@ services:
       
       # Suppress verbose logging
       CHAINLIT_DEBUG: "false"
+
+      # Suppress noisy library warnings
+      PYTHONWARNINGS: "ignore::DeprecationWarning,ignore:urllib3.*doesn't match a supported version"
 
       # ONNX Runtime optimization (same as backend)
       OMP_NUM_THREADS: "4"
@@ -163,7 +197,6 @@ services:
       OMP_PROC_BIND: "false"
     volumes:
       - ./docker/logs:/app/logs
-      - chainlit_files:/app/.files  # Persistent file storage for uploads/exports
     ports:
       - "${CHAINLIT_PORT:-8001}:8001"
     depends_on:
@@ -187,6 +220,7 @@ services:
   # Data Initialization (downloads data AND loads into database)
   # ==========================================================================
   data-loader:
+    init: true
     build:
       context: .
       dockerfile: docker/Dockerfile
@@ -222,8 +256,6 @@ volumes:
   chromadb_data:
     driver: local
   chroma_cache:
-    driver: local
-  chainlit_files:
     driver: local
 
 # =============================================================================

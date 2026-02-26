@@ -30,16 +30,15 @@ Azure OpenAI provides enterprise-grade features:
 From Azure Portal, navigate to your Azure OpenAI resource and collect:
 
 1. **Endpoint URL** - Found in "Keys and Endpoint" section
-   - Example: `https://your-resource.openai.azure.com/`
+   - Must include `/openai/v1/` suffix for OpenAI-compatible API
+   - Example: `https://your-resource.openai.azure.com/openai/v1/`
 
 2. **API Key** - Found in "Keys and Endpoint" section
    - Either Key 1 or Key 2
 
-3. **Deployment Name** - The name you gave your model deployment
-   - Example: `gpt-4-turbo`, `gpt-35-turbo`
-
-4. **API Version** (optional) - Defaults to `2024-02-15-preview`
-   - Check Azure docs for latest version
+3. **Model/Deployment Name** - The name you gave your model deployment
+   - Used as `LLM_SQL_MODEL` and `LLM_KB_MODEL` values
+   - Example: `gpt-4.1`, `gpt-4.1-mini`
 
 ---
 
@@ -52,14 +51,13 @@ Add these to your `.env` file:
 LLM_PROVIDER=azure_openai
 
 # Azure OpenAI Configuration
-AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
+# Endpoint MUST include /openai/v1/ suffix
+AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/openai/v1/
 AZURE_OPENAI_API_KEY=your-azure-api-key-here
-AZURE_OPENAI_DEPLOYMENT_NAME=gpt-4-turbo
-AZURE_OPENAI_API_VERSION=2024-02-15-preview  # Optional, has default
 
-# Optional: Specify different models for different tasks
-LLM_SQL_MODEL=gpt-4-turbo  # For SQL generation
-LLM_KB_MODEL=gpt-35-turbo  # For KB insights (can use cheaper model)
+# Model names (must match your Azure deployment names)
+LLM_SQL_MODEL=gpt-4.1        # For SQL generation
+LLM_KB_MODEL=gpt-4.1-mini    # For KB insights (can use cheaper model)
 ```
 
 ---
@@ -84,8 +82,8 @@ Expected response:
 ```json
 {
   "provider": "azure_openai",
-  "sql_model": "gpt-4-turbo",
-  "vanna_version": "2.0.1",
+  "model": "gpt-4.1",
+  "vanna_version": "0.x",
   "initialized": true
 }
 ```
@@ -113,9 +111,9 @@ OPENAI_API_KEY=sk-...
 ### Use Azure OpenAI
 ```bash
 LLM_PROVIDER=azure_openai
-AZURE_OPENAI_ENDPOINT=https://...
+AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/openai/v1/
 AZURE_OPENAI_API_KEY=...
-AZURE_OPENAI_DEPLOYMENT_NAME=gpt-4-turbo
+LLM_SQL_MODEL=gpt-4.1
 ```
 
 ---
@@ -123,12 +121,12 @@ AZURE_OPENAI_DEPLOYMENT_NAME=gpt-4-turbo
 ## 📊 Model Deployment Recommendations
 
 ### For SQL Generation (High Accuracy Required)
-- **Recommended:** GPT-4 or GPT-4-turbo
-- **Minimum:** GPT-3.5-turbo-16k
+- **Recommended:** GPT-4.1 or GPT-4.1-mini
+- **Minimum:** GPT-4.1-nano
 
 ### For KB Insights (Cost-Effective)
-- **Recommended:** GPT-3.5-turbo
-- **Alternative:** GPT-4 (if budget allows)
+- **Recommended:** GPT-4.1-mini
+- **Alternative:** GPT-4.1 (if budget allows)
 
 ---
 
@@ -156,21 +154,15 @@ AZURE_OPENAI_DEPLOYMENT_NAME=gpt-4-turbo
 docker exec backend-server printenv | grep AZURE
 ```
 
-### Error: "Deployment name not set"
-**Solution:** Set `AZURE_OPENAI_DEPLOYMENT_NAME` to match your Azure deployment:
-```bash
-AZURE_OPENAI_DEPLOYMENT_NAME=gpt-4-turbo
-```
-
 ### Error: "Resource not found"
-**Solution:** Check your endpoint URL format:
-- ✅ Correct: `https://your-resource.openai.azure.com/`
-- ❌ Wrong: `https://your-resource.openai.azure.com` (missing trailing slash)
+**Solution:** Check your endpoint URL format — it must include the `/openai/v1/` suffix:
+- ✅ Correct: `https://your-resource.openai.azure.com/openai/v1/`
+- ❌ Wrong: `https://your-resource.openai.azure.com/` (missing `/openai/v1/`)
 
-### Error: "Invalid API version"
-**Solution:** Update to a supported API version:
+### Error: "Model not found"
+**Solution:** Ensure `LLM_SQL_MODEL` matches your Azure deployment name exactly:
 ```bash
-AZURE_OPENAI_API_VERSION=2024-02-15-preview
+LLM_SQL_MODEL=gpt-4.1
 ```
 
 ---
@@ -181,10 +173,10 @@ AZURE_OPENAI_API_VERSION=2024-02-15-preview
 
 ```bash
 # High-accuracy SQL generation
-LLM_SQL_MODEL=gpt-4-turbo
+LLM_SQL_MODEL=gpt-4.1
 
 # Cost-effective KB insights
-LLM_KB_MODEL=gpt-35-turbo
+LLM_KB_MODEL=gpt-4.1-mini
 ```
 
 ### Monitor Token Usage
@@ -223,23 +215,20 @@ DATABASE_URL=postgresql://user:pass@postgres:5432/snapanalyst_db
 
 # LLM Provider - Azure OpenAI
 LLM_PROVIDER=azure_openai
-AZURE_OPENAI_ENDPOINT=https://mycompany-openai.openai.azure.com/
+AZURE_OPENAI_ENDPOINT=https://mycompany-openai.openai.azure.com/openai/v1/
 AZURE_OPENAI_API_KEY=abc123def456...
-AZURE_OPENAI_DEPLOYMENT_NAME=gpt-4-turbo
-AZURE_OPENAI_API_VERSION=2024-02-15-preview
 
-# Optional: Model-specific settings
-LLM_SQL_MODEL=gpt-4-turbo
-LLM_KB_MODEL=gpt-35-turbo
-LLM_TEMPERATURE=0.1
-LLM_MAX_TOKENS=2000
+# Model settings (must match Azure deployment names)
+LLM_SQL_MODEL=gpt-4.1
+LLM_KB_MODEL=gpt-4.1-mini
+LLM_SQL_TEMPERATURE=0.1
+LLM_SQL_MAX_TOKENS=2000
 
-# Vanna Configuration
-VANNA_CHROMADB_PATH=./chromadb
-VANNA_STORE_USER_QUERIES=false
+# Feedback-driven training
+VANNA_STORE_USER_QUERIES=true
 ```
 
 ---
 
-**Last Updated:** January 21, 2026
+**Last Updated:** February 26, 2026
 **Version:** 0.1.0

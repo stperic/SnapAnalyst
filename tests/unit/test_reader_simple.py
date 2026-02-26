@@ -1,6 +1,7 @@
 """
 Simplified unit tests for CSVReader - no database required
 """
+
 from pathlib import Path
 
 import polars as pl
@@ -21,7 +22,8 @@ class TestCSVReaderBasic:
 
     def test_init_with_invalid_file(self):
         """Test CSVReader initialization with non-existent file"""
-        from src.core.exceptions import FileNotFoundError as SnapFileNotFoundError
+        from src.core.exceptions import DataFileNotFoundError as SnapFileNotFoundError
+
         with pytest.raises(SnapFileNotFoundError):
             CSVReader("/nonexistent/file.csv")
 

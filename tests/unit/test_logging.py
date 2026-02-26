@@ -3,6 +3,7 @@ Unit tests for Logging Configuration
 
 Tests logging setup, file rotation, and logger configuration.
 """
+
 import logging
 from unittest.mock import Mock, patch
 
@@ -19,8 +20,8 @@ from src.core.logging import (
 class TestCreateRotatingFileHandler:
     """Test create_rotating_file_handler function"""
 
-    @patch('src.core.logging.RotatingFileHandler')
-    @patch('src.core.logging.Path')
+    @patch("src.core.logging.RotatingFileHandler")
+    @patch("src.core.logging.Path")
     def test_create_rotating_file_handler_defaults(self, mock_path, mock_handler_cls):
         """Test creating handler with default settings"""
         mock_path.return_value.parent.mkdir = Mock()
@@ -33,28 +34,24 @@ class TestCreateRotatingFileHandler:
         mock_handler.setFormatter.assert_called_once()
         mock_handler.setLevel.assert_called_once_with(logging.DEBUG)
 
-    @patch('src.core.logging.RotatingFileHandler')
-    @patch('src.core.logging.Path')
+    @patch("src.core.logging.RotatingFileHandler")
+    @patch("src.core.logging.Path")
     def test_create_rotating_file_handler_custom_size(self, mock_path, mock_handler_cls):
         """Test creating handler with custom size"""
         mock_path.return_value.parent.mkdir = Mock()
         mock_handler = Mock()
         mock_handler_cls.return_value = mock_handler
 
-        handler = create_rotating_file_handler(
-            "./logs/test.log",
-            max_bytes=5000000,
-            backup_count=3
-        )
+        handler = create_rotating_file_handler("./logs/test.log", max_bytes=5000000, backup_count=3)
 
         assert handler == mock_handler
         # Verify RotatingFileHandler was called with custom values
         call_kwargs = mock_handler_cls.call_args[1]
-        assert call_kwargs['maxBytes'] == 5000000
-        assert call_kwargs['backupCount'] == 3
+        assert call_kwargs["maxBytes"] == 5000000
+        assert call_kwargs["backupCount"] == 3
 
-    @patch('src.core.logging.RotatingFileHandler')
-    @patch('src.core.logging.Path')
+    @patch("src.core.logging.RotatingFileHandler")
+    @patch("src.core.logging.Path")
     def test_create_rotating_file_handler_creates_directory(self, mock_path, mock_handler_cls):
         """Test that handler creates log directory if missing"""
         mock_log_file = Mock()
@@ -70,8 +67,8 @@ class TestCreateRotatingFileHandler:
         # Should create parent directory
         mock_parent.mkdir.assert_called_once_with(parents=True, exist_ok=True)
 
-    @patch('src.core.logging.RotatingFileHandler')
-    @patch('src.core.logging.Path')
+    @patch("src.core.logging.RotatingFileHandler")
+    @patch("src.core.logging.Path")
     def test_create_rotating_file_handler_custom_level(self, mock_path, mock_handler_cls):
         """Test creating handler with custom log level"""
         mock_path.return_value.parent.mkdir = Mock()
@@ -86,11 +83,11 @@ class TestCreateRotatingFileHandler:
 class TestSetupLogging:
     """Test setup_logging function"""
 
-    @patch('logging.basicConfig')
-    @patch('logging.getLogger')
+    @patch("logging.basicConfig")
+    @patch("logging.getLogger")
     def test_setup_logging_basic(self, mock_get_logger, mock_basic_config):
         """Test basic logging setup without file output"""
-        with patch('src.core.config.settings') as mock_settings:
+        with patch("src.core.config.settings") as mock_settings:
             mock_settings.log_level = "INFO"
             mock_settings.log_to_file = False
 
@@ -102,14 +99,14 @@ class TestSetupLogging:
             # Should configure basicConfig
             mock_basic_config.assert_called_once()
             call_kwargs = mock_basic_config.call_args[1]
-            assert call_kwargs['level'] == logging.INFO
+            assert call_kwargs["level"] == logging.INFO
 
-    @patch('logging.basicConfig')
-    @patch('logging.getLogger')
-    @patch('src.core.logging.create_rotating_file_handler')
+    @patch("logging.basicConfig")
+    @patch("logging.getLogger")
+    @patch("src.core.logging.create_rotating_file_handler")
     def test_setup_logging_with_file(self, mock_create_handler, mock_get_logger, mock_basic_config):
         """Test logging setup with file output"""
-        with patch('src.core.config.settings') as mock_settings:
+        with patch("src.core.config.settings") as mock_settings:
             mock_settings.log_level = "DEBUG"
             mock_settings.log_to_file = True
             mock_settings.log_file_path = "./logs/app.log"
@@ -128,11 +125,11 @@ class TestSetupLogging:
             mock_create_handler.assert_called_once()
             mock_logger.addHandler.assert_called_once_with(mock_file_handler)
 
-    @patch('logging.basicConfig')
-    @patch('logging.getLogger')
+    @patch("logging.basicConfig")
+    @patch("logging.getLogger")
     def test_setup_logging_custom_level(self, mock_get_logger, mock_basic_config):
         """Test logging setup with custom log level"""
-        with patch('src.core.config.settings') as mock_settings:
+        with patch("src.core.config.settings") as mock_settings:
             mock_settings.log_to_file = False
             mock_settings.log_level = "INFO"
 
@@ -143,13 +140,13 @@ class TestSetupLogging:
 
             # Should use custom level, not settings level
             call_kwargs = mock_basic_config.call_args[1]
-            assert call_kwargs['level'] == logging.ERROR
+            assert call_kwargs["level"] == logging.ERROR
 
-    @patch('logging.basicConfig')
-    @patch('logging.getLogger')
+    @patch("logging.basicConfig")
+    @patch("logging.getLogger")
     def test_setup_logging_suppresses_noisy_loggers(self, mock_get_logger, mock_basic_config):
         """Test that setup_logging suppresses noisy library loggers"""
-        with patch('src.core.config.settings') as mock_settings:
+        with patch("src.core.config.settings") as mock_settings:
             mock_settings.log_level = "DEBUG"
             mock_settings.log_to_file = False
             mock_settings.log_max_bytes = 10000000
@@ -167,8 +164,8 @@ class TestSetupLogging:
 class TestSetupAPILogging:
     """Test setup_api_logging function"""
 
-    @patch('logging.getLogger')
-    @patch('src.core.logging.create_rotating_file_handler')
+    @patch("logging.getLogger")
+    @patch("src.core.logging.create_rotating_file_handler")
     def test_setup_api_logging(self, mock_create_handler, mock_get_logger):
         """Test setting up API logger"""
         mock_logger = Mock()
@@ -185,8 +182,8 @@ class TestSetupAPILogging:
         mock_logger.addHandler.assert_called_once_with(mock_handler)
         mock_create_handler.assert_called_once_with("./logs/custom_api.log")
 
-    @patch('logging.getLogger')
-    @patch('src.core.logging.create_rotating_file_handler')
+    @patch("logging.getLogger")
+    @patch("src.core.logging.create_rotating_file_handler")
     def test_setup_api_logging_avoids_duplicate_handlers(self, mock_create_handler, mock_get_logger):
         """Test that setup_api_logging doesn't add duplicate handlers"""
         from logging.handlers import RotatingFileHandler
@@ -203,8 +200,8 @@ class TestSetupAPILogging:
         mock_logger.addHandler.assert_not_called()
         mock_create_handler.assert_not_called()
 
-    @patch('logging.getLogger')
-    @patch('src.core.logging.create_rotating_file_handler')
+    @patch("logging.getLogger")
+    @patch("src.core.logging.create_rotating_file_handler")
     def test_setup_api_logging_default_path(self, mock_create_handler, mock_get_logger):
         """Test API logging with default path"""
         mock_logger = Mock()
@@ -223,8 +220,8 @@ class TestSetupAPILogging:
 class TestSetupLLMLogging:
     """Test setup_llm_logging function"""
 
-    @patch('logging.getLogger')
-    @patch('src.core.logging.create_rotating_file_handler')
+    @patch("logging.getLogger")
+    @patch("src.core.logging.create_rotating_file_handler")
     def test_setup_llm_logging(self, mock_create_handler, mock_get_logger):
         """Test setting up LLM logger"""
         mock_logger = Mock()
@@ -241,7 +238,7 @@ class TestSetupLLMLogging:
         mock_logger.addHandler.assert_called_once_with(mock_handler)
         mock_create_handler.assert_called_once()
 
-    @patch('logging.getLogger')
+    @patch("logging.getLogger")
     def test_setup_llm_logging_avoids_duplicate_handlers(self, mock_get_logger):
         """Test that setup_llm_logging doesn't add duplicate handlers"""
         from logging.handlers import RotatingFileHandler
@@ -257,8 +254,8 @@ class TestSetupLLMLogging:
         # Should not add another handler
         mock_logger.addHandler.assert_not_called()
 
-    @patch('logging.getLogger')
-    @patch('src.core.logging.create_rotating_file_handler')
+    @patch("logging.getLogger")
+    @patch("src.core.logging.create_rotating_file_handler")
     def test_setup_llm_logging_default_path(self, mock_create_handler, mock_get_logger):
         """Test LLM logging with default path"""
         mock_logger = Mock()
@@ -277,8 +274,8 @@ class TestSetupLLMLogging:
 class TestGetLLMLogger:
     """Test get_llm_logger function"""
 
-    @patch('logging.getLogger')
-    @patch('src.core.logging.setup_llm_logging')
+    @patch("logging.getLogger")
+    @patch("src.core.logging.setup_llm_logging")
     def test_get_llm_logger_initializes_if_no_handlers(self, mock_setup, mock_get_logger):
         """Test get_llm_logger initializes logger if no handlers"""
         mock_logger = Mock()
@@ -291,14 +288,14 @@ class TestGetLLMLogger:
         mock_setup.assert_called_once()
         assert logger == mock_logger
 
-    @patch('logging.getLogger')
+    @patch("logging.getLogger")
     def test_get_llm_logger_skips_init_if_handlers_exist(self, mock_get_logger):
         """Test get_llm_logger doesn't reinitialize if handlers exist"""
         mock_logger = Mock()
         mock_logger.handlers = [Mock()]  # Has existing handler
         mock_get_logger.return_value = mock_logger
 
-        with patch('src.core.logging.setup_llm_logging') as mock_setup:
+        with patch("src.core.logging.setup_llm_logging") as mock_setup:
             logger = get_llm_logger()
 
             # Should NOT call setup_llm_logging
@@ -309,7 +306,7 @@ class TestGetLLMLogger:
 class TestGetLogger:
     """Test get_logger function"""
 
-    @patch('logging.getLogger')
+    @patch("logging.getLogger")
     def test_get_logger(self, mock_get_logger):
         """Test get_logger returns logger for module"""
         mock_logger = Mock()
@@ -320,7 +317,7 @@ class TestGetLogger:
         mock_get_logger.assert_called_once_with("test_module")
         assert logger == mock_logger
 
-    @patch('logging.getLogger')
+    @patch("logging.getLogger")
     def test_get_logger_with_package_name(self, mock_get_logger):
         """Test get_logger with package name"""
         mock_logger = Mock()

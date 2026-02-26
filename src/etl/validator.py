@@ -3,6 +3,7 @@ SnapAnalyst Data Validator
 
 Validates data integrity and consistency.
 """
+
 from __future__ import annotations
 
 from decimal import Decimal
@@ -95,10 +96,13 @@ class DataValidator:
         # Logical consistency
         gross = household.get("gross_income")
         net = household.get("net_income")
-        if (gross is not None and net is not None
-                and isinstance(gross, (int, float, Decimal))
-                and isinstance(net, (int, float, Decimal))
-                and gross < net):
+        if (
+            gross is not None
+            and net is not None
+            and isinstance(gross, (int, float, Decimal))
+            and isinstance(net, (int, float, Decimal))
+            and gross < net
+        ):
             result.add_error(f"Gross income ({gross}) < net income ({net})")
 
         # Income must be non-negative
@@ -143,8 +147,14 @@ class DataValidator:
 
         # Income fields must be non-negative
         income_fields = [
-            "wages", "self_employment_income", "social_security", "ssi",
-            "tanf", "unemployment", "child_support", "veterans_benefits"
+            "wages",
+            "self_employment_income",
+            "social_security",
+            "ssi",
+            "tanf",
+            "unemployment",
+            "child_support",
+            "veterans_benefits",
         ]
         for field in income_fields:
             value = member.get(field)
@@ -187,12 +197,7 @@ class DataValidator:
 
         return result
 
-    def validate_batch(
-        self,
-        households: list[dict],
-        members: list[dict],
-        errors: list[dict]
-    ) -> ValidationResult:
+    def validate_batch(self, households: list[dict], members: list[dict], errors: list[dict]) -> ValidationResult:
         """
         Validate entire batch of data.
 
@@ -206,8 +211,7 @@ class DataValidator:
         """
         result = ValidationResult()
 
-        result.add_info(f"Validating batch: {len(households)} households, "
-                       f"{len(members)} members, {len(errors)} errors")
+        result.add_info(f"Validating batch: {len(households)} households, {len(members)} members, {len(errors)} errors")
 
         # Validate each household
         for i, household in enumerate(households):

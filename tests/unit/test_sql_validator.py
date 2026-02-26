@@ -4,7 +4,6 @@ Unit tests for SQL Validator
 Tests SQL security validation and direct SQL detection.
 """
 
-
 from src.utils.sql_validator import is_direct_sql, validate_readonly_sql
 
 

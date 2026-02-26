@@ -5,13 +5,14 @@ Handles all communication with the SnapAnalyst backend API.
 This is a generic HTTP client that can be used by any frontend.
 """
 
-import logging
 import os
 from collections.abc import AsyncGenerator
 
 import httpx
 
-logger = logging.getLogger(__name__)
+from src.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 # =============================================================================
 # API CONFIGURATION
@@ -36,8 +37,10 @@ API_TIMEOUT_UPLOAD = 120.0
 # API CLIENT FUNCTIONS
 # =============================================================================
 
+
 class APIError(Exception):
     """Custom exception for API errors with user-friendly messages."""
+
     def __init__(self, message: str, status_code: int = 400):
         self.message = message
         self.status_code = status_code
@@ -45,10 +48,7 @@ class APIError(Exception):
 
 
 async def call_api(
-    endpoint: str,
-    method: str = "GET",
-    data: dict | None = None,
-    timeout: float = API_TIMEOUT_DEFAULT
+    endpoint: str, method: str = "GET", data: dict | None = None, timeout: float = API_TIMEOUT_DEFAULT
 ) -> dict:
     """
     Make API call to SnapAnalyst backend.
@@ -121,8 +121,8 @@ async def check_database_health() -> tuple[bool, str]:
             response = await client.get(f"{API_BASE_URL}/api/v1/data/health")
             health = response.json()
             db_info = health.get("database", {})
-            if db_info.get('connected', False):
-                return True, db_info.get('name', 'snapanalyst_db')
+            if db_info.get("connected", False):
+                return True, db_info.get("name", "snapanalyst_db")
             return False, "unknown"
     except Exception as e:
         logger.error(f"Database health check failed: {e}")
@@ -147,9 +147,9 @@ async def check_llm_health() -> tuple[bool, str]:
             response = await client.get(f"{API_BASE_URL}/api/v1/chat/health")
             health = response.json()
 
-            is_healthy = health.get('healthy', False)
-            provider = health.get('provider', 'Unknown')
-            status = health.get('status', 'unknown')
+            is_healthy = health.get("healthy", False)
+            provider = health.get("provider", "Unknown")
+            status = health.get("status", "unknown")
 
             if is_healthy:
                 return True, provider
@@ -180,12 +180,9 @@ async def upload_file(file_path: str, filename: str) -> dict:
         Upload response from API
     """
     async with httpx.AsyncClient(timeout=API_TIMEOUT_UPLOAD) as client:
-        with open(file_path, 'rb') as f:
-            files_data = {'file': (filename, f, 'text/csv')}
-            response = await client.post(
-                f"{API_BASE_URL}{API_PREFIX}/data/upload",
-                files=files_data
-            )
+        with open(file_path, "rb") as f:
+            files_data = {"file": (filename, f, "text/csv")}
+            response = await client.post(f"{API_BASE_URL}{API_PREFIX}/data/upload", files=files_data)
             response.raise_for_status()
             return response.json()
 
@@ -218,11 +215,7 @@ def get_api_prefix() -> str:
 # =============================================================================
 
 
-async def stream_from_api(
-    endpoint: str,
-    data: dict | None = None,
-    timeout: float = 60.0
-) -> AsyncGenerator[dict, None]:
+async def stream_from_api(endpoint: str, data: dict | None = None, timeout: float = 60.0) -> AsyncGenerator[dict, None]:
     """
     Stream SSE events from an API endpoint.
 

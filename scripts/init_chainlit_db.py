@@ -110,7 +110,9 @@ async def init_chainlit_tables():
     """Initialize Chainlit database tables."""
     import asyncpg
 
-    db_url = os.getenv("DATABASE_URL", "postgresql://snapanalyst:snapanalyst_dev_password@localhost:5432/snapanalyst_db")
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        raise ValueError("DATABASE_URL environment variable is required")
 
     # Convert to asyncpg format
     if db_url.startswith("postgresql://"):
@@ -118,15 +120,10 @@ async def init_chainlit_tables():
     elif db_url.startswith("postgresql+asyncpg://"):
         db_url = db_url.replace("postgresql+asyncpg://", "postgres://")
 
-    print("🔧 Connecting to database...")
-
     try:
         conn = await asyncpg.connect(db_url)
-
-        print("📊 Creating Chainlit tables...")
         await conn.execute(CHAINLIT_TABLES_SQL)
 
-        # Verify tables exist
         tables = await conn.fetch("""
             SELECT tablename FROM pg_tables
             WHERE schemaname = 'public'
@@ -136,15 +133,15 @@ async def init_chainlit_tables():
 
         await conn.close()
 
-        print("\n✅ Chainlit tables created/verified:")
-        for table in tables:
-            print(f"   - {table['tablename']}")
+        table_names = ", ".join(t["tablename"] for t in tables)
+        print(f"[chainlit-db] Tables ready: {table_names}")
 
         return True
 
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"[chainlit-db] ERROR: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -155,19 +152,6 @@ def init_chainlit_tables_sync():
 
 
 if __name__ == "__main__":
-    print("=" * 60)
-    print("Chainlit Database Initialization")
-    print("=" * 60)
-
-    success = init_chainlit_tables_sync()
-
-    if success:
-        print("\n" + "=" * 60)
-        print("✅ Database ready for Chainlit!")
-        print("   - User authentication with password hashing")
-        print("   - Chat history persistence")
-        print("   - Feedback collection")
-        print("=" * 60)
-    else:
-        print("\n❌ Database initialization failed")
+    if not init_chainlit_tables_sync():
+        print("[chainlit-db] ERROR: Database initialization failed")
         sys.exit(1)

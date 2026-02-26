@@ -6,6 +6,7 @@ Provides centralized logging with:
 - Rotating file logs (prevents logs from growing too large)
 - Configurable size limits and backup counts
 """
+
 from __future__ import annotations
 
 import logging
@@ -20,10 +21,7 @@ LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
 
 def create_rotating_file_handler(
-    log_path: str,
-    max_bytes: int = None,
-    backup_count: int = None,
-    level: int = logging.DEBUG
+    log_path: str, max_bytes: int = None, backup_count: int = None, level: int = logging.DEBUG
 ) -> RotatingFileHandler:
     """
     Create a rotating file handler with size limits.
@@ -45,12 +43,7 @@ def create_rotating_file_handler(
     log_file = Path(log_path)
     log_file.parent.mkdir(parents=True, exist_ok=True)
 
-    handler = RotatingFileHandler(
-        log_path,
-        maxBytes=max_bytes,
-        backupCount=backup_count,
-        encoding='utf-8'
-    )
+    handler = RotatingFileHandler(log_path, maxBytes=max_bytes, backupCount=backup_count, encoding="utf-8")
     handler.setFormatter(logging.Formatter(LOG_FORMAT))
     handler.setLevel(level)
 
@@ -72,15 +65,12 @@ def setup_logging(log_level: str | None = None) -> None:
         format=LOG_FORMAT,
         handlers=[
             logging.StreamHandler(sys.stdout),
-        ]
+        ],
     )
 
     # Add rotating file handler if configured
     if settings.log_to_file:
-        file_handler = create_rotating_file_handler(
-            settings.log_file_path,
-            level=getattr(logging, level)
-        )
+        file_handler = create_rotating_file_handler(settings.log_file_path, level=getattr(logging, level))
         logging.getLogger().addHandler(file_handler)
 
     # Set specific log levels for noisy libraries
@@ -125,7 +115,7 @@ def setup_logging(log_level: str | None = None) -> None:
     logging.getLogger("aiohttp").setLevel(logging.WARNING)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
 
-    logging.info(
+    logging.debug(
         f"SnapAnalyst logging initialized at {level} level "
         f"(rotation: {settings.log_max_bytes / 1_000_000:.1f}MB, "
         f"keeping {settings.log_backup_count} backups)"

@@ -6,58 +6,114 @@ This is UI-specific because it deals with Chainlit session management.
 """
 
 import asyncio
-import logging
 
 import chainlit as cl
 
 # Import from src/ for API client
-from src.clients.api_client import call_api, check_api_health, check_database_health, check_llm_health
+from src.clients.api_client import API_BASE_URL, call_api
+from src.core.config import settings
+from src.core.logging import get_logger
 
-# Import from ui/ for responses
-from ..responses import system_status_message, welcome_message
+logger = get_logger(__name__)
 
-logger = logging.getLogger(__name__)
 
-# Store the current settings widget for refresh
-_current_settings = None
+def _get_default_llm_settings() -> dict:
+    """Get default LLM settings from config for all three modes."""
+    return {
+        "sql": {
+            "model": settings.sql_model,
+            "temperature": settings.effective_sql_temperature,
+            "max_tokens": settings.effective_sql_max_tokens,
+            "top_p": 1.0,
+            "context_window": None,
+            "summary_enabled": settings.llm_sql_summary_enabled,
+            "summary_max_rows": settings.llm_sql_summary_max_rows,
+        },
+        "insights": {
+            "model": settings.kb_model,
+            "temperature": settings.effective_kb_temperature,
+            "max_tokens": settings.llm_kb_max_tokens,
+            "top_p": 1.0,
+            "context_window": None,
+        },
+        "knowledge": {
+            "model": settings.kb_model,
+            "temperature": settings.effective_kb_temperature,
+            "max_tokens": settings.llm_kb_max_tokens,
+            "top_p": 1.0,
+            "context_window": None,
+        },
+        "summary": {
+            "model": settings.kb_model,
+            "temperature": settings.effective_kb_temperature,
+            "max_tokens": settings.llm_kb_max_tokens,
+            "top_p": 1.0,
+            "context_window": None,
+            "summary_enabled": settings.llm_sql_summary_enabled,
+            "summary_max_rows": settings.llm_sql_summary_max_rows,
+        },
+    }
+
+
+def _prefill_context_windows(defaults: dict) -> dict:
+    """Try to fill context window values from the model registry."""
+    try:
+        from src.services.model_registry import get_context_window
+
+        for mode in ("sql", "insights", "knowledge", "summary"):
+            model = defaults[mode]["model"]
+            ctx = get_context_window(model)
+            if ctx:
+                defaults[mode]["context_window"] = ctx
+    except Exception as e:
+        logger.debug(f"Could not prefill context windows: {e}")
+    return defaults
 
 
 async def initialize_session():
     """
     Initialize a new chat session with default values.
-    Sets up session variables for chat history, query count, and filters.
+    Sets up session variables for chat history, query count, filters, and LLM settings.
     """
     # Get authenticated user and set user_id
     user = cl.user_session.get("user")
-    if user and hasattr(user, 'identifier'):
+    if user and hasattr(user, "identifier"):
         user_id = user.identifier
         cl.user_session.set("user_id", user_id)
-        logger.info(f"Session initialized for user: {user_id}")
+        logger.debug(f"Session initialized for user: {user_id}")
     else:
-        cl.user_session.set("user_id", "anonymous@snapanalyst.com")
+        # Derive default anonymous email from active dataset
+        try:
+            from datasets import get_active_dataset
+
+            ds = get_active_dataset()
+            app_name = ds.get_personas().get("app", "snapanalyst").lower().replace(" ", "") if ds else "snapanalyst"
+        except Exception:
+            app_name = "snapanalyst"
+        cl.user_session.set("user_id", f"anonymous@{app_name}.com")
         logger.warning("No authenticated user found, using anonymous")
 
     cl.user_session.set("chat_history", [])
     cl.user_session.set("query_count", 0)
     cl.user_session.set("current_state_filter", "All States")
     cl.user_session.set("current_year_filter", "All Years")
-    cl.user_session.set("training_enabled", False)
+
+    # Initialize per-mode LLM settings with defaults
+    defaults = _prefill_context_windows(_get_default_llm_settings())
+    cl.user_session.set("llm_sql_settings", defaults["sql"])
+    cl.user_session.set("llm_insights_settings", defaults["insights"])
+    cl.user_session.set("llm_knowledge_settings", defaults["knowledge"])
+    cl.user_session.set("llm_summary_settings", defaults["summary"])
 
 
 async def setup_filter_settings():
     """
-    Set up the filter settings UI.
-    Fetches available filter options from API and creates the settings panel.
-    Loads saved filter from database if it exists.
-
-    Returns:
-        The ChatSettings object, or None if setup failed
+    Load saved filter from database and apply to session.
+    No longer creates ChatSettings widgets — filters are managed via the Settings button.
     """
-    global _current_settings
     try:
         # Get available filter options from API
         filter_options = await call_api("/filter/options")
-        states = ["All States"] + filter_options.get("states", [])
         years = ["All Years"] + [str(y) for y in filter_options.get("fiscal_years", [])]
 
         # Store years in session for refresh detection
@@ -69,95 +125,34 @@ async def setup_filter_settings():
             saved_state = current_filter.get("filter", {}).get("state")
             saved_year = current_filter.get("filter", {}).get("fiscal_year")
 
-            initial_state = saved_state if saved_state else "All States"
-            initial_year = str(saved_year) if saved_year else "All Years"
+            if saved_state:
+                cl.user_session.set("current_state_filter", saved_state)
+            if saved_year:
+                cl.user_session.set("current_year_filter", str(saved_year))
         except Exception:
-            initial_state = "All States"
-            initial_year = "All Years"
-
-        # Create filter selection UI
-        settings = await cl.ChatSettings(
-            [
-                cl.input_widget.Select(
-                    id="state_filter",
-                    label="State Filter",
-                    values=states,
-                    initial_value=initial_state,
-                    description="Filter all queries and exports by state",
-                ),
-                cl.input_widget.Select(
-                    id="year_filter",
-                    label="Fiscal Year Filter",
-                    values=years,
-                    initial_value=initial_year,
-                    description="Filter all queries and exports by fiscal year",
-                ),
-                cl.input_widget.Switch(
-                    id="training_enabled",
-                    label="AI Training",
-                    initial=False,
-                    description="Enable persistent training (stores embeddings in ChromaDB). When disabled, clears vector database.",
-                ),
-            ]
-        ).send()
-
-        _current_settings = settings
-        return settings
+            pass
 
     except Exception as e:
         logger.error(f"Error setting up filters: {e}")
-        return None
 
 
 async def refresh_filter_settings():
     """
-    Refresh the filter settings with updated options from API.
+    Refresh the available filter options from API.
     Call this after data load completes to update fiscal year options.
 
     Returns:
-        True if filters were updated, False otherwise
+        True if years have changed, False otherwise
     """
     try:
-        # Get current available years from session
         old_years = cl.user_session.get("available_years", [])
 
-        # Fetch fresh filter options
         filter_options = await call_api("/filter/options")
         new_years = ["All Years"] + [str(y) for y in filter_options.get("fiscal_years", [])]
 
-        # Check if years have changed
         if set(new_years) != set(old_years):
             logger.info(f"Filter years changed: {old_years} -> {new_years}")
             cl.user_session.set("available_years", new_years)
-
-            # Re-create the settings panel with new options
-            states = ["All States"] + filter_options.get("states", [])
-
-            await cl.ChatSettings(
-                [
-                    cl.input_widget.Select(
-                        id="state_filter",
-                        label="🗺️ State Filter",
-                        values=states,
-                        initial_value=cl.user_session.get("current_state_filter", "All States"),
-                        description="Filter all queries and exports by state",
-                    ),
-                    cl.input_widget.Select(
-                        id="year_filter",
-                        label="📅 Fiscal Year Filter",
-                        values=new_years,
-                        initial_value=cl.user_session.get("current_year_filter", "All Years"),
-                        description="Filter all queries and exports by fiscal year",
-                    ),
-                    cl.input_widget.Switch(
-                        id="training_enabled",
-                        label="🧠 AI Training",
-                        initial=cl.user_session.get("training_enabled", False),
-                        description="Enable persistent training (stores embeddings in ChromaDB). When disabled, clears vector database.",
-                    ),
-                ]
-            ).send()
-
             return True
 
         return False
@@ -188,9 +183,7 @@ async def wait_for_load_and_refresh(job_id: str, max_wait_seconds: int = 300):
             try:
                 # Check job status
                 async with httpx.AsyncClient(timeout=10.0) as client:
-                    response = await client.get(
-                        f"http://localhost:8000/api/v1/data/load/jobs/{job_id}"
-                    )
+                    response = await client.get(f"{API_BASE_URL}/api/v1/data/load/jobs/{job_id}")
                     if response.status_code == 200:
                         job_data = response.json()
                         status = job_data.get("status")
@@ -200,7 +193,10 @@ async def wait_for_load_and_refresh(job_id: str, max_wait_seconds: int = 300):
                             updated = await refresh_filter_settings()
                             if updated:
                                 from ..responses import send_message
-                                await send_message("✅ **Filters updated** - New fiscal year is now available in the Settings panel.")
+
+                                await send_message(
+                                    "**Filters updated** - New fiscal year is now available. Use the **Settings** button to update your filters."
+                                )
                             return
                         elif status == "failed":
                             logger.warning(f"Load job {job_id} failed")
@@ -215,29 +211,3 @@ async def wait_for_load_and_refresh(job_id: str, max_wait_seconds: int = 300):
         logger.debug(f"Load monitoring task cancelled for job {job_id}")
     except Exception as e:
         logger.error(f"Error in load monitoring: {e}")
-
-
-async def check_system_health():
-    """
-    Check all system components and display status.
-    Checks API, database, and LLM services.
-    """
-    # Check all services
-    api_ok, api_version = await check_api_health()
-    db_ok, db_name = await check_database_health()
-    llm_ok, llm_provider = await check_llm_health()
-
-    # Send status message
-    await system_status_message(
-        api_ok=api_ok,
-        api_version=api_version,
-        db_ok=db_ok,
-        db_name=db_name,
-        llm_ok=llm_ok,
-        llm_provider=llm_provider
-    )
-
-    # Send welcome message
-    await welcome_message()
-
-    return api_ok and db_ok and llm_ok

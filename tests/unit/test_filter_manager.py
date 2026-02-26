@@ -7,6 +7,8 @@ Tests DataFilter class for per-user filtering functionality.
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from src.core.filter_manager import DataFilter, FilterManager, get_filter_manager
 
 
@@ -52,11 +54,7 @@ class TestDataFilterBasics:
     def test_filter_with_timestamps(self):
         """Test filter with created/updated timestamps"""
         now = datetime.now()
-        filter = DataFilter(
-            states=["Texas"],
-            created_at=now,
-            updated_at=now
-        )
+        filter = DataFilter(states=["Texas"], created_at=now, updated_at=now)
 
         assert filter.created_at == now
         assert filter.updated_at == now
@@ -242,66 +240,58 @@ class TestDataFilterEdgeCases:
     """Test edge cases"""
 
     def test_sql_injection_in_state_name(self):
-        """Test handling of SQL injection attempt in state name"""
-        # Note: This tests that the filter generates the condition
-        # The actual SQL execution should use parameterized queries
+        """Test that SQL injection attempts are rejected by input validation"""
         filter = DataFilter(states=["'; DROP TABLE households; --"])
 
-        conditions = filter.get_sql_conditions()
-
-        # Should still generate condition (SQL injection protection is at query execution level)
-        assert len(conditions) == 1
-        assert "state_name = '" in conditions[0]
+        with pytest.raises(ValueError, match="Invalid state name"):
+            filter.get_sql_conditions()
 
     def test_special_characters_in_state(self):
-        """Test handling of special characters in state name"""
+        """Test that apostrophes in state names are rejected (SQL safety)"""
         filter = DataFilter(states=["O'Brien County"])
 
-        conditions = filter.get_sql_conditions()
-
-        assert len(conditions) == 1
-        # Note: Proper SQL escaping should be handled at query execution
-        assert "O'Brien County" in conditions[0]
+        with pytest.raises(ValueError, match="Invalid state name"):
+            filter.get_sql_conditions()
 
     def test_zero_fiscal_year(self):
-        """Test handling of zero fiscal year"""
+        """Test that zero fiscal year is rejected by validation"""
         filter = DataFilter(fiscal_years=[0])
 
         assert filter.is_active is True
         assert filter.fiscal_year == 0
 
-        conditions = filter.get_sql_conditions()
-        assert "fiscal_year = 0" in conditions[0]
+        with pytest.raises(ValueError, match="Invalid fiscal year"):
+            filter.get_sql_conditions()
 
     def test_negative_fiscal_year(self):
-        """Test handling of negative fiscal year"""
+        """Test that negative fiscal year is rejected by validation"""
         filter = DataFilter(fiscal_years=[-1])
 
-        conditions = filter.get_sql_conditions()
-        assert "fiscal_year = -1" in conditions[0]
+        with pytest.raises(ValueError, match="Invalid fiscal year"):
+            filter.get_sql_conditions()
 
     def test_very_large_fiscal_year(self):
-        """Test handling of very large fiscal year"""
+        """Test that very large fiscal year is rejected by validation"""
         filter = DataFilter(fiscal_years=[9999])
 
-        conditions = filter.get_sql_conditions()
-        assert "fiscal_year = 9999" in conditions[0]
+        with pytest.raises(ValueError, match="Invalid fiscal year"):
+            filter.get_sql_conditions()
 
     def test_empty_state_string(self):
-        """Test handling of empty state string"""
+        """Test that empty state string is rejected by validation"""
         filter = DataFilter(states=[""])
 
         assert filter.is_active is True
         assert filter.state == ""
 
-        conditions = filter.get_sql_conditions()
-        assert len(conditions) == 1
+        with pytest.raises(ValueError, match="Invalid state name"):
+            filter.get_sql_conditions()
 
 
 class TestFilterManagerGetUserID:
     """Test FilterManager user ID retrieval"""
 
-    @patch('src.database.engine.SessionLocal')
+    @patch("src.database.engine.SessionLocal")
     def test_get_user_id_database_fallback(self, mock_session_local):
         """Test falling back to database user when Chainlit unavailable"""
         mock_session = MagicMock()
@@ -319,7 +309,7 @@ class TestFilterManagerGetUserID:
         assert user_id == "db_user_456"
         mock_session.close.assert_called_once()
 
-    @patch('src.database.engine.SessionLocal', side_effect=Exception("DB error"))
+    @patch("src.database.engine.SessionLocal", side_effect=Exception("DB error"))
     def test_get_user_id_default_fallback(self, mock_session_local):
         """Test falling back to 'default' when DB fails"""
         manager = FilterManager()
@@ -328,7 +318,7 @@ class TestFilterManagerGetUserID:
         # Should fall back to "default"
         assert user_id == "default"
 
-    @patch('src.database.engine.SessionLocal')
+    @patch("src.database.engine.SessionLocal")
     def test_get_user_id_no_database_user(self, mock_session_local):
         """Test falling back to default when no user in database"""
         mock_session = MagicMock()
@@ -348,33 +338,35 @@ class TestFilterManagerGetUserID:
 class TestFilterManagerGetFilter:
     """Test FilterManager get_filter method"""
 
-    @patch.object(FilterManager, '_get_user_id', return_value="test_user")
-    @patch('src.database.engine.SessionLocal')
+    @patch.object(FilterManager, "_get_user_id", return_value="test_user")
+    @patch("src.database.engine.SessionLocal")
     def test_get_filter_with_stored_preferences(self, mock_session_local, mock_get_user_id):
         """Test loading filter from database"""
         mock_session = MagicMock()
         mock_session_local.return_value = mock_session
 
         mock_result = MagicMock()
-        mock_row = ({
-            'states': ['California'],
-            'fiscal_years': [2023],
-            'created_at': '2024-01-01T00:00:00',
-            'updated_at': '2024-01-02T00:00:00'
-        },)
+        mock_row = (
+            {
+                "states": ["California"],
+                "fiscal_years": [2023],
+                "created_at": "2024-01-01T00:00:00",
+                "updated_at": "2024-01-02T00:00:00",
+            },
+        )
         mock_result.fetchone.return_value = mock_row
         mock_session.execute.return_value = mock_result
 
         manager = FilterManager()
         filter_obj = manager.get_filter()
 
-        assert filter_obj.states == ['California']
+        assert filter_obj.states == ["California"]
         assert filter_obj.fiscal_years == [2023]
         assert filter_obj.created_at is not None
         mock_session.close.assert_called_once()
 
-    @patch.object(FilterManager, '_get_user_id', return_value="test_user")
-    @patch('src.database.engine.SessionLocal')
+    @patch.object(FilterManager, "_get_user_id", return_value="test_user")
+    @patch("src.database.engine.SessionLocal")
     def test_get_filter_no_stored_preferences(self, mock_session_local, mock_get_user_id):
         """Test get_filter returns empty filter when no preferences stored"""
         mock_session = MagicMock()
@@ -391,8 +383,8 @@ class TestFilterManagerGetFilter:
         assert filter_obj.states == []
         assert filter_obj.fiscal_years == []
 
-    @patch.object(FilterManager, '_get_user_id', return_value="test_user")
-    @patch('src.database.engine.SessionLocal', side_effect=Exception("DB error"))
+    @patch.object(FilterManager, "_get_user_id", return_value="test_user")
+    @patch("src.database.engine.SessionLocal", side_effect=Exception("DB error"))
     def test_get_filter_database_error(self, mock_session_local, mock_get_user_id):
         """Test get_filter returns empty filter on database error"""
         manager = FilterManager()
@@ -404,8 +396,8 @@ class TestFilterManagerGetFilter:
 class TestFilterManagerSetMethods:
     """Test FilterManager set methods"""
 
-    @patch.object(FilterManager, '_save_filter')
-    @patch.object(FilterManager, 'get_filter', return_value=DataFilter())
+    @patch.object(FilterManager, "_save_filter")
+    @patch.object(FilterManager, "get_filter", return_value=DataFilter())
     def test_set_state(self, mock_get_filter, mock_save_filter):
         """Test setting state filter"""
         manager = FilterManager()
@@ -416,8 +408,8 @@ class TestFilterManagerSetMethods:
         assert result.created_at is not None
         mock_save_filter.assert_called_once()
 
-    @patch.object(FilterManager, '_save_filter')
-    @patch.object(FilterManager, 'get_filter', return_value=DataFilter())
+    @patch.object(FilterManager, "_save_filter")
+    @patch.object(FilterManager, "get_filter", return_value=DataFilter())
     def test_set_fiscal_year(self, mock_get_filter, mock_save_filter):
         """Test setting fiscal year filter"""
         manager = FilterManager()
@@ -428,8 +420,8 @@ class TestFilterManagerSetMethods:
         assert result.created_at is not None
         mock_save_filter.assert_called_once()
 
-    @patch.object(FilterManager, '_save_filter')
-    @patch.object(FilterManager, 'get_filter', return_value=DataFilter())
+    @patch.object(FilterManager, "_save_filter")
+    @patch.object(FilterManager, "get_filter", return_value=DataFilter())
     def test_set_filter_both(self, mock_get_filter, mock_save_filter):
         """Test setting both state and year"""
         manager = FilterManager()
@@ -440,8 +432,8 @@ class TestFilterManagerSetMethods:
         assert result.updated_at is not None
         mock_save_filter.assert_called_once()
 
-    @patch.object(FilterManager, '_save_filter')
-    @patch.object(FilterManager, 'get_filter', return_value=DataFilter())
+    @patch.object(FilterManager, "_save_filter")
+    @patch.object(FilterManager, "get_filter", return_value=DataFilter())
     def test_set_filter_state_only(self, mock_get_filter, mock_save_filter):
         """Test setting only state"""
         manager = FilterManager()
@@ -451,7 +443,7 @@ class TestFilterManagerSetMethods:
         assert result.fiscal_years == []
         mock_save_filter.assert_called_once()
 
-    @patch.object(FilterManager, '_save_filter')
+    @patch.object(FilterManager, "_save_filter")
     def test_clear_filter(self, mock_save_filter):
         """Test clearing all filters"""
         manager = FilterManager()
@@ -466,8 +458,8 @@ class TestFilterManagerSetMethods:
 class TestFilterManagerSaveFilter:
     """Test FilterManager _save_filter method"""
 
-    @patch.object(FilterManager, '_get_user_id', return_value="test_user")
-    @patch('src.database.engine.SessionLocal')
+    @patch.object(FilterManager, "_get_user_id", return_value="test_user")
+    @patch("src.database.engine.SessionLocal")
     def test_save_filter_success(self, mock_session_local, mock_get_user_id):
         """Test saving filter to database"""
         mock_session = MagicMock()
@@ -484,8 +476,8 @@ class TestFilterManagerSaveFilter:
         mock_session.commit.assert_called_once()
         mock_session.close.assert_called_once()
 
-    @patch.object(FilterManager, '_get_user_id', return_value="test_user")
-    @patch('src.database.engine.SessionLocal', side_effect=Exception("DB error"))
+    @patch.object(FilterManager, "_get_user_id", return_value="test_user")
+    @patch("src.database.engine.SessionLocal", side_effect=Exception("DB error"))
     def test_save_filter_database_error(self, mock_session_local, mock_get_user_id):
         """Test save_filter handles database errors"""
         manager = FilterManager()
@@ -498,7 +490,7 @@ class TestFilterManagerSaveFilter:
 class TestFilterManagerApplyToSQL:
     """Test FilterManager apply_to_sql method"""
 
-    @patch.object(FilterManager, 'get_filter')
+    @patch.object(FilterManager, "get_filter")
     def test_apply_to_sql_empty_filter(self, mock_get_filter):
         """Test apply_to_sql with empty filter returns original SQL"""
         mock_get_filter.return_value = DataFilter()
@@ -509,7 +501,7 @@ class TestFilterManagerApplyToSQL:
 
         assert result == sql
 
-    @patch.object(FilterManager, 'get_filter')
+    @patch.object(FilterManager, "get_filter")
     def test_apply_to_sql_households_state_filter(self, mock_get_filter):
         """Test apply_to_sql with state filter on households"""
         mock_get_filter.return_value = DataFilter(states=["Connecticut"])
@@ -521,7 +513,7 @@ class TestFilterManagerApplyToSQL:
         assert "state_name = 'Connecticut'" in result
         assert "WHERE" in result
 
-    @patch.object(FilterManager, 'get_filter')
+    @patch.object(FilterManager, "get_filter")
     def test_apply_to_sql_households_year_filter(self, mock_get_filter):
         """Test apply_to_sql with fiscal year filter"""
         mock_get_filter.return_value = DataFilter(fiscal_years=[2023])
@@ -533,7 +525,7 @@ class TestFilterManagerApplyToSQL:
         assert "fiscal_year = 2023" in result
         assert "WHERE" in result
 
-    @patch.object(FilterManager, 'get_filter')
+    @patch.object(FilterManager, "get_filter")
     def test_apply_to_sql_households_both_filters(self, mock_get_filter):
         """Test apply_to_sql with both state and year"""
         mock_get_filter.return_value = DataFilter(states=["Maryland"], fiscal_years=[2022])
@@ -546,7 +538,7 @@ class TestFilterManagerApplyToSQL:
         assert "fiscal_year = 2022" in result
         assert "AND" in result
 
-    @patch.object(FilterManager, 'get_filter')
+    @patch.object(FilterManager, "get_filter")
     def test_apply_to_sql_existing_where_clause(self, mock_get_filter):
         """Test apply_to_sql adds to existing WHERE clause"""
         mock_get_filter.return_value = DataFilter(states=["Texas"])
@@ -559,7 +551,7 @@ class TestFilterManagerApplyToSQL:
         assert "status = 2" in result
         assert result.count("WHERE") == 1
 
-    @patch.object(FilterManager, 'get_filter')
+    @patch.object(FilterManager, "get_filter")
     def test_apply_to_sql_with_group_by(self, mock_get_filter):
         """Test apply_to_sql inserts WHERE before GROUP BY"""
         mock_get_filter.return_value = DataFilter(fiscal_years=[2021])
@@ -571,7 +563,7 @@ class TestFilterManagerApplyToSQL:
         assert "WHERE fiscal_year = 2021" in result
         assert result.index("WHERE") < result.index("GROUP BY")
 
-    @patch.object(FilterManager, 'get_filter')
+    @patch.object(FilterManager, "get_filter")
     def test_apply_to_sql_with_order_by(self, mock_get_filter):
         """Test apply_to_sql inserts WHERE before ORDER BY"""
         mock_get_filter.return_value = DataFilter(states=["Florida"])
@@ -583,7 +575,7 @@ class TestFilterManagerApplyToSQL:
         assert "WHERE" in result
         assert result.index("WHERE") < result.index("ORDER BY")
 
-    @patch.object(FilterManager, 'get_filter')
+    @patch.object(FilterManager, "get_filter")
     def test_apply_to_sql_with_limit(self, mock_get_filter):
         """Test apply_to_sql inserts WHERE before LIMIT"""
         mock_get_filter.return_value = DataFilter(fiscal_years=[2020])
@@ -595,7 +587,7 @@ class TestFilterManagerApplyToSQL:
         assert "WHERE fiscal_year = 2020" in result
         assert result.index("WHERE") < result.index("LIMIT")
 
-    @patch.object(FilterManager, 'get_filter')
+    @patch.object(FilterManager, "get_filter")
     def test_apply_to_sql_qc_errors_state_filter(self, mock_get_filter):
         """Test apply_to_sql uses subquery for qc_errors table"""
         mock_get_filter.return_value = DataFilter(states=["Virginia"])
@@ -606,7 +598,7 @@ class TestFilterManagerApplyToSQL:
 
         assert "case_id IN (SELECT case_id FROM households WHERE state_name = 'Virginia')" in result
 
-    @patch.object(FilterManager, 'get_filter')
+    @patch.object(FilterManager, "get_filter")
     def test_apply_to_sql_members_state_filter(self, mock_get_filter):
         """Test apply_to_sql uses subquery for household_members table"""
         mock_get_filter.return_value = DataFilter(states=["Ohio"])
@@ -617,7 +609,7 @@ class TestFilterManagerApplyToSQL:
 
         assert "case_id IN (SELECT case_id FROM households WHERE state_name = 'Ohio')" in result
 
-    @patch.object(FilterManager, 'get_filter')
+    @patch.object(FilterManager, "get_filter")
     def test_apply_to_sql_multiple_states(self, mock_get_filter):
         """Test apply_to_sql with multiple states"""
         mock_get_filter.return_value = DataFilter(states=["Texas", "California", "New York"])
@@ -628,7 +620,7 @@ class TestFilterManagerApplyToSQL:
 
         assert "state_name IN ('Texas', 'California', 'New York')" in result
 
-    @patch.object(FilterManager, 'get_filter')
+    @patch.object(FilterManager, "get_filter")
     def test_apply_to_sql_multiple_years(self, mock_get_filter):
         """Test apply_to_sql with multiple fiscal years"""
         mock_get_filter.return_value = DataFilter(fiscal_years=[2020, 2021, 2022])
@@ -639,7 +631,7 @@ class TestFilterManagerApplyToSQL:
 
         assert "fiscal_year IN (2020, 2021, 2022)" in result
 
-    @patch.object(FilterManager, 'get_filter')
+    @patch.object(FilterManager, "get_filter")
     def test_apply_to_sql_case_insensitive_keywords(self, mock_get_filter):
         """Test apply_to_sql handles case-insensitive SQL keywords"""
         mock_get_filter.return_value = DataFilter(states=["Idaho"])

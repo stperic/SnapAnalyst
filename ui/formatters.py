@@ -5,19 +5,20 @@ HTML and display formatting utilities for the Chainlit UI.
 Uses centralized message templates from src/core/prompts.py.
 Column display formats are loaded from datasets/snap/data_mapping.json.
 """
+
 from __future__ import annotations
 
 import json
-import logging
 from functools import lru_cache
 from pathlib import Path
 
 import chainlit as cl
 import sqlparse
 
+from src.core.logging import get_logger
 from src.core.prompts import MSG_EXPORT_STATS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Path to data mapping configuration
 DATA_MAPPING_PATH = Path(__file__).parent.parent / "datasets" / "snap" / "data_mapping.json"
@@ -34,13 +35,7 @@ def format_sql_display(sql: str) -> str:
         Formatted SQL string with proper indentation
     """
     try:
-        formatted = sqlparse.format(
-            sql,
-            reindent=True,
-            keyword_case='upper',
-            indent_width=2,
-            wrap_after=80
-        )
+        formatted = sqlparse.format(sql, reindent=True, keyword_case="upper", indent_width=2, wrap_after=80)
         return formatted
     except Exception as e:
         logger.warning(f"Could not format SQL: {e}")
@@ -57,9 +52,9 @@ def _load_column_formats() -> dict[str, set[str]]:
         Dictionary mapping format type to set of column names
     """
     formats: dict[str, set[str]] = {
-        "integer": set(),   # Counts with comma separators
-        "rawint": set(),    # Codes/dates without comma separators
-        "year": set(),      # Years without comma separators
+        "integer": set(),  # Counts with comma separators
+        "rawint": set(),  # Codes/dates without comma separators
+        "year": set(),  # Years without comma separators
         "currency": set(),
         "weight": set(),
         "text": set(),
@@ -176,22 +171,23 @@ def format_cell_value(value, format_type: str) -> str:
             # Display as Yes/No
             if isinstance(value, bool):
                 return "Yes" if value else "No"
-            elif str(value).lower() in ('true', '1', 'yes'):
+            elif str(value).lower() in ("true", "1", "yes"):
                 return "Yes"
-            elif str(value).lower() in ('false', '0', 'no'):
+            elif str(value).lower() in ("false", "0", "no"):
                 return "No"
             return str(value)
 
         elif format_type == "datetime":
             # Display datetime in clean format
             from datetime import datetime
+
             if isinstance(value, datetime):
                 return value.strftime("%Y-%m-%d %H:%M")
             # Try to parse string datetime
             str_val = str(value)
             # Remove microseconds if present
-            if '.' in str_val:
-                str_val = str_val.split('.')[0]
+            if "." in str_val:
+                str_val = str_val.split(".")[0]
             return str_val
 
         elif format_type == "text":
@@ -229,6 +225,7 @@ def format_sql_results(results: list[dict], row_count: int) -> str:
 
     # Generate unique ID for this table instance
     import uuid
+
     table_id = f"table-{str(uuid.uuid4())[:8]}"
 
     # Pre-format data using Python's format mapping from data_mapping.json
@@ -242,7 +239,8 @@ def format_sql_results(results: list[dict], row_count: int) -> str:
             formatted_row[col_name] = _format_for_tabulator(value, format_type)
         formatted_results.append(formatted_row)
 
-    json_data = json.dumps(formatted_results, default=str)
+    # Escape </script> sequences to prevent breaking out of the JSON script tag
+    json_data = json.dumps(formatted_results, default=str).replace("</", "<\\/")
 
     # Use textwrap.dedent to ensure no leading whitespace makes it into Markdown
     from textwrap import dedent
@@ -314,20 +312,21 @@ def _format_for_tabulator(value, format_type: str) -> str:
             # Display as Yes/No
             if isinstance(value, bool):
                 return "Yes" if value else "No"
-            elif str(value).lower() in ('true', '1', 'yes'):
+            elif str(value).lower() in ("true", "1", "yes"):
                 return "Yes"
-            elif str(value).lower() in ('false', '0', 'no'):
+            elif str(value).lower() in ("false", "0", "no"):
                 return "No"
             return str(value)
 
         elif format_type == "datetime":
             # Display datetime in clean format
             from datetime import datetime
+
             if isinstance(value, datetime):
                 return value.strftime("%Y-%m-%d %H:%M")
             str_val = str(value)
-            if '.' in str_val:
-                str_val = str_val.split('.')[0]
+            if "." in str_val:
+                str_val = str_val.split(".")[0]
             return str_val
 
         elif format_type == "text":
@@ -375,7 +374,10 @@ def get_filter_indicator() -> str:
 
     # Return indicator HTML only if filter is active
     if filter_parts:
-        return f'<div style="text-align: center; font-size: 11px; color: #666; padding: 8px; margin-top: 16px; border-top: 1px solid #eee;">🔍 Active Filter: {" | ".join(filter_parts)}</div>'
+        from html import escape
+
+        safe_parts = [escape(p) for p in filter_parts]
+        return f'<div style="text-align: center; font-size: 11px; color: #666; padding: 8px; margin-top: 16px; border-top: 1px solid #eee;">Active Filter: {" | ".join(safe_parts)}</div>'
     return ""
 
 
@@ -410,8 +412,4 @@ def format_table_stats(headers: list[str], row_count: int, file_size_kb: float) 
     Returns:
         Formatted statistics string
     """
-    return MSG_EXPORT_STATS.format(
-        row_count=row_count,
-        column_count=len(headers),
-        file_size_kb=file_size_kb
-    )
+    return MSG_EXPORT_STATS.format(row_count=row_count, column_count=len(headers), file_size_kb=file_size_kb)

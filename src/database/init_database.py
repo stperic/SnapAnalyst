@@ -32,9 +32,10 @@ import sys
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from src.core.logging import get_logger
 from src.database.engine import Base, engine
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def create_schemas() -> None:
@@ -88,6 +89,7 @@ def create_all_tables(drop_existing: bool = False) -> None:
         # Fallback to SQLAlchemy models if schema.sql not found
         from src.database import models  # noqa
         from src.database import reference_models  # noqa
+
         if drop_existing:
             Base.metadata.drop_all(engine)
         Base.metadata.create_all(engine)
@@ -142,7 +144,7 @@ def create_all_tables(drop_existing: bool = False) -> None:
             DROP TABLE IF EXISTS ref_status CASCADE;
         """
         with Session(engine) as session:
-            for stmt in drop_sql.strip().split(';'):
+            for stmt in drop_sql.strip().split(";"):
                 if stmt.strip():
                     session.execute(text(stmt))
             session.commit()
@@ -157,18 +159,18 @@ def create_all_tables(drop_existing: bool = False) -> None:
     # doesn't abort subsequent statements (PostgreSQL aborts the whole
     # transaction on error).
     with engine.connect() as conn:
-        for statement in schema_sql.split(';'):
+        for statement in schema_sql.split(";"):
             stmt = statement.strip()
             if not stmt:
                 continue
 
             # Remove leading comment lines (section headers like -- MAIN TABLES)
-            lines = stmt.split('\n')
+            lines = stmt.split("\n")
             non_comment_lines = []
             for line in lines:
                 stripped_line = line.strip()
                 # Keep the line if it's not a pure comment line
-                if stripped_line and not stripped_line.startswith('--'):
+                if stripped_line and not stripped_line.startswith("--"):
                     non_comment_lines.append(line)
                 elif non_comment_lines:
                     # Keep inline comments after we've started the statement
@@ -177,7 +179,7 @@ def create_all_tables(drop_existing: bool = False) -> None:
             if not non_comment_lines:
                 continue
 
-            clean_stmt = '\n'.join(non_comment_lines).strip()
+            clean_stmt = "\n".join(non_comment_lines).strip()
             if not clean_stmt:
                 continue
 
@@ -213,7 +215,6 @@ def create_enriched_views() -> None:
             LEFT JOIN ref_sex rsex ON m.sex = rsex.code
             LEFT JOIN ref_snap_affiliation rsa ON m.snap_affiliation_code = rsa.code
         """,
-
         # Error summary by type - aggregated view
         "v_error_summary_by_type": """
             CREATE OR REPLACE VIEW v_error_summary_by_type AS
@@ -228,7 +229,6 @@ def create_enriched_views() -> None:
             LEFT JOIN ref_element re ON e.element_code = re.code
             GROUP BY e.fiscal_year, re.category, re.description
         """,
-
         # Error summary by responsibility - client vs agency
         "v_error_summary_by_responsibility": """
             CREATE OR REPLACE VIEW v_error_summary_by_responsibility AS
@@ -275,6 +275,7 @@ def populate_references(drop_existing: bool = False) -> dict[str, int]:
         Dictionary with table names and record counts
     """
     from src.database.populate_references import populate_all_references
+
     return populate_all_references(drop_existing=drop_existing)
 
 
@@ -417,38 +418,17 @@ def initialize_database(
 
 def main():
     """Command-line interface for database initialization."""
-    parser = argparse.ArgumentParser(
-        description="Initialize SNAP QC database with reference tables"
-    )
-    parser.add_argument(
-        "--reset",
-        action="store_true",
-        help="Drop and recreate all tables (WARNING: destroys data)"
-    )
-    parser.add_argument(
-        "--refs-only",
-        action="store_true",
-        help="Only populate reference tables (skip table creation)"
-    )
-    parser.add_argument(
-        "--no-views",
-        action="store_true",
-        help="Skip creating enriched views"
-    )
-    parser.add_argument(
-        "--verbose", "-v",
-        action="store_true",
-        help="Enable verbose logging"
-    )
+    parser = argparse.ArgumentParser(description="Initialize SNAP QC database with reference tables")
+    parser.add_argument("--reset", action="store_true", help="Drop and recreate all tables (WARNING: destroys data)")
+    parser.add_argument("--refs-only", action="store_true", help="Only populate reference tables (skip table creation)")
+    parser.add_argument("--no-views", action="store_true", help="Skip creating enriched views")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose logging")
 
     args = parser.parse_args()
 
     # Setup logging
     log_level = logging.DEBUG if args.verbose else logging.INFO
-    logging.basicConfig(
-        level=log_level,
-        format="%(levelname)s: %(message)s"
-    )
+    logging.basicConfig(level=log_level, format="%(levelname)s: %(message)s")
 
     # Confirm reset
     if args.reset:

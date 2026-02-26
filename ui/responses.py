@@ -8,7 +8,6 @@ consistent voice and branding.
 Templates are imported from src/core/prompts.py for centralized management.
 """
 
-
 import chainlit as cl
 
 from src.core.prompts import (
@@ -20,10 +19,6 @@ from src.core.prompts import (
     MSG_SYSTEM_DEGRADED,
     MSG_SYSTEM_READY,
     MSG_SYSTEM_STATUS,
-    MSG_TRAINING_DISABLED_CLEANED,
-    MSG_TRAINING_DISABLED_EMPTY,
-    MSG_TRAINING_DISABLED_ERROR,
-    MSG_TRAINING_ENABLED,
     MSG_WELCOME,
 )
 
@@ -31,10 +26,7 @@ from .config import AI_PERSONA, APP_PERSONA
 
 
 async def send_message(
-    content: str,
-    elements: list | None = None,
-    actions: list | None = None,
-    author: str = APP_PERSONA
+    content: str, elements: list | None = None, actions: list | None = None, author: str = APP_PERSONA
 ) -> cl.Message:
     """
     Send a message with the app persona.
@@ -48,21 +40,12 @@ async def send_message(
     Returns:
         The sent message
     """
-    msg = cl.Message(
-        content=content,
-        elements=elements,
-        actions=actions,
-        author=author
-    )
+    msg = cl.Message(content=content, elements=elements, actions=actions, author=author)
     await msg.send()
     return msg
 
 
-async def send_ai_message(
-    content: str,
-    elements: list | None = None,
-    actions: list | None = None
-) -> cl.Message:
+async def send_ai_message(content: str, elements: list | None = None, actions: list | None = None) -> cl.Message:
     """
     Send a message with the AI persona.
 
@@ -79,11 +62,6 @@ async def send_ai_message(
     return await send_message(content, elements, actions, author=AI_PERSONA)
 
 
-async def send_success(content: str) -> cl.Message:
-    """Send a success message with the app persona."""
-    return await send_message(content)
-
-
 async def send_error(content: str) -> cl.Message:
     """Send an error message with the app persona."""
     return await send_message(content)
@@ -98,19 +76,13 @@ async def send_warning(content: str) -> cl.Message:
 # SPECIFIC MESSAGE TEMPLATES
 # =============================================================================
 
+
 async def csv_ready_message(
-    filename: str,
-    row_count: int,
-    column_count: int,
-    file_size_kb: float,
-    file_element: cl.File
+    filename: str, row_count: int, column_count: int, file_size_kb: float, file_element: cl.File
 ) -> cl.Message:
     """Send CSV ready message with file download."""
     content = MSG_CSV_READY.format(
-        row_count=row_count,
-        column_count=column_count,
-        file_size_kb=file_size_kb,
-        filename=filename
+        row_count=row_count, column_count=column_count, file_size_kb=file_size_kb, filename=filename
     )
     return await send_message(content, elements=[file_element])
 
@@ -126,12 +98,7 @@ async def csv_error_message(error: str) -> cl.Message:
 
 
 async def system_status_message(
-    api_ok: bool,
-    api_version: str,
-    db_ok: bool,
-    db_name: str,
-    llm_ok: bool,
-    llm_provider: str
+    api_ok: bool, api_version: str, db_ok: bool, db_name: str, llm_ok: bool, llm_provider: str
 ) -> cl.Message:
     """Send system status message on startup."""
     api_status = "✅" if api_ok else "❌"
@@ -148,7 +115,7 @@ async def system_status_message(
         db_name=db_name,
         llm_status=llm_status,
         llm_provider=llm_provider,
-        ready_message=ready_message
+        ready_message=ready_message,
     )
     return await send_message(content)
 
@@ -161,28 +128,8 @@ async def welcome_message() -> cl.Message:
 async def filter_applied_message(state: str | None, year: int | None) -> cl.Message:
     """Send filter applied confirmation message."""
     if state or year:
-        content = MSG_FILTER_APPLIED.format(
-            state=state or 'All',
-            year=year or 'All'
-        )
+        content = MSG_FILTER_APPLIED.format(state=state or "All", year=year or "All")
     else:
         content = MSG_FILTER_CLEARED
-
-    return await send_message(content)
-
-
-async def training_enabled_message() -> cl.Message:
-    """Send training enabled message."""
-    return await send_message(MSG_TRAINING_ENABLED)
-
-
-async def training_disabled_message(cleaned: bool = True, error: str | None = None) -> cl.Message:
-    """Send training disabled message."""
-    if error:
-        content = MSG_TRAINING_DISABLED_ERROR.format(error=error)
-    elif cleaned:
-        content = MSG_TRAINING_DISABLED_CLEANED
-    else:
-        content = MSG_TRAINING_DISABLED_EMPTY
 
     return await send_message(content)

@@ -3,8 +3,10 @@ SnapAnalyst FastAPI Application
 
 Main FastAPI application entry point.
 """
+
 from __future__ import annotations
 
+import asyncio
 import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -13,19 +15,31 @@ from contextlib import asynccontextmanager
 # CRITICAL: Explicitly set thread count to prevent CPU affinity errors in LXC containers
 # When thread count is explicit, ONNX Runtime skips automatic CPU affinity (which fails in LXC)
 # See: https://github.com/chroma-core/chroma/issues/1420
-if not os.environ.get('OMP_NUM_THREADS') or os.environ.get('OMP_NUM_THREADS') == '0':
-    os.environ['OMP_NUM_THREADS'] = '4'
+if not os.environ.get("OMP_NUM_THREADS") or os.environ.get("OMP_NUM_THREADS") == "0":
+    os.environ["OMP_NUM_THREADS"] = "4"
+
+# Suppress noisy library warnings before imports
+import warnings
+
+warnings.filterwarnings("ignore", message="urllib3.*doesn't match a supported version")
+
+import logging as _logging
+
+# Suppress config warnings until proper logging is set up
+_logging.getLogger("src.core.config").setLevel(_logging.ERROR)
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.core.config import settings
 from src.core.logging import get_logger, setup_logging
-from src.database.engine import init_db
 
-# Initialize logging
+# Initialize logging (restores src.core.config to inherited level)
 setup_logging()
+_logging.getLogger("src.core.config").setLevel(_logging.WARNING)
 logger = get_logger(__name__)
+
+from src.database.engine import init_db
 
 
 @asynccontextmanager
@@ -36,30 +50,44 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     Handles startup and shutdown events.
     """
     # Startup
-    logger.info(f"Starting {settings.app_name} v{settings.app_version}")
-    logger.info(f"Environment: {settings.environment}")
+    logger.info(f"Starting {settings.app_name} v{settings.app_version} ({settings.environment})")
 
     # Initialize database (create tables if they don't exist)
     if settings.is_development:
-        logger.info("Development mode: Initializing database tables...")
+        logger.debug("Development mode: Initializing database tables...")
         init_db()
 
     # Initialize LLM service (chatbot) - training always happens
-    logger.info(f"Initializing LLM service with {settings.llm_provider}...")
     try:
         from src.services.llm_service import initialize_llm_service
+
         initialize_llm_service()
-        logger.info("LLM service initialized and trained successfully")
     except Exception as e:
-        logger.warning(f"LLM service initialization failed: {e}")
-        logger.warning("Chatbot will initialize on first use")
+        logger.warning(f"LLM service initialization failed: {e} (will retry on first use)")
 
     yield
 
-    # Shutdown
+    # Shutdown with timeout to prevent hanging on Ctrl+C / docker stop
     logger.info("Shutting down SnapAnalyst...")
-    from src.database.engine import dispose_engines
-    dispose_engines()
+    try:
+        from src.database.engine import dispose_engines
+
+        await asyncio.wait_for(asyncio.to_thread(dispose_engines), timeout=5.0)
+    except TimeoutError:
+        logger.warning("Engine disposal timed out after 5s, forcing exit")
+    except Exception as e:
+        logger.warning(f"Error during shutdown: {e}")
+
+    # Close Vanna's psycopg2 connection pool (moved from atexit to avoid
+    # blocking indefinitely when connections are checked out at SIGTERM)
+    try:
+        from src.services.llm_providers import shutdown_db_pool
+
+        await asyncio.wait_for(asyncio.to_thread(shutdown_db_pool), timeout=3.0)
+    except TimeoutError:
+        logger.warning("DB pool shutdown timed out after 3s, forcing exit")
+    except Exception as e:
+        logger.warning(f"Error shutting down DB pool: {e}")
 
 
 # Create FastAPI application
@@ -138,27 +166,21 @@ async def add_user_context_middleware(request: Request, call_next):
 @app.get("/", tags=["Root"])
 async def root():
     """Root endpoint - returns basic application information"""
-    return {
-        "name": settings.app_name,
-        "version": settings.app_version,
-        "status": "running"
-    }
+    return {"name": settings.app_name, "version": settings.app_version, "status": "running"}
 
 
 @app.get("/health", tags=["Health"])
 async def health_check():
     """Simple health check endpoint for monitoring"""
-    from datetime import datetime
-    return {
-        "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat() + "Z"
-    }
+    from datetime import UTC, datetime
+
+    return {"status": "healthy", "timestamp": datetime.now(UTC).isoformat()}
 
 
 @app.get("/about", tags=["Info"])
 async def about():
     """Detailed application information and service status"""
-    from datetime import datetime
+    from datetime import UTC, datetime
 
     # Check database health
     db_status = "healthy"
@@ -166,9 +188,12 @@ async def about():
         from sqlalchemy import text
 
         from src.database.engine import SessionLocal
+
         session = SessionLocal()
-        session.execute(text("SELECT 1"))
-        session.close()
+        try:
+            session.execute(text("SELECT 1"))
+        finally:
+            session.close()
     except Exception:
         db_status = "unhealthy"
 
@@ -178,6 +203,7 @@ async def about():
     llm_model = "unknown"
     try:
         from src.services.llm_service import get_llm_service
+
         llm_service = get_llm_service()
         health = llm_service.check_health()
         llm_status = "healthy" if health.get("healthy") else "unhealthy"
@@ -191,38 +217,34 @@ async def about():
             "name": settings.app_name,
             "description": "SNAP Quality Control data analysis platform with natural language query interface",
             "version": settings.app_version,
-            "environment": settings.environment
+            "environment": settings.environment,
         },
         "services": {
             "api": {
                 "status": "healthy",
                 "version": settings.app_version,
                 "host": settings.api_host,
-                "port": settings.api_port
+                "port": settings.api_port,
             },
             "database": {
                 "status": db_status,
                 "type": "PostgreSQL",
-                "url": str(settings.database_url).split('@')[1] if '@' in str(settings.database_url) else "configured"
+                "url": str(settings.database_url).split("@")[1] if "@" in str(settings.database_url) else "configured",
             },
-            "llm": {
-                "status": llm_status,
-                "provider": llm_provider,
-                "model": llm_model
-            }
+            "llm": {"status": llm_status, "provider": llm_provider, "model": llm_model},
         },
         "features": {
             "natural_language_queries": True,
             "sql_execution": True,
             "knowledge_base": True,
             "data_export": True,
-            "filtering": True
+            "filtering": True,
         },
         "docs": {
             "api_docs": "/docs" if settings.is_development else None,
-            "redoc": "/redoc" if settings.is_development else None
+            "redoc": "/redoc" if settings.is_development else None,
         },
-        "timestamp": datetime.utcnow().isoformat() + "Z"
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
 

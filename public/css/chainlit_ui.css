@@ -98,6 +98,22 @@ div[class*="lg:block"][class*="bg-muted"][class*="overflow-hidden"] {
 }
 
 /* =============================================================================
+   Composer Command Buttons (Insights / Knowledge) - Red accent
+   ============================================================================= */
+
+/* Command buttons (Insights / Knowledge) — match the send button (primary) color */
+.text-command {
+    color: hsl(var(--primary)) !important;
+}
+.bg-command {
+    background-color: hsl(var(--primary)) !important;
+}
+/* The underline indicator uses after:bg-command */
+.command-button::after {
+    background-color: hsl(var(--primary)) !important;
+}
+
+/* =============================================================================
    Loading Indicator
    Note: Chainlit uses its own default loading indicator (white dot with shading)
    ============================================================================= */

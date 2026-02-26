@@ -1,6 +1,7 @@
 """
 Unit tests for DataTransformer - simplified version
 """
+
 import polars as pl
 
 from src.etl.transformer import DataTransformer
@@ -18,14 +19,16 @@ class TestDataTransformer:
     def test_extract_households_basic(self, fiscal_year: int):
         """Test basic household extraction"""
         # Create simple test DataFrame
-        df = pl.DataFrame({
-            "HHLDNO": ["TEST001"],
-            "STATE": ["CA"],
-            "STATENAME": ["California"],
-            "FSBEN": [284.50],
-            "RAWGROSS": [2000.00],
-            "CERTHHSZ": [2],
-        })
+        df = pl.DataFrame(
+            {
+                "HHLDNO": ["TEST001"],
+                "STATE": ["CA"],
+                "STATENAME": ["California"],
+                "FSBEN": [284.50],
+                "RAWGROSS": [2000.00],
+                "CERTHHSZ": [2],
+            }
+        )
 
         transformer = DataTransformer(fiscal_year)
         households_df = transformer.extract_households(df)
@@ -38,11 +41,13 @@ class TestDataTransformer:
 
     def test_extract_households_multiple_rows(self, fiscal_year: int):
         """Test household extraction with multiple rows"""
-        df = pl.DataFrame({
-            "HHLDNO": ["TEST001", "TEST002", "TEST003"],
-            "STATE": ["CA", "TX", "NY"],
-            "FSBEN": [284.50, 312.00, 256.75],
-        })
+        df = pl.DataFrame(
+            {
+                "HHLDNO": ["TEST001", "TEST002", "TEST003"],
+                "STATE": ["CA", "TX", "NY"],
+                "FSBEN": [284.50, 312.00, 256.75],
+            }
+        )
 
         transformer = DataTransformer(fiscal_year)
         households_df = transformer.extract_households(df)
@@ -52,15 +57,17 @@ class TestDataTransformer:
 
     def test_extract_members_single_member(self, fiscal_year: int):
         """Test member extraction with single member household"""
-        df = pl.DataFrame({
-            "HHLDNO": ["TEST001"],
-            "FSAFIL1": [1],
-            "AGE1": [35],
-            "SEX1": [2],
-            "WAGES1": [2000.00],
-            "SOCSEC1": [0.00],
-            # No FSAFIL2, so only 1 member
-        })
+        df = pl.DataFrame(
+            {
+                "HHLDNO": ["TEST001"],
+                "FSAFIL1": [1],
+                "AGE1": [35],
+                "SEX1": [2],
+                "WAGES1": [2000.00],
+                "SOCSEC1": [0.00],
+                # No FSAFIL2, so only 1 member
+            }
+        )
 
         transformer = DataTransformer(fiscal_year)
         members_df = transformer.extract_members_fast(df)
@@ -72,18 +79,20 @@ class TestDataTransformer:
 
     def test_extract_members_multiple_members(self, fiscal_year: int):
         """Test member extraction with multiple members"""
-        df = pl.DataFrame({
-            "HHLDNO": ["TEST001"],
-            "FSAFIL1": [1],
-            "AGE1": [35],
-            "WAGES1": [2000.00],
-            "FSAFIL2": [1],
-            "AGE2": [32],
-            "WAGES2": [1500.00],
-            "FSAFIL3": [1],
-            "AGE3": [8],
-            "WAGES3": [0.00],
-        })
+        df = pl.DataFrame(
+            {
+                "HHLDNO": ["TEST001"],
+                "FSAFIL1": [1],
+                "AGE1": [35],
+                "WAGES1": [2000.00],
+                "FSAFIL2": [1],
+                "AGE2": [32],
+                "WAGES2": [1500.00],
+                "FSAFIL3": [1],
+                "AGE3": [8],
+                "WAGES3": [0.00],
+            }
+        )
 
         transformer = DataTransformer(fiscal_year)
         members_df = transformer.extract_members_fast(df)
@@ -94,13 +103,15 @@ class TestDataTransformer:
 
     def test_extract_errors_single_error(self, fiscal_year: int):
         """Test error extraction with single error"""
-        df = pl.DataFrame({
-            "HHLDNO": ["TEST001"],
-            "ELEMENT1": [520],
-            "NATURE1": [75],
-            "AMOUNT1": [100.00],
-            # No ELEMENT2, so only 1 error
-        })
+        df = pl.DataFrame(
+            {
+                "HHLDNO": ["TEST001"],
+                "ELEMENT1": [520],
+                "NATURE1": [75],
+                "AMOUNT1": [100.00],
+                # No ELEMENT2, so only 1 error
+            }
+        )
 
         transformer = DataTransformer(fiscal_year)
         errors_df = transformer.extract_errors_fast(df)
@@ -112,15 +123,17 @@ class TestDataTransformer:
 
     def test_extract_errors_multiple_errors(self, fiscal_year: int):
         """Test error extraction with multiple errors"""
-        df = pl.DataFrame({
-            "HHLDNO": ["TEST001"],
-            "ELEMENT1": [520],
-            "AMOUNT1": [100.00],
-            "ELEMENT2": [363],
-            "AMOUNT2": [50.00],
-            "ELEMENT3": [520],
-            "AMOUNT3": [25.00],
-        })
+        df = pl.DataFrame(
+            {
+                "HHLDNO": ["TEST001"],
+                "ELEMENT1": [520],
+                "AMOUNT1": [100.00],
+                "ELEMENT2": [363],
+                "AMOUNT2": [50.00],
+                "ELEMENT3": [520],
+                "AMOUNT3": [25.00],
+            }
+        )
 
         transformer = DataTransformer(fiscal_year)
         errors_df = transformer.extract_errors_fast(df)
@@ -130,11 +143,13 @@ class TestDataTransformer:
 
     def test_extract_errors_no_errors(self, fiscal_year: int):
         """Test error extraction when no errors exist"""
-        df = pl.DataFrame({
-            "HHLDNO": ["TEST001"],
-            "ELEMENT1": [None],
-            "ELEMENT2": [None],
-        })
+        df = pl.DataFrame(
+            {
+                "HHLDNO": ["TEST001"],
+                "ELEMENT1": [None],
+                "ELEMENT2": [None],
+            }
+        )
 
         transformer = DataTransformer(fiscal_year)
         errors_df = transformer.extract_errors_fast(df)
@@ -144,22 +159,24 @@ class TestDataTransformer:
 
     def test_transform_complete_pipeline(self, fiscal_year: int):
         """Test complete transformation pipeline"""
-        df = pl.DataFrame({
-            "HHLDNO": ["TEST001", "TEST002"],
-            "STATE": ["CA", "TX"],
-            "FSBEN": [284.50, 312.00],
-            "CERTHHSZ": [2, 3],
-            # Member data
-            "FSAFIL1": [1, 1],
-            "AGE1": [35, 45],
-            "WAGES1": [2000.00, 1500.00],
-            "FSAFIL2": [1, 1],
-            "AGE2": [8, 42],
-            "WAGES2": [0.00, 1200.00],
-            # Error data
-            "ELEMENT1": [520, None],
-            "AMOUNT1": [100.00, None],
-        })
+        df = pl.DataFrame(
+            {
+                "HHLDNO": ["TEST001", "TEST002"],
+                "STATE": ["CA", "TX"],
+                "FSBEN": [284.50, 312.00],
+                "CERTHHSZ": [2, 3],
+                # Member data
+                "FSAFIL1": [1, 1],
+                "AGE1": [35, 45],
+                "WAGES1": [2000.00, 1500.00],
+                "FSAFIL2": [1, 1],
+                "AGE2": [8, 42],
+                "WAGES2": [0.00, 1200.00],
+                # Error data
+                "ELEMENT1": [520, None],
+                "AMOUNT1": [100.00, None],
+            }
+        )
 
         transformer = DataTransformer(fiscal_year)
         households_df, members_df, errors_df = transformer.transform(df)

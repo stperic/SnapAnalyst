@@ -3,6 +3,7 @@ API Integration Tests
 
 Tests the FastAPI endpoints with actual database operations.
 """
+
 import time
 from pathlib import Path
 
@@ -155,29 +156,19 @@ class TestManagementEndpoints:
 
     def test_reset_database_without_confirmation(self, client):
         """Test POST /api/v1/data/reset without confirmation"""
-        response = client.post("/api/v1/data/reset", json={
-            "confirm": False
-        })
+        response = client.post("/api/v1/data/reset", json={"confirm": False})
         assert response.status_code == 400
         assert "confirm" in response.json()["detail"].lower()
 
     def test_reset_database_with_confirmation(self, client, test_session):
         """Test POST /api/v1/data/reset with confirmation"""
         # Add some test data first
-        test_household = Household(
-            case_id="RESET_TEST",
-            fiscal_year=2099,
-            state_code="CA",
-            snap_benefit=100.00
-        )
+        test_household = Household(case_id="RESET_TEST", fiscal_year=2099, state_code="CA", snap_benefit=100.00)
         test_session.add(test_household)
         test_session.commit()
 
         # Reset database
-        response = client.post("/api/v1/data/reset", json={
-            "confirm": True,
-            "fiscal_years": [2099]
-        })
+        response = client.post("/api/v1/data/reset", json={"confirm": True, "fiscal_years": [2099]})
 
         assert response.status_code == 200
         data = response.json()
@@ -190,22 +181,28 @@ class TestDataLoadingEndpoints:
 
     def test_load_data_file_not_found(self, client):
         """Test POST /api/v1/data/load with non-existent file"""
-        response = client.post("/api/v1/data/load", json={
-            "fiscal_year": 2029,  # Valid year but file doesn't exist
-            "batch_size": 100
-        })
+        response = client.post(
+            "/api/v1/data/load",
+            json={
+                "fiscal_year": 2029,  # Valid year but file doesn't exist
+                "batch_size": 100,
+            },
+        )
 
         assert response.status_code == 404
         assert "not found" in response.json()["detail"].lower()
 
     def test_load_data_success(self, client, sample_csv_file):
         """Test POST /api/v1/data/load with valid file"""
-        response = client.post("/api/v1/data/load", json={
-            "fiscal_year": 2024,  # Valid year within range
-            "filename": sample_csv_file.name,
-            "batch_size": 100,
-            "skip_validation": False
-        })
+        response = client.post(
+            "/api/v1/data/load",
+            json={
+                "fiscal_year": 2024,  # Valid year within range
+                "filename": sample_csv_file.name,
+                "batch_size": 100,
+                "skip_validation": False,
+            },
+        )
 
         assert response.status_code == 202  # Accepted
         data = response.json()
@@ -235,10 +232,13 @@ class TestDataLoadingEndpoints:
 
     def test_load_multiple_years(self, client, sample_csv_file):
         """Test POST /api/v1/data/load-multiple"""
-        response = client.post("/api/v1/data/load-multiple", json={
-            "fiscal_years": [2024],  # Valid year within range
-            "batch_size": 100
-        })
+        response = client.post(
+            "/api/v1/data/load-multiple",
+            json={
+                "fiscal_years": [2024],  # Valid year within range
+                "batch_size": 100,
+            },
+        )
 
         assert response.status_code == 202
         data = response.json()
@@ -251,19 +251,25 @@ class TestAPIErrorHandling:
 
     def test_invalid_fiscal_year(self, client):
         """Test loading with invalid fiscal year"""
-        response = client.post("/api/v1/data/load", json={
-            "fiscal_year": 1900,  # Too old
-            "batch_size": 100
-        })
+        response = client.post(
+            "/api/v1/data/load",
+            json={
+                "fiscal_year": 1900,  # Too old
+                "batch_size": 100,
+            },
+        )
 
         assert response.status_code in [400, 404, 422]
 
     def test_invalid_batch_size(self, client):
         """Test loading with invalid batch size"""
-        response = client.post("/api/v1/data/load", json={
-            "fiscal_year": 2023,
-            "batch_size": 50  # Below minimum
-        })
+        response = client.post(
+            "/api/v1/data/load",
+            json={
+                "fiscal_year": 2023,
+                "batch_size": 50,  # Below minimum
+            },
+        )
 
         assert response.status_code == 422  # Validation error
 

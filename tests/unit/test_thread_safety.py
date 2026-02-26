@@ -4,6 +4,7 @@ Unit tests for thread-safety of request context management.
 These tests verify that the thread-local storage approach prevents
 cross-user contamination without requiring heavy dependencies.
 """
+
 import concurrent.futures
 import threading
 import time
@@ -32,7 +33,7 @@ class TestThreadLocalStorage:
                 time.sleep(0.05)
 
                 # Read back the value - should be unchanged
-                retrieved = getattr(_thread_local, 'value', None)
+                retrieved = getattr(_thread_local, "value", None)
                 results[worker_id] = retrieved
 
             except Exception as e:
@@ -40,10 +41,7 @@ class TestThreadLocalStorage:
 
         # Run 10 concurrent workers
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-            futures = [
-                executor.submit(worker, i, f"value_{i}")
-                for i in range(10)
-            ]
+            futures = [executor.submit(worker, i, f"value_{i}") for i in range(10)]
 
             for future in concurrent.futures.as_completed(futures):
                 future.result()
@@ -53,8 +51,7 @@ class TestThreadLocalStorage:
 
         # Verify each worker got its own value
         for i in range(10):
-            assert results[i] == f"value_{i}", \
-                f"Worker {i} got wrong value: {results[i]}"
+            assert results[i] == f"value_{i}", f"Worker {i} got wrong value: {results[i]}"
 
     def test_context_var_isolation(self):
         """
@@ -64,7 +61,7 @@ class TestThreadLocalStorage:
         """
         from contextvars import ContextVar
 
-        context_var: ContextVar[str | None] = ContextVar('test_var', default=None)
+        context_var: ContextVar[str | None] = ContextVar("test_var", default=None)
         results = {}
         errors = []
 
@@ -86,10 +83,7 @@ class TestThreadLocalStorage:
 
         # Run 10 concurrent workers
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-            futures = [
-                executor.submit(worker, i, f"user_{i}")
-                for i in range(10)
-            ]
+            futures = [executor.submit(worker, i, f"user_{i}") for i in range(10)]
 
             for future in concurrent.futures.as_completed(futures):
                 future.result()
@@ -99,8 +93,7 @@ class TestThreadLocalStorage:
 
         # Verify each worker got its own value
         for i in range(10):
-            assert results[i] == f"user_{i}", \
-                f"Worker {i} got wrong value: {results[i]}"
+            assert results[i] == f"user_{i}", f"Worker {i} got wrong value: {results[i]}"
 
 
 class TestRequestDependencies:
@@ -165,8 +158,7 @@ class TestRequestDependencies:
 
         # Verify each request maintained its own user context
         for user_id in users:
-            assert results[user_id] == user_id, \
-                f"User {user_id} got wrong context: {results[user_id]}"
+            assert results[user_id] == user_id, f"User {user_id} got wrong context: {results[user_id]}"
 
 
 class TestSharedInstanceSafety:
@@ -178,6 +170,7 @@ class TestSharedInstanceSafety:
 
         This simulates the Vanna instance pattern we fixed.
         """
+
         class SharedService:
             """Simulates a shared service like Vanna."""
 
@@ -190,7 +183,7 @@ class TestSharedInstanceSafety:
 
             def get_user_context(self) -> str | None:
                 """Get context from thread-local storage."""
-                return getattr(self._thread_local, 'context', None)
+                return getattr(self._thread_local, "context", None)
 
             def process_with_context(self, data: str) -> str:
                 """Process data with current context."""
@@ -223,10 +216,7 @@ class TestSharedInstanceSafety:
 
         # Run 10 concurrent workers using the SAME shared service
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-            futures = [
-                executor.submit(worker, i, f"context_{i}")
-                for i in range(10)
-            ]
+            futures = [executor.submit(worker, i, f"context_{i}") for i in range(10)]
 
             for future in concurrent.futures.as_completed(futures):
                 future.result()
@@ -237,8 +227,7 @@ class TestSharedInstanceSafety:
         # Verify each worker used its own context
         for i in range(10):
             expected = f"context_{i}: data_{i}"
-            assert results[i] == expected, \
-                f"Worker {i} got wrong result: {results[i]} (expected {expected})"
+            assert results[i] == expected, f"Worker {i} got wrong result: {results[i]} (expected {expected})"
 
     def test_broken_shared_instance_pattern(self):
         """
@@ -246,6 +235,7 @@ class TestSharedInstanceSafety:
 
         This shows what happens WITHOUT thread-local storage.
         """
+
         class BrokenSharedService:
             """Simulates the BROKEN pattern with instance attributes."""
 
@@ -286,10 +276,7 @@ class TestSharedInstanceSafety:
 
         # Run 10 concurrent workers
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-            futures = [
-                executor.submit(worker, i, f"context_{i}")
-                for i in range(10)
-            ]
+            futures = [executor.submit(worker, i, f"context_{i}") for i in range(10)]
 
             for future in concurrent.futures.as_completed(futures):
                 future.result()
@@ -306,8 +293,7 @@ class TestSharedInstanceSafety:
 
         # In the broken pattern, we EXPECT cross-contamination
         # (This test documents the problem we fixed)
-        assert contaminated > 0, \
-            "Expected cross-contamination with broken pattern, but none occurred"
+        assert contaminated > 0, "Expected cross-contamination with broken pattern, but none occurred"
 
         print(f"\nBroken pattern resulted in {contaminated}/10 contaminated results")
         print("This demonstrates the race condition we fixed with thread-local storage")

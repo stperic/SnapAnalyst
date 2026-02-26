@@ -23,7 +23,7 @@ logger = get_logger(__name__)
 
 def get_training_data_path() -> Path:
     """Get the Vanna training data folder from settings."""
-    return Path(settings.sql_training_data_path)
+    return Path(settings.resolved_training_path)
 
 
 def get_documentation_files() -> list[Path]:
@@ -38,7 +38,7 @@ def get_documentation_files() -> list[Path]:
         return []
 
     doc_files = sorted(folder.glob("*.md")) + sorted(folder.glob("*.txt"))
-    logger.info(f"Found {len(doc_files)} documentation files in {folder}")
+    logger.debug(f"Found {len(doc_files)} documentation files in {folder}")
     return doc_files
 
 
@@ -65,7 +65,7 @@ def load_training_examples() -> list[dict]:
             examples = data.get("example_queries", [])
             if examples:
                 all_examples.extend(examples)
-                logger.info(f"Loaded {len(examples)} examples from {json_path.name}")
+                logger.debug(f"Loaded {len(examples)} examples from {json_path.name}")
             else:
                 logger.debug(f"No 'example_queries' key in {json_path.name}, skipping")
         except Exception as e:
@@ -87,7 +87,7 @@ def get_ddl_statements(dataset: str | None = None) -> list[str]:
             include_samples=True,
             dataset_name=dataset,
         )
-        logger.info(f"Extracted {len(ddl_statements)} DDL statements")
+        logger.debug(f"Extracted {len(ddl_statements)} DDL statements")
         return ddl_statements
     except Exception as e:
         logger.error(f"Failed to extract DDL: {e}")

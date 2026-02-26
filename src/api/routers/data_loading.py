@@ -3,6 +3,7 @@ SnapAnalyst Data Loading API Router
 
 Endpoints for loading SNAP QC CSV files into the database.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -25,6 +26,7 @@ job_manager = ETLJobManager()
 
 class LoadRequest(BaseModel):
     """Request to load CSV data"""
+
     fiscal_year: int = Field(..., ge=2000, le=2030, description="Fiscal year to load")
     filename: str | None = Field(None, description="CSV filename (if not provided, uses default pattern)")
     batch_size: int = Field(1000, ge=100, le=10000, description="Batch size for processing")
@@ -34,6 +36,7 @@ class LoadRequest(BaseModel):
 
 class LoadMultipleRequest(BaseModel):
     """Request to load multiple fiscal years"""
+
     fiscal_years: list[int] = Field(..., description="List of fiscal years to load")
     batch_size: int = Field(1000, ge=100, le=10000)
     strict_validation: bool = Field(False)
@@ -42,6 +45,7 @@ class LoadMultipleRequest(BaseModel):
 
 class LoadResponse(BaseModel):
     """Response from load request"""
+
     status: str
     job_id: str
     message: str
@@ -52,6 +56,7 @@ class LoadResponse(BaseModel):
 
 class JobStatusResponse(BaseModel):
     """Response with job status"""
+
     job_id: str
     status: str
     started_at: str | None
@@ -101,10 +106,7 @@ def _background_load_task(
 
 
 @router.post("/load", response_model=LoadResponse, status_code=202)
-async def load_data(
-    request: LoadRequest,
-    background_tasks: BackgroundTasks
-):
+async def load_data(request: LoadRequest, background_tasks: BackgroundTasks):
     """
     Load SNAP QC CSV file into database.
 
@@ -117,16 +119,13 @@ async def load_data(
     try:
         # Determine file path
         if request.filename:
-            file_path = Path(settings.snapdata_path) / request.filename
+            file_path = Path(settings.resolved_data_path) / request.filename
         else:
             # Use default filename pattern
-            file_path = Path(settings.snapdata_path) / f"qc_pub_fy{request.fiscal_year}.csv"
+            file_path = Path(settings.resolved_data_path) / f"qc_pub_fy{request.fiscal_year}.csv"
 
         if not file_path.exists():
-            raise HTTPException(
-                status_code=404,
-                detail=f"CSV file not found: {file_path.name}"
-            )
+            raise HTTPException(status_code=404, detail=f"CSV file not found: {file_path.name}")
 
         # Create job
         job_id = f"load_{request.fiscal_year}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -156,7 +155,7 @@ async def load_data(
             message=f"Data loading initiated for FY{request.fiscal_year}",
             fiscal_year=request.fiscal_year,
             estimated_time_seconds=estimated_time,
-            progress_url=f"/api/v1/data/load/status/{job_id}"
+            progress_url=f"/api/v1/data/load/status/{job_id}",
         )
 
     except HTTPException:
@@ -167,10 +166,7 @@ async def load_data(
 
 
 @router.post("/load-multiple", status_code=202)
-async def load_multiple_years(
-    request: LoadMultipleRequest,
-    background_tasks: BackgroundTasks
-):
+async def load_multiple_years(request: LoadMultipleRequest, background_tasks: BackgroundTasks):
     """
     Load multiple fiscal years.
 
@@ -184,7 +180,7 @@ async def load_multiple_years(
 
         for fiscal_year in request.fiscal_years:
             # Determine file path
-            file_path = Path(settings.snapdata_path) / f"qc_pub_fy{fiscal_year}.csv"
+            file_path = Path(settings.resolved_data_path) / f"qc_pub_fy{fiscal_year}.csv"
 
             if not file_path.exists():
                 logger.warning(f"Skipping FY{fiscal_year} - file not found: {file_path.name}")
@@ -262,10 +258,7 @@ async def list_jobs(active_only: bool = False):
 
         if active_only:
             # Filter for jobs that are in progress
-            active_jobs = [
-                job for job in all_jobs
-                if job.get("status") in ["in_progress", "processing", "accepted"]
-            ]
+            active_jobs = [job for job in all_jobs if job.get("status") in ["in_progress", "processing", "accepted"]]
             return {"jobs": active_jobs, "total": len(active_jobs)}
 
         return {"jobs": all_jobs, "total": len(all_jobs)}

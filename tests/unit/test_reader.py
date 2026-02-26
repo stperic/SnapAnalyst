@@ -3,6 +3,7 @@ Unit tests for CSVReader
 
 Tests error handling, validation, and chunk reading functionality.
 """
+
 from pathlib import Path
 from unittest.mock import patch
 
@@ -16,7 +17,7 @@ from src.etl.reader import CSVReader
 class TestCSVReaderErrors:
     """Test error handling in CSVReader"""
 
-    @patch('polars.read_csv')
+    @patch("polars.read_csv")
     def test_read_csv_error_handling(self, mock_read_csv, test_csv_path: Path):
         """Test read_csv handles exceptions gracefully"""
         reader = CSVReader(str(test_csv_path))
@@ -27,7 +28,7 @@ class TestCSVReaderErrors:
         with pytest.raises(ValidationError, match="Failed to read CSV"):
             reader.read_csv()
 
-    @patch('polars.scan_csv')
+    @patch("polars.scan_csv")
     def test_get_row_count_error_handling(self, mock_scan_csv, test_csv_path: Path):
         """Test get_row_count handles exceptions gracefully"""
         reader = CSVReader(str(test_csv_path))
@@ -39,7 +40,7 @@ class TestCSVReaderErrors:
         result = reader.get_row_count()
         assert result == 0
 
-    @patch('polars.read_csv')
+    @patch("polars.read_csv")
     def test_get_column_names_error_handling(self, mock_read_csv, test_csv_path: Path):
         """Test get_column_names handles exceptions gracefully"""
         reader = CSVReader(str(test_csv_path))
@@ -58,10 +59,12 @@ class TestCSVReaderValidation:
         """Test validation fails when required columns are missing"""
         # Create a CSV with incomplete columns
         incomplete_csv = tmp_path / "incomplete.csv"
-        df = pl.DataFrame({
-            "STATE": ["CA"],
-            "OTHER": ["value"],
-        })
+        df = pl.DataFrame(
+            {
+                "STATE": ["CA"],
+                "OTHER": ["value"],
+            }
+        )
         df.write_csv(incomplete_csv)
 
         reader = CSVReader(str(incomplete_csv))
@@ -104,12 +107,14 @@ class TestCSVReaderChunks:
         """Test read_in_chunks with small file"""
         # Create a small CSV file
         small_csv = tmp_path / "small.csv"
-        df = pl.DataFrame({
-            "HHLDNO": ["1", "2", "3"],
-            "STATE": ["CA", "TX", "NY"],
-            "YRMONTH": ["202301", "202301", "202301"],
-            "FSBEN": [100.0, 200.0, 300.0],
-        })
+        df = pl.DataFrame(
+            {
+                "HHLDNO": ["1", "2", "3"],
+                "STATE": ["CA", "TX", "NY"],
+                "YRMONTH": ["202301", "202301", "202301"],
+                "FSBEN": [100.0, 200.0, 300.0],
+            }
+        )
         df.write_csv(small_csv)
 
         reader = CSVReader(str(small_csv))
@@ -125,12 +130,14 @@ class TestCSVReaderChunks:
         """Test read_in_chunks with empty file (no data rows)"""
         empty_csv = tmp_path / "empty.csv"
         # Create file with just headers
-        df = pl.DataFrame({
-            "HHLDNO": [],
-            "STATE": [],
-            "YRMONTH": [],
-            "FSBEN": [],
-        })
+        df = pl.DataFrame(
+            {
+                "HHLDNO": [],
+                "STATE": [],
+                "YRMONTH": [],
+                "FSBEN": [],
+            }
+        )
         df.write_csv(empty_csv)
 
         reader = CSVReader(str(empty_csv))
@@ -143,12 +150,14 @@ class TestCSVReaderChunks:
         """Test read_in_chunks creates multiple chunks correctly"""
         # Create CSV with 25 rows
         large_csv = tmp_path / "large.csv"
-        df = pl.DataFrame({
-            "HHLDNO": [str(i) for i in range(1, 26)],
-            "STATE": ["CA"] * 25,
-            "YRMONTH": ["202301"] * 25,
-            "FSBEN": [float(i * 100) for i in range(1, 26)],
-        })
+        df = pl.DataFrame(
+            {
+                "HHLDNO": [str(i) for i in range(1, 26)],
+                "STATE": ["CA"] * 25,
+                "YRMONTH": ["202301"] * 25,
+                "FSBEN": [float(i * 100) for i in range(1, 26)],
+            }
+        )
         df.write_csv(large_csv)
 
         reader = CSVReader(str(large_csv))
@@ -170,14 +179,16 @@ class TestCSVReaderChunks:
         """Test read_in_chunks preserves all columns across chunks"""
         # Create CSV with many columns
         multi_col_csv = tmp_path / "multi_col.csv"
-        df = pl.DataFrame({
-            "HHLDNO": ["1", "2", "3", "4", "5"],
-            "STATE": ["CA", "TX", "NY", "FL", "WA"],
-            "YRMONTH": ["202301"] * 5,
-            "FSBEN": [100.0, 200.0, 300.0, 400.0, 500.0],
-            "CERTHHSZ": [1, 2, 3, 4, 5],
-            "RAWGROSS": [1000.0, 2000.0, 3000.0, 4000.0, 5000.0],
-        })
+        df = pl.DataFrame(
+            {
+                "HHLDNO": ["1", "2", "3", "4", "5"],
+                "STATE": ["CA", "TX", "NY", "FL", "WA"],
+                "YRMONTH": ["202301"] * 5,
+                "FSBEN": [100.0, 200.0, 300.0, 400.0, 500.0],
+                "CERTHHSZ": [1, 2, 3, 4, 5],
+                "RAWGROSS": [1000.0, 2000.0, 3000.0, 4000.0, 5000.0],
+            }
+        )
         df.write_csv(multi_col_csv)
 
         reader = CSVReader(str(multi_col_csv))
@@ -190,5 +201,3 @@ class TestCSVReaderChunks:
         # All chunks should have same columns
         for chunk in chunks:
             assert chunk.columns == expected_columns
-
-

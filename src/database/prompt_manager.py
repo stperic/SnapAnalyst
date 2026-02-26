@@ -4,14 +4,15 @@ User Prompt Management
 Helper functions for storing and retrieving custom LLM prompts per user.
 Supports SQL generation prompts and KB insight prompts.
 """
+
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 
 from src.core.logging import get_logger
-from src.core.prompts import KB_INSIGHT_SYSTEM_PROMPT, VANNA_SQL_SYSTEM_PROMPT
+from src.core.prompts import AI_SUMMARY_SYSTEM_PROMPT, KB_INSIGHT_SYSTEM_PROMPT, VANNA_SQL_SYSTEM_PROMPT
 from src.database.engine import get_db_context
 from src.database.models import UserPrompt
 
@@ -24,20 +25,17 @@ def get_user_prompt(user_id: str, prompt_type: str) -> str:
 
     Args:
         user_id: User identifier
-        prompt_type: 'sql' or 'kb'
+        prompt_type: 'sql', 'kb', or 'summary'
 
     Returns:
         Prompt text (custom if exists, default otherwise)
     """
-    if prompt_type not in ['sql', 'kb']:
+    if prompt_type not in ["sql", "kb", "summary"]:
         raise ValueError(f"Invalid prompt_type: {prompt_type}")
 
     try:
         with get_db_context() as session:
-            stmt = select(UserPrompt).where(
-                UserPrompt.user_id == user_id,
-                UserPrompt.prompt_type == prompt_type
-            )
+            stmt = select(UserPrompt).where(UserPrompt.user_id == user_id, UserPrompt.prompt_type == prompt_type)
             result = session.execute(stmt).scalar_one_or_none()
 
             if result:
@@ -57,15 +55,17 @@ def get_default_prompt(prompt_type: str) -> str:
     Get system default prompt.
 
     Args:
-        prompt_type: 'sql' or 'kb'
+        prompt_type: 'sql', 'kb', or 'summary'
 
     Returns:
         Default prompt from prompts.py
     """
-    if prompt_type == 'sql':
+    if prompt_type == "sql":
         return VANNA_SQL_SYSTEM_PROMPT
-    elif prompt_type == 'kb':
+    elif prompt_type == "kb":
         return KB_INSIGHT_SYSTEM_PROMPT
+    elif prompt_type == "summary":
+        return AI_SUMMARY_SYSTEM_PROMPT
     else:
         raise ValueError(f"Invalid prompt_type: {prompt_type}")
 
@@ -76,13 +76,13 @@ def set_user_prompt(user_id: str, prompt_type: str, prompt_text: str) -> bool:
 
     Args:
         user_id: User identifier
-        prompt_type: 'sql' or 'kb'
+        prompt_type: 'sql', 'kb', or 'summary'
         prompt_text: The custom prompt text
 
     Returns:
         True if successful, False otherwise
     """
-    if prompt_type not in ['sql', 'kb']:
+    if prompt_type not in ["sql", "kb", "summary"]:
         raise ValueError(f"Invalid prompt_type: {prompt_type}")
 
     # Validate length
@@ -92,24 +92,17 @@ def set_user_prompt(user_id: str, prompt_type: str, prompt_text: str) -> bool:
     try:
         with get_db_context() as session:
             # Check if prompt exists
-            stmt = select(UserPrompt).where(
-                UserPrompt.user_id == user_id,
-                UserPrompt.prompt_type == prompt_type
-            )
+            stmt = select(UserPrompt).where(UserPrompt.user_id == user_id, UserPrompt.prompt_type == prompt_type)
             existing = session.execute(stmt).scalar_one_or_none()
 
             if existing:
                 # Update existing
                 existing.prompt_text = prompt_text
-                existing.updated_at = datetime.utcnow()
+                existing.updated_at = datetime.now(UTC)
                 logger.info(f"Updated {prompt_type} prompt for user {user_id}")
             else:
                 # Create new
-                new_prompt = UserPrompt(
-                    user_id=user_id,
-                    prompt_type=prompt_type,
-                    prompt_text=prompt_text
-                )
+                new_prompt = UserPrompt(user_id=user_id, prompt_type=prompt_type, prompt_text=prompt_text)
                 session.add(new_prompt)
                 logger.info(f"Created {prompt_type} prompt for user {user_id}")
 
@@ -127,20 +120,17 @@ def reset_user_prompt(user_id: str, prompt_type: str) -> bool:
 
     Args:
         user_id: User identifier
-        prompt_type: 'sql' or 'kb'
+        prompt_type: 'sql', 'kb', or 'summary'
 
     Returns:
         True if successful, False otherwise
     """
-    if prompt_type not in ['sql', 'kb']:
+    if prompt_type not in ["sql", "kb", "summary"]:
         raise ValueError(f"Invalid prompt_type: {prompt_type}")
 
     try:
         with get_db_context() as session:
-            stmt = select(UserPrompt).where(
-                UserPrompt.user_id == user_id,
-                UserPrompt.prompt_type == prompt_type
-            )
+            stmt = select(UserPrompt).where(UserPrompt.user_id == user_id, UserPrompt.prompt_type == prompt_type)
             existing = session.execute(stmt).scalar_one_or_none()
 
             if existing:
@@ -163,20 +153,17 @@ def has_custom_prompt(user_id: str, prompt_type: str) -> bool:
 
     Args:
         user_id: User identifier
-        prompt_type: 'sql' or 'kb'
+        prompt_type: 'sql', 'kb', or 'summary'
 
     Returns:
         True if custom prompt exists, False otherwise
     """
-    if prompt_type not in ['sql', 'kb']:
+    if prompt_type not in ["sql", "kb", "summary"]:
         raise ValueError(f"Invalid prompt_type: {prompt_type}")
 
     try:
         with get_db_context() as session:
-            stmt = select(UserPrompt).where(
-                UserPrompt.user_id == user_id,
-                UserPrompt.prompt_type == prompt_type
-            )
+            stmt = select(UserPrompt).where(UserPrompt.user_id == user_id, UserPrompt.prompt_type == prompt_type)
             result = session.execute(stmt).scalar_one_or_none()
             return result is not None
 

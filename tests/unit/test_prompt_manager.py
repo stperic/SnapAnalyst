@@ -3,6 +3,7 @@ Unit tests for User Prompt Manager
 
 Tests custom LLM prompt storage and retrieval functionality.
 """
+
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
@@ -22,14 +23,14 @@ class TestGetDefaultPrompt:
 
     def test_get_default_sql_prompt(self):
         """Test getting default SQL prompt"""
-        prompt = get_default_prompt('sql')
+        prompt = get_default_prompt("sql")
 
         assert isinstance(prompt, str)
         assert len(prompt) > 0
 
     def test_get_default_kb_prompt(self):
         """Test getting default KB prompt"""
-        prompt = get_default_prompt('kb')
+        prompt = get_default_prompt("kb")
 
         assert isinstance(prompt, str)
         assert len(prompt) > 0
@@ -37,13 +38,13 @@ class TestGetDefaultPrompt:
     def test_invalid_prompt_type(self):
         """Test raises error for invalid prompt type"""
         with pytest.raises(ValueError, match="Invalid prompt_type"):
-            get_default_prompt('invalid')
+            get_default_prompt("invalid")
 
 
 class TestGetUserPrompt:
     """Test get_user_prompt function"""
 
-    @patch('src.database.prompt_manager.get_db_context')
+    @patch("src.database.prompt_manager.get_db_context")
     def test_get_custom_sql_prompt(self, mock_context):
         """Test retrieving custom SQL prompt"""
         # Mock database session
@@ -59,7 +60,7 @@ class TestGetUserPrompt:
 
         assert prompt == "Custom SQL prompt"
 
-    @patch('src.database.prompt_manager.get_db_context')
+    @patch("src.database.prompt_manager.get_db_context")
     def test_get_prompt_falls_back_to_default(self, mock_context):
         """Test falls back to default when no custom prompt exists"""
         # Mock database session
@@ -75,7 +76,7 @@ class TestGetUserPrompt:
         assert isinstance(prompt, str)
         assert len(prompt) > 0
 
-    @patch('src.database.prompt_manager.get_db_context')
+    @patch("src.database.prompt_manager.get_db_context")
     def test_get_prompt_handles_exception(self, mock_context):
         """Test handles database exception gracefully"""
         # Mock database session that raises exception
@@ -98,7 +99,7 @@ class TestGetUserPrompt:
 class TestSetUserPrompt:
     """Test set_user_prompt function"""
 
-    @patch('src.database.prompt_manager.get_db_context')
+    @patch("src.database.prompt_manager.get_db_context")
     def test_create_new_prompt(self, mock_context):
         """Test creating new custom prompt"""
         # Mock database session
@@ -108,17 +109,13 @@ class TestSetUserPrompt:
         # Mock no existing prompt
         mock_session.execute.return_value.scalar_one_or_none.return_value = None
 
-        result = set_user_prompt(
-            "user123",
-            "sql",
-            "My custom SQL prompt for better results"
-        )
+        result = set_user_prompt("user123", "sql", "My custom SQL prompt for better results")
 
         assert result is True
         mock_session.add.assert_called_once()
         mock_session.commit.assert_called_once()
 
-    @patch('src.database.prompt_manager.get_db_context')
+    @patch("src.database.prompt_manager.get_db_context")
     def test_update_existing_prompt(self, mock_context):
         """Test updating existing custom prompt"""
         # Mock database session
@@ -129,11 +126,7 @@ class TestSetUserPrompt:
         mock_existing = MagicMock()
         mock_session.execute.return_value.scalar_one_or_none.return_value = mock_existing
 
-        result = set_user_prompt(
-            "user123",
-            "sql",
-            "Updated SQL prompt text"
-        )
+        result = set_user_prompt("user123", "sql", "Updated SQL prompt text")
 
         assert result is True
         assert mock_existing.prompt_text == "Updated SQL prompt text"
@@ -156,7 +149,7 @@ class TestSetUserPrompt:
         with pytest.raises(ValueError, match="Invalid prompt_type"):
             set_user_prompt("user123", "invalid", "Valid prompt text here")
 
-    @patch('src.database.prompt_manager.get_db_context')
+    @patch("src.database.prompt_manager.get_db_context")
     def test_set_prompt_handles_exception(self, mock_context):
         """Test handles database exception"""
         # Mock database session that raises exception
@@ -164,11 +157,7 @@ class TestSetUserPrompt:
         mock_context.return_value.__enter__.return_value = mock_session
         mock_session.execute.side_effect = Exception("Database error")
 
-        result = set_user_prompt(
-            "user123",
-            "sql",
-            "Valid prompt text here"
-        )
+        result = set_user_prompt("user123", "sql", "Valid prompt text here")
 
         assert result is False
 
@@ -176,7 +165,7 @@ class TestSetUserPrompt:
 class TestResetUserPrompt:
     """Test reset_user_prompt function"""
 
-    @patch('src.database.prompt_manager.get_db_context')
+    @patch("src.database.prompt_manager.get_db_context")
     def test_reset_existing_prompt(self, mock_context):
         """Test resetting existing custom prompt"""
         # Mock database session
@@ -193,7 +182,7 @@ class TestResetUserPrompt:
         mock_session.delete.assert_called_once_with(mock_existing)
         mock_session.commit.assert_called_once()
 
-    @patch('src.database.prompt_manager.get_db_context')
+    @patch("src.database.prompt_manager.get_db_context")
     def test_reset_nonexistent_prompt(self, mock_context):
         """Test resetting when no custom prompt exists"""
         # Mock database session
@@ -214,7 +203,7 @@ class TestResetUserPrompt:
         with pytest.raises(ValueError, match="Invalid prompt_type"):
             reset_user_prompt("user123", "invalid")
 
-    @patch('src.database.prompt_manager.get_db_context')
+    @patch("src.database.prompt_manager.get_db_context")
     def test_reset_prompt_handles_exception(self, mock_context):
         """Test handles database exception"""
         # Mock database session that raises exception
@@ -230,7 +219,7 @@ class TestResetUserPrompt:
 class TestHasCustomPrompt:
     """Test has_custom_prompt function"""
 
-    @patch('src.database.prompt_manager.get_db_context')
+    @patch("src.database.prompt_manager.get_db_context")
     def test_has_custom_prompt_true(self, mock_context):
         """Test returns True when custom prompt exists"""
         # Mock database session
@@ -245,7 +234,7 @@ class TestHasCustomPrompt:
 
         assert result is True
 
-    @patch('src.database.prompt_manager.get_db_context')
+    @patch("src.database.prompt_manager.get_db_context")
     def test_has_custom_prompt_false(self, mock_context):
         """Test returns False when no custom prompt exists"""
         # Mock database session
@@ -264,7 +253,7 @@ class TestHasCustomPrompt:
         with pytest.raises(ValueError, match="Invalid prompt_type"):
             has_custom_prompt("user123", "invalid")
 
-    @patch('src.database.prompt_manager.get_db_context')
+    @patch("src.database.prompt_manager.get_db_context")
     def test_has_custom_prompt_handles_exception(self, mock_context):
         """Test handles database exception"""
         # Mock database session that raises exception
@@ -280,7 +269,7 @@ class TestHasCustomPrompt:
 class TestPromptManagerIntegration:
     """Integration tests for prompt manager"""
 
-    @patch('src.database.prompt_manager.get_db_context')
+    @patch("src.database.prompt_manager.get_db_context")
     def test_kb_prompt_type(self, mock_context):
         """Test KB prompt type works across all functions"""
         # Mock database session

@@ -6,8 +6,10 @@ Filters are stored in database (persists across sessions).
 
 Designed for extensibility - can easily support multiple states/years in future.
 """
+
+import re
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from src.core.logging import get_logger
@@ -22,6 +24,7 @@ class DataFilter:
 
     Currently supports single state/year, but designed for future multi-select.
     """
+
     states: list[str] = field(default_factory=list)  # Future: multiple states
     fiscal_years: list[int] = field(default_factory=list)  # Future: multiple years
     created_at: datetime | None = None
@@ -59,6 +62,20 @@ class DataFilter:
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
 
+    @staticmethod
+    def _validate_state(state: str) -> str:
+        """Validate state name contains only safe characters."""
+        if not re.match(r"^[A-Za-z\s\-\.]+$", state):
+            raise ValueError(f"Invalid state name: {state!r}")
+        return state
+
+    @staticmethod
+    def _validate_fiscal_year(year: int) -> int:
+        """Validate fiscal year is an integer in a reasonable range."""
+        if not isinstance(year, int) or year < 2000 or year > 2100:
+            raise ValueError(f"Invalid fiscal year: {year!r}")
+        return year
+
     def get_sql_conditions(self) -> list[str]:
         """
         Get SQL WHERE conditions for this filter.
@@ -69,21 +86,19 @@ class DataFilter:
         conditions = []
 
         if self.states:
-            # Current: single state
-            # Future: state_name IN ('CT', 'MA', 'NY')
-            if len(self.states) == 1:
-                conditions.append(f"state_name = '{self.states[0]}'")
+            validated = [self._validate_state(s) for s in self.states]
+            if len(validated) == 1:
+                conditions.append(f"state_name = '{validated[0]}'")
             else:
-                states_str = "', '".join(self.states)
+                states_str = "', '".join(validated)
                 conditions.append(f"state_name IN ('{states_str}')")
 
         if self.fiscal_years:
-            # Current: single year
-            # Future: fiscal_year IN (2021, 2022, 2023)
-            if len(self.fiscal_years) == 1:
-                conditions.append(f"fiscal_year = {self.fiscal_years[0]}")
+            validated_years = [self._validate_fiscal_year(y) for y in self.fiscal_years]
+            if len(validated_years) == 1:
+                conditions.append(f"fiscal_year = {validated_years[0]}")
             else:
-                years_str = ", ".join(map(str, self.fiscal_years))
+                years_str = ", ".join(map(str, validated_years))
                 conditions.append(f"fiscal_year IN ({years_str})")
 
         return conditions
@@ -104,7 +119,7 @@ class DataFilter:
             if len(self.fiscal_years) == 1:
                 parts.append(f"FY{self.fiscal_years[0]}")
             else:
-                years = ', '.join(f"FY{y}" for y in self.fiscal_years)
+                years = ", ".join(f"FY{y}" for y in self.fiscal_years)
                 parts.append(f"Years: {years}")
 
         return " | ".join(parts)
@@ -130,6 +145,7 @@ class FilterManager:
         # Try FastAPI request context first (for API endpoints)
         try:
             from src.api.dependencies import get_request_user
+
             user_id = get_request_user()
             if user_id:
                 return user_id
@@ -139,8 +155,9 @@ class FilterManager:
         # Try Chainlit session (for UI)
         try:
             import chainlit as cl
+
             user = cl.user_session.get("user")
-            if user and hasattr(user, 'identifier'):
+            if user and hasattr(user, "identifier"):
                 return user.identifier
         except Exception:
             pass
@@ -150,12 +167,15 @@ class FilterManager:
             from sqlalchemy import text
 
             from src.database.engine import SessionLocal
+
             session = SessionLocal()
-            result = session.execute(text("SELECT identifier FROM users LIMIT 1"))
-            row = result.fetchone()
-            session.close()
-            if row:
-                return row[0]
+            try:
+                result = session.execute(text("SELECT identifier FROM users LIMIT 1"))
+                row = result.fetchone()
+                if row:
+                    return row[0]
+            finally:
+                session.close()
         except Exception:
             pass
 
@@ -170,20 +190,21 @@ class FilterManager:
 
             user_id = self._get_user_id()
             session = SessionLocal()
-            result = session.execute(
-                text("SELECT filter_preferences FROM users WHERE identifier = :user_id"),
-                {"user_id": user_id}
-            )
-            row = result.fetchone()
-            session.close()
+            try:
+                result = session.execute(
+                    text("SELECT filter_preferences FROM users WHERE identifier = :user_id"), {"user_id": user_id}
+                )
+                row = result.fetchone()
+            finally:
+                session.close()
 
             if row and row[0]:
                 prefs = row[0]
                 return DataFilter(
-                    states=prefs.get('states', []),
-                    fiscal_years=prefs.get('fiscal_years', []),
-                    created_at=datetime.fromisoformat(prefs['created_at']) if prefs.get('created_at') else None,
-                    updated_at=datetime.fromisoformat(prefs['updated_at']) if prefs.get('updated_at') else None,
+                    states=prefs.get("states", []),
+                    fiscal_years=prefs.get("fiscal_years", []),
+                    created_at=datetime.fromisoformat(prefs["created_at"]) if prefs.get("created_at") else None,
+                    updated_at=datetime.fromisoformat(prefs["updated_at"]) if prefs.get("updated_at") else None,
                 )
         except Exception as e:
             logger.error(f"Error loading filter: {e}")
@@ -202,24 +223,26 @@ class FilterManager:
 
             user_id = self._get_user_id()
             prefs = {
-                'states': filter_obj.states,
-                'fiscal_years': filter_obj.fiscal_years,
-                'created_at': filter_obj.created_at.isoformat() if filter_obj.created_at else None,
-                'updated_at': filter_obj.updated_at.isoformat() if filter_obj.updated_at else None,
+                "states": filter_obj.states,
+                "fiscal_years": filter_obj.fiscal_years,
+                "created_at": filter_obj.created_at.isoformat() if filter_obj.created_at else None,
+                "updated_at": filter_obj.updated_at.isoformat() if filter_obj.updated_at else None,
             }
 
             session = SessionLocal()
-            session.execute(
-                text("""
-                    INSERT INTO users (id, identifier, metadata, filter_preferences)
-                    VALUES (:id, :identifier, '{}'::jsonb, CAST(:prefs AS jsonb))
-                    ON CONFLICT (identifier)
-                    DO UPDATE SET filter_preferences = EXCLUDED.filter_preferences
-                """),
-                {"id": str(uuid.uuid4()), "identifier": user_id, "prefs": json.dumps(prefs)}
-            )
-            session.commit()
-            session.close()
+            try:
+                session.execute(
+                    text("""
+                        INSERT INTO users (id, identifier, metadata, filter_preferences)
+                        VALUES (:id, :identifier, '{}'::jsonb, CAST(:prefs AS jsonb))
+                        ON CONFLICT (identifier)
+                        DO UPDATE SET filter_preferences = EXCLUDED.filter_preferences
+                    """),
+                    {"id": str(uuid.uuid4()), "identifier": user_id, "prefs": json.dumps(prefs)},
+                )
+                session.commit()
+            finally:
+                session.close()
         except Exception as e:
             logger.error(f"Error saving filter: {e}", exc_info=True)
 
@@ -227,9 +250,9 @@ class FilterManager:
         """Set state filter."""
         filter_obj = self.get_filter()
         filter_obj.states = [state] if state else []
-        filter_obj.updated_at = datetime.now()
+        filter_obj.updated_at = datetime.now(UTC)
         if filter_obj.created_at is None:
-            filter_obj.created_at = datetime.now()
+            filter_obj.created_at = datetime.now(UTC)
         self._save_filter(filter_obj)
         return filter_obj
 
@@ -237,9 +260,9 @@ class FilterManager:
         """Set fiscal year filter."""
         filter_obj = self.get_filter()
         filter_obj.fiscal_years = [year] if year else []
-        filter_obj.updated_at = datetime.now()
+        filter_obj.updated_at = datetime.now(UTC)
         if filter_obj.created_at is None:
-            filter_obj.created_at = datetime.now()
+            filter_obj.created_at = datetime.now(UTC)
         self._save_filter(filter_obj)
         return filter_obj
 
@@ -248,9 +271,9 @@ class FilterManager:
         filter_obj = self.get_filter()
         filter_obj.states = [state] if state else []
         filter_obj.fiscal_years = [fiscal_year] if fiscal_year else []
-        filter_obj.updated_at = datetime.now()
+        filter_obj.updated_at = datetime.now(UTC)
         if filter_obj.created_at is None:
-            filter_obj.created_at = datetime.now()
+            filter_obj.created_at = datetime.now(UTC)
         self._save_filter(filter_obj)
         return filter_obj
 
@@ -283,44 +306,83 @@ class FilterManager:
             return sql  # No filter, return original SQL
 
         # Normalize whitespace to handle newlines
-        sql_normalized = ' '.join(sql.split())
+        sql_normalized = " ".join(sql.split())
         sql_upper = sql_normalized.upper()
 
+        # Get filter dimensions from active dataset
+        from datasets import get_active_dataset
+
+        ds = get_active_dataset()
+        dimensions = ds.get_filter_dimensions() if ds else []
+
+        # Build a lookup: dimension_name -> dimension config
+        dim_map = {d["name"]: d for d in dimensions}
+
         # Determine which tables are in the query (case-insensitive)
-        has_households = bool(re.search(r'\bhouseholds\b', sql_normalized, re.IGNORECASE))
-        has_qc_errors = bool(re.search(r'\bqc_errors\b', sql_normalized, re.IGNORECASE))
-        has_members = bool(re.search(r'\bhousehold_members\b', sql_normalized, re.IGNORECASE))
+        # Build a set of all table names mentioned in dimensions
+        all_dim_tables = set()
+        for d in dimensions:
+            if d.get("table") and d["table"] != "*":
+                all_dim_tables.add(d["table"])
+        # Also discover tables from main table names
+        if ds:
+            for t in ds.get_main_table_names():
+                all_dim_tables.add(t)
+
+        tables_in_query = {
+            t for t in all_dim_tables if re.search(rf"\b{re.escape(t)}\b", sql_normalized, re.IGNORECASE)
+        }
 
         # Build conditions based on table context
         conditions = []
 
-        # State filter - state_name only exists in households table
+        # State filter — uses dimension config
         if filter_obj.states:
-            state_val = filter_obj.states[0] if len(filter_obj.states) == 1 else filter_obj.states
+            state_dim = dim_map.get("state")
+            if state_dim:
+                col = state_dim["column"]
+                source_table = state_dim.get("table", "")
+                join_col = state_dim.get("join_column")
 
-            if has_households:
-                # Direct filter on households table
-                if isinstance(state_val, str):
-                    conditions.append(f"state_name = '{state_val}'")
-                else:
-                    states_str = "', '".join(state_val)
-                    conditions.append(f"state_name IN ('{states_str}')")
-            elif has_qc_errors or has_members:
-                # Need subquery to filter by state via case_id
-                if isinstance(state_val, str):
-                    subquery = f"case_id IN (SELECT case_id FROM households WHERE state_name = '{state_val}')"
-                else:
-                    states_str = "', '".join(state_val)
-                    subquery = f"case_id IN (SELECT case_id FROM households WHERE state_name IN ('{states_str}'))"
-                conditions.append(subquery)
+                # Validate state values before interpolating into SQL (security boundary)
+                validated_states = [DataFilter._validate_state(s) for s in filter_obj.states]
+                # Defense-in-depth: escape single quotes even though regex disallows them
+                validated_states = [s.replace("'", "''") for s in validated_states]
+                state_val = validated_states[0] if len(validated_states) == 1 else validated_states
 
-        # Fiscal year filter - exists in all tables
+                # Determine filter strategy:
+                # 1. Source table is directly in query → filter on it
+                # 2. Known tables in query but not source → subquery via join_column
+                # 3. Unknown table/view (e.g. mv_state_error_rates) → apply column directly
+                use_direct = source_table in tables_in_query or not tables_in_query
+                use_subquery = not use_direct and join_col and tables_in_query
+
+                if use_direct:
+                    if isinstance(state_val, str):
+                        conditions.append(f"{col} = '{state_val}'")
+                    else:
+                        states_str = "', '".join(state_val)
+                        conditions.append(f"{col} IN ('{states_str}')")
+                elif use_subquery:
+                    if isinstance(state_val, str):
+                        subquery = f"{join_col} IN (SELECT {join_col} FROM {source_table} WHERE {col} = '{state_val}')"
+                    else:
+                        states_str = "', '".join(state_val)
+                        subquery = (
+                            f"{join_col} IN (SELECT {join_col} FROM {source_table} WHERE {col} IN ('{states_str}'))"
+                        )
+                    conditions.append(subquery)
+
+        # Fiscal year filter — uses dimension config (table="*" means all tables)
         if filter_obj.fiscal_years:
-            if len(filter_obj.fiscal_years) == 1:
-                conditions.append(f"fiscal_year = {filter_obj.fiscal_years[0]}")
-            else:
-                years_str = ", ".join(map(str, filter_obj.fiscal_years))
-                conditions.append(f"fiscal_year IN ({years_str})")
+            fy_dim = dim_map.get("fiscal_year")
+            if fy_dim:
+                col = fy_dim["column"]
+                if len(filter_obj.fiscal_years) == 1:
+                    conditions.append(f"{col} = {filter_obj.fiscal_years[0]}")
+                else:
+                    years_str = ", ".join(map(str, filter_obj.fiscal_years))
+                    conditions.append(f"{col} IN ({years_str})")
 
         if not conditions:
             return sql
@@ -332,7 +394,9 @@ class FilterManager:
         # Case 1: SQL already has WHERE clause
         if " WHERE " in sql_upper:
             # Add to existing WHERE with AND (case-insensitive single replacement)
-            return re.sub(r'\s+WHERE\s+', f' WHERE ({filter_clause}) AND ', sql_normalized, count=1, flags=re.IGNORECASE)
+            return re.sub(
+                r"\s+WHERE\s+", f" WHERE ({filter_clause}) AND ", sql_normalized, count=1, flags=re.IGNORECASE
+            )
 
         # Case 2: SQL has GROUP BY, ORDER BY, LIMIT, etc. but no WHERE
         # Insert WHERE before these clauses
@@ -346,7 +410,7 @@ class FilterManager:
 
         # Case 3: Simple SELECT without WHERE or other clauses
         # Add WHERE at the end
-        return sql_normalized.rstrip().rstrip(';') + f" WHERE {filter_clause}"
+        return sql_normalized.rstrip().rstrip(";") + f" WHERE {filter_clause}"
 
 
 # Global filter manager instance

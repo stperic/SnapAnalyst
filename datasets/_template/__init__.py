@@ -73,6 +73,7 @@ class YourDatasetConfig(DatasetConfig):
 
         # Option 2: Reuse existing models (if schema matches)
         from src.database import models
+
         return models
 
     def get_reference_models_module(self):
@@ -83,6 +84,7 @@ class YourDatasetConfig(DatasetConfig):
 
         # Option 2: Reuse existing reference models
         from src.database import reference_models
+
         return reference_models
 
     # =========================================================================
@@ -111,6 +113,7 @@ class YourDatasetConfig(DatasetConfig):
             HOUSEHOLD_LEVEL_VARIABLES,
             PERSON_LEVEL_VARIABLES,
         )
+
         return {
             "household": HOUSEHOLD_LEVEL_VARIABLES,
             "person": PERSON_LEVEL_VARIABLES,
@@ -125,6 +128,7 @@ class YourDatasetConfig(DatasetConfig):
 
         # Option 2: Reuse existing transformer
         from src.etl.transformer import DataTransformer
+
         return DataTransformer
 
     # =========================================================================

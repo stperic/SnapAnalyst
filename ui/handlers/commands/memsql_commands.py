@@ -12,16 +12,15 @@ Subcommands (stats, list, add, reset) are still supported for
 backward compatibility but the primary UX is the sidebar panel.
 """
 
-import logging
-
 import chainlit as cl
 import httpx
 
 from src.clients.api_client import call_api, get_api_base_url, get_api_prefix
+from src.core.logging import get_logger
 
 from ...responses import send_error, send_message, send_warning
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def handle_memsql_command(args: str | None = None):
@@ -54,7 +53,7 @@ async def handle_memsql_command(args: str | None = None):
         await send_error(
             f"Unknown subcommand: `{subcommand}`\n\n"
             "Valid subcommands: `stats`, `list`, `add`, `reset`\n\n"
-            "Type `/memsql` for help."
+            "Or use **Settings > Knowledge SQL** panel."
         )
 
 
@@ -79,10 +78,7 @@ async def handle_memsql_stats():
 | SQL (question-SQL pairs) | {sql} |
 | **Total** | **{total}** |
 
-**Tips:**
-- Use `/memsql list` to see training data details
-- Use `/memsql add` to add custom documentation or query examples
-- Use `/memsql reset` to rebuild from scratch"""
+**Tip:** Open **Settings > Knowledge SQL** to manage training data."""
 
         await send_message(content)
 
@@ -101,7 +97,7 @@ async def handle_memsql_list():
             await send_message(
                 "**No Vanna training data found.**\n\n"
                 "The Vanna ChromaDB is empty or not initialized.\n\n"
-                "Use `/memsql reset` to train from scratch."
+                "Use **Settings > Knowledge SQL** to reset and train from scratch."
             )
             return
 
@@ -143,7 +139,7 @@ async def handle_memsql_list():
                 content += f"- `{entry['id'][:12]}...` - *{question}*\n"
             content += "\n"
 
-        content += "**Tip:** Use `/memsql stats` for summary counts."
+        content += "**Tip:** Open **Settings > Knowledge SQL** for summary counts and management."
 
         await send_message(content)
 
@@ -159,10 +155,10 @@ async def handle_memsql_add(args: str | None = None):
         if not message_files:
             await send_error(
                 "**No files attached**\n\n"
-                "Please attach files to your message, then use `/memsql add`\n\n"
+                "Please attach files to your message, or use the **Settings > Knowledge SQL** panel to upload.\n\n"
                 "**Supported file types:**\n"
                 "- `.md` / `.txt` - Added as documentation context for SQL generation\n"
-                "- `.json` - Must contain `{\"example_queries\": [{\"question\": \"...\", \"sql\": \"...\"}]}`\n\n"
+                '- `.json` - Must contain `{"example_queries": [{"question": "...", "sql": "..."}]}`\n\n'
                 "**Example:**\n"
                 "Attach files, then type `/memsql add`"
             )
@@ -251,7 +247,7 @@ async def handle_memsql_add(args: str | None = None):
                 else:
                     content_parts.append(f"- `{filename}` - {error}")
 
-        content_parts.append("\nUse `/memsql stats` to see updated statistics.")
+        content_parts.append("\nOpen **Settings > Knowledge SQL** to see updated statistics.")
         await send_message("\n".join(content_parts))
 
     except Exception as e:
@@ -268,6 +264,7 @@ async def handle_memsql_panel():
         data_list = await call_api("/llm/vanna/list")
 
         from src.clients.api_client import get_api_external_url, get_api_prefix
+
         api_url = get_api_external_url() + get_api_prefix()
 
         user = cl.user_session.get("user")
@@ -286,8 +283,8 @@ async def handle_memsql_panel():
             display="side",
         )
         cl.user_session.set("memsql_panel_element", element)
-        await cl.ElementSidebar.set_title("SQL Training")
-        await cl.ElementSidebar.set_elements([element])
+        await cl.ElementSidebar.set_title("Knowledge SQL")
+        await cl.ElementSidebar.set_elements([element], key="memsql")
 
     except Exception as e:
         await send_error(f"Error opening SQL training panel: {e}")

@@ -34,6 +34,7 @@ Usage:
         for ddl in ddl_statements:
             vanna.train(ddl=ddl, metadata={"dataset": dataset_name})
 """
+
 from __future__ import annotations
 
 import json
@@ -48,9 +49,36 @@ from src.database.engine import engine
 
 logger = get_logger(__name__)
 
-# Path to dataset configuration files
-_DATASET_CONFIG_PATH = Path(__file__).parent.parent.parent / "datasets" / "snap" / "config.yaml"
-DATA_MAPPING_PATH = Path(__file__).parent.parent.parent / "datasets" / "snap" / "data_mapping.json"
+_SNAP_FALLBACK_CONFIG = Path(__file__).parent.parent.parent / "datasets" / "snap" / "config.yaml"
+_SNAP_FALLBACK_MAPPING = Path(__file__).parent.parent.parent / "datasets" / "snap" / "data_mapping.json"
+
+
+def _get_dataset_config_path() -> Path:
+    """Resolve config.yaml path from the active dataset."""
+    try:
+        from datasets import get_active_dataset
+
+        ds = get_active_dataset()
+        if ds:
+            p = ds.base_path / "config.yaml"
+            if p.exists():
+                return p
+    except Exception:
+        pass
+    return _SNAP_FALLBACK_CONFIG
+
+
+def _get_data_mapping_path() -> Path:
+    """Resolve data_mapping.json path from the active dataset."""
+    try:
+        from datasets import get_active_dataset
+
+        ds = get_active_dataset()
+        if ds:
+            return ds.get_data_mapping_path()
+    except Exception:
+        pass
+    return _SNAP_FALLBACK_MAPPING
 
 
 def _load_table_discovery_config() -> dict:
@@ -68,8 +96,9 @@ def _load_table_discovery_config() -> dict:
         "exclude_table_prefixes": ["pg_", "sql_", "information_"],
     }
     try:
-        if _DATASET_CONFIG_PATH.exists():
-            with open(_DATASET_CONFIG_PATH) as f:
+        config_path = _get_dataset_config_path()
+        if config_path.exists():
+            with open(config_path) as f:
                 config = yaml.safe_load(f)
             return {
                 "include_table_prefixes": config.get("include_table_prefixes", defaults["include_table_prefixes"]),
@@ -83,16 +112,16 @@ def _load_table_discovery_config() -> dict:
 
 # System schemas to exclude from dataset discovery
 SYSTEM_SCHEMAS = [
-    'app',                  # SnapAnalyst system data
-    'public',              # Reserved for SNAP QC (handled separately)
-    'pg_catalog',          # PostgreSQL system catalog
-    'information_schema',  # SQL standard system views
-    'pg_toast',           # PostgreSQL TOAST storage
-    'pg_temp',            # PostgreSQL temp schemas
+    "app",  # SnapAnalyst system data
+    "public",  # Reserved for SNAP QC (handled separately)
+    "pg_catalog",  # PostgreSQL system catalog
+    "information_schema",  # SQL standard system views
+    "pg_toast",  # PostgreSQL TOAST storage
+    "pg_temp",  # PostgreSQL temp schemas
 ]
 
 
-def discover_tables_and_views(schema_name: str = 'public', db_engine: Engine = None) -> tuple[list[str], list[str]]:
+def discover_tables_and_views(schema_name: str = "public", db_engine: Engine = None) -> tuple[list[str], list[str]]:
     """
     Dynamically discover tables and views using config-driven filters.
 
@@ -134,20 +163,17 @@ def discover_tables_and_views(schema_name: str = 'public', db_engine: Engine = N
 
         # Apply exclude filters
         tables = [
-            t for t in all_tables
-            if t not in exclude_tables
-            and not any(t.startswith(prefix) for prefix in exclude_prefixes)
+            t
+            for t in all_tables
+            if t not in exclude_tables and not any(t.startswith(prefix) for prefix in exclude_prefixes)
         ]
 
         # Apply include prefix filter (skip if wildcard)
         if not include_all:
-            tables = [
-                t for t in tables
-                if any(t.startswith(prefix) for prefix in include_prefixes)
-            ]
+            tables = [t for t in tables if any(t.startswith(prefix) for prefix in include_prefixes)]
 
         # Sort: ref_* tables first (FK dependency ordering), then alphabetical
-        tables.sort(key=lambda t: (0 if t.startswith('ref_') else 1, t))
+        tables.sort(key=lambda t: (0 if t.startswith("ref_") else 1, t))
 
         # Discover views (include all non-system views in the schema)
         views_query = text("""
@@ -159,7 +185,7 @@ def discover_tables_and_views(schema_name: str = 'public', db_engine: Engine = N
         result = conn.execute(views_query, {"schema": schema_name})
         views = [row[0] for row in result]
 
-    logger.info(
+    logger.debug(
         f"Discovered in schema '{schema_name}': {len(tables)} tables, {len(views)} views"
         f" (include={'*' if include_all else include_prefixes}, exclude={len(exclude_tables)} tables)"
     )
@@ -187,18 +213,20 @@ def discover_user_schemas(db_engine: Engine = None) -> list[str]:
         db_engine = engine
 
     with db_engine.connect() as conn:
-        # Query for all schemas
+        # Query for all schemas — use expanding bindparam for tuple IN clause
+        from sqlalchemy import bindparam
+
         query = text("""
             SELECT schema_name
             FROM information_schema.schemata
             WHERE schema_name NOT IN :system_schemas
                 AND schema_name NOT LIKE 'pg_%'
             ORDER BY schema_name
-        """)
-        result = conn.execute(query, {"system_schemas": tuple(SYSTEM_SCHEMAS)})
+        """).bindparams(bindparam("system_schemas", expanding=True))
+        result = conn.execute(query, {"system_schemas": list(SYSTEM_SCHEMAS)})
         schemas = [row[0] for row in result]
 
-    logger.info(f"Discovered {len(schemas)} user schema(s): {schemas}")
+    logger.debug(f"Discovered {len(schemas)} user schema(s): {schemas}")
     return schemas
 
 
@@ -326,7 +354,7 @@ def get_table_ddl(table_name: str, db_engine: Engine = None, schema_name: str = 
         # Build DDL
         # For public schema: use unqualified names (SNAP QC default)
         # For custom schemas: use schema-qualified names
-        if schema_name == 'public':
+        if schema_name == "public":
             ddl_lines = [f"CREATE TABLE {table_name} ("]
         else:
             ddl_lines = [f"CREATE TABLE {schema_name}.{table_name} ("]
@@ -388,7 +416,7 @@ def get_table_ddl(table_name: str, db_engine: Engine = None, schema_name: str = 
                     "columns": [],
                     "ref_schema": fk_schema,
                     "ref_table": fk_table,
-                    "ref_columns": []
+                    "ref_columns": [],
                 }
             fk_by_constraint[constraint_name]["columns"].append(col_name)
             fk_by_constraint[constraint_name]["ref_columns"].append(fk_column)
@@ -401,7 +429,7 @@ def get_table_ddl(table_name: str, db_engine: Engine = None, schema_name: str = 
 
             # For public schema references, omit schema qualification
             # For custom schemas, include schema in FK reference
-            if ref_schema == 'public' and schema_name == 'public':
+            if ref_schema == "public" and schema_name == "public":
                 fk_str = f"    FOREIGN KEY ({cols}) REFERENCES {ref_table}({ref_cols})"
             else:
                 fk_str = f"    FOREIGN KEY ({cols}) REFERENCES {ref_schema}.{ref_table}({ref_cols})"
@@ -417,11 +445,13 @@ def get_table_ddl(table_name: str, db_engine: Engine = None, schema_name: str = 
             SELECT obj_description((quote_ident(:schema_name) || '.' || quote_ident(:table_name))::regclass, 'pg_class')
         """)
         try:
-            table_comment = conn.execute(table_comment_query, {"schema_name": schema_name, "table_name": table_name}).scalar()
+            table_comment = conn.execute(
+                table_comment_query, {"schema_name": schema_name, "table_name": table_name}
+            ).scalar()
             if table_comment:
                 # Format multi-line comments properly
-                comment_lines = table_comment.strip().split('\n')
-                formatted_comment = '\n'.join(f"-- {line}" for line in comment_lines)
+                comment_lines = table_comment.strip().split("\n")
+                formatted_comment = "\n".join(f"-- {line}" for line in comment_lines)
                 ddl += f"\n\n{formatted_comment}"
         except Exception as e:
             logger.debug(f"Could not fetch table comment for {schema_name}.{table_name}: {e}")
@@ -429,7 +459,9 @@ def get_table_ddl(table_name: str, db_engine: Engine = None, schema_name: str = 
         return ddl
 
 
-def get_reference_table_ddl_with_sample_data(table_name: str, db_engine: Engine = None, schema_name: str = "public") -> str | None:
+def get_reference_table_ddl_with_sample_data(
+    table_name: str, db_engine: Engine = None, schema_name: str = "public"
+) -> str | None:
     """
     Extract DDL for reference table and include sample data as comments.
 
@@ -477,7 +509,14 @@ def get_reference_table_ddl_with_sample_data(table_name: str, db_engine: Engine 
             pk_col = conn.execute(pk_query, {"schema_name": schema_name, "table_name": table_name}).scalar() or "code"
 
             # Get sample data (use schema-qualified table name if not public)
-            if schema_name == 'public':
+            # Validate identifiers to prevent SQL injection (defense-in-depth: these come from
+            # information_schema but we validate anyway)
+            import re as _re
+
+            if not _re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", pk_col):
+                logger.warning(f"Invalid pk_col rejected: {pk_col}")
+                return ddl
+            if schema_name == "public":
                 sample_query = text(f"""
                     SELECT {pk_col}, description
                     FROM {table_name}
@@ -551,7 +590,7 @@ def get_view_ddl(view_name: str, db_engine: Engine = None, schema_name: str = "p
         columns = conn.execute(columns_query, {"schema_name": schema_name, "view_name": view_name}).fetchall()
 
         # Build CREATE VIEW statement
-        qualified_name = f"{schema_name}.{view_name}" if schema_name != 'public' else view_name
+        qualified_name = f"{schema_name}.{view_name}" if schema_name != "public" else view_name
         ddl = f"CREATE OR REPLACE VIEW {qualified_name} AS\n{view_def.strip()};"
 
         # Add column comments
@@ -579,7 +618,7 @@ def get_all_ddl_statements(
     include_samples: bool = True,
     include_format_docs: bool = True,
     dataset_name: str | None = None,
-    schema_name: str = "public"
+    schema_name: str = "public",
 ) -> list[str]:
     """
     Get DDL statements for all tables and views in the correct order.
@@ -610,11 +649,11 @@ def get_all_ddl_statements(
     all_tables, views = discover_tables_and_views(schema_name, db_engine)
 
     # Separate reference tables from other tables for correct ordering
-    reference_tables = [t for t in all_tables if t.startswith('ref_')]
-    main_tables = [t for t in all_tables if not t.startswith('ref_')]
+    reference_tables = [t for t in all_tables if t.startswith("ref_")]
+    main_tables = [t for t in all_tables if not t.startswith("ref_")]
 
     # First, extract reference tables with sample data
-    logger.info(f"Extracting DDL for reference tables from schema '{schema_name}'...")
+    logger.debug(f"Extracting DDL for reference tables from schema '{schema_name}'...")
     for table_name in reference_tables:
         if include_samples:
             ddl = get_reference_table_ddl_with_sample_data(table_name, db_engine, schema_name)
@@ -628,7 +667,7 @@ def get_all_ddl_statements(
             logger.warning(f"Could not extract DDL for {schema_name}.{table_name}")
 
     # Then, extract main tables
-    logger.info(f"Extracting DDL for main tables from schema '{schema_name}'...")
+    logger.debug(f"Extracting DDL for main tables from schema '{schema_name}'...")
     for table_name in main_tables:
         ddl = get_table_ddl(table_name, db_engine, schema_name)
         if ddl:
@@ -639,7 +678,7 @@ def get_all_ddl_statements(
 
     # Then, extract views
     if views:
-        logger.info(f"Extracting DDL for views from schema '{schema_name}'...")
+        logger.debug(f"Extracting DDL for views from schema '{schema_name}'...")
         for view_name in views:
             ddl = get_view_ddl(view_name, db_engine, schema_name)
             if ddl:
@@ -649,11 +688,11 @@ def get_all_ddl_statements(
                 logger.warning(f"Could not extract DDL for view {schema_name}.{view_name}")
 
     # Add column format documentation (only for SNAP QC / public schema)
-    if include_format_docs and schema_name == 'public':
+    if include_format_docs and schema_name == "public":
         format_doc = get_column_format_documentation()
         if format_doc:
             ddl_statements.append(format_doc)
-            logger.info("Added column format documentation from data_mapping.json")
+            logger.debug("Added column format documentation from data_mapping.json")
 
     # Log summary
     item_types = []
@@ -664,14 +703,11 @@ def get_all_ddl_statements(
     if views:
         item_types.append(f"{len(views)} views")
 
-    logger.info(f"Extracted DDL for {len(ddl_statements)} items from schema '{schema_name}' ({', '.join(item_types)})")
+    logger.debug(f"Extracted DDL for {len(ddl_statements)} items from schema '{schema_name}' ({', '.join(item_types)})")
     return ddl_statements
 
 
-def get_ddl_for_all_datasets(
-    include_samples: bool = True,
-    include_format_docs: bool = True
-) -> dict[str, list[str]]:
+def get_ddl_for_all_datasets(include_samples: bool = True, include_format_docs: bool = True) -> dict[str, list[str]]:
     """
     Extract DDL for all datasets (public + custom schemas).
 
@@ -692,34 +728,32 @@ def get_ddl_for_all_datasets(
     datasets = {}
 
     # 1. Extract SNAP QC dataset (public schema)
-    logger.info("Extracting DDL for SNAP QC dataset (public schema)...")
+    logger.debug("Extracting DDL for SNAP QC dataset (public schema)...")
     snap_qc_ddl = get_all_ddl_statements(
-        include_samples=include_samples,
-        include_format_docs=include_format_docs,
-        schema_name='public'
+        include_samples=include_samples, include_format_docs=include_format_docs, schema_name="public"
     )
     if snap_qc_ddl:
-        datasets['snap_qc'] = snap_qc_ddl
-        logger.info(f"SNAP QC dataset: {len(snap_qc_ddl)} DDL statements")
+        datasets["snap_qc"] = snap_qc_ddl
+        logger.debug(f"SNAP QC dataset: {len(snap_qc_ddl)} DDL statements")
 
     # 2. Discover and extract custom datasets (user-created schemas)
     user_schemas = discover_user_schemas()
 
     for schema in user_schemas:
-        logger.info(f"Extracting DDL for dataset '{schema}' (schema: {schema})...")
+        logger.debug(f"Extracting DDL for dataset '{schema}' (schema: {schema})...")
         try:
             schema_ddl = get_all_ddl_statements(
                 include_samples=include_samples,
                 include_format_docs=False,  # No format docs for custom schemas
-                schema_name=schema
+                schema_name=schema,
             )
             if schema_ddl:
                 datasets[schema] = schema_ddl
-                logger.info(f"Dataset '{schema}': {len(schema_ddl)} DDL statements")
+                logger.debug(f"Dataset '{schema}': {len(schema_ddl)} DDL statements")
         except Exception as e:
             logger.error(f"Failed to extract DDL for schema '{schema}': {e}")
 
-    logger.info(f"Total datasets extracted: {len(datasets)}")
+    logger.debug(f"Total datasets extracted: {len(datasets)}")
     return datasets
 
 
@@ -734,10 +768,7 @@ def get_ddl_for_dataset(dataset_name: str, include_samples: bool = True) -> list
     Returns:
         List of DDL statements for the dataset
     """
-    return get_all_ddl_statements(
-        include_samples=include_samples,
-        dataset_name=dataset_name
-    )
+    return get_all_ddl_statements(include_samples=include_samples, dataset_name=dataset_name)
 
 
 def get_ddl_as_single_string() -> str:
@@ -817,14 +848,16 @@ def get_foreign_key_summary(schema_name: str = "public") -> list[dict]:
         results = conn.execute(query, {"schema_name": schema_name}).fetchall()
 
         for row in results:
-            fk_summary.append({
-                "from_schema": row[0],
-                "from_table": row[1],
-                "from_column": row[2],
-                "to_schema": row[3],
-                "to_table": row[4],
-                "to_column": row[5]
-            })
+            fk_summary.append(
+                {
+                    "from_schema": row[0],
+                    "from_table": row[1],
+                    "from_column": row[2],
+                    "to_schema": row[3],
+                    "to_table": row[4],
+                    "to_column": row[5],
+                }
+            )
 
     return fk_summary
 
@@ -840,11 +873,12 @@ def get_column_format_documentation() -> str | None:
         SQL comment block documenting column formats, or None if unavailable
     """
     try:
-        if not DATA_MAPPING_PATH.exists():
-            logger.warning(f"Data mapping file not found: {DATA_MAPPING_PATH}")
+        mapping_path = _get_data_mapping_path()
+        if not mapping_path.exists():
+            logger.warning(f"Data mapping file not found: {mapping_path}")
             return None
 
-        with open(DATA_MAPPING_PATH) as f:
+        with open(mapping_path) as f:
             data = json.load(f)
 
         display_formats = data.get("column_display_formats", {})
@@ -885,14 +919,16 @@ def get_column_format_documentation() -> str | None:
                     lines.append(col_line.rstrip(", "))
                 lines.append("--")
 
-        lines.extend([
-            "-- IMPORTANT NOTES:",
-            "-- - case_id is stored as VARCHAR (string), not numeric",
-            "-- - Currency columns represent dollar amounts (2 decimal places)",
-            "-- - Weight columns are statistical weights (high precision)",
-            "-- - Integer columns should display without decimal places",
-            "-- ====================================================="
-        ])
+        lines.extend(
+            [
+                "-- IMPORTANT NOTES:",
+                "-- - case_id is stored as VARCHAR (string), not numeric",
+                "-- - Currency columns represent dollar amounts (2 decimal places)",
+                "-- - Weight columns are statistical weights (high precision)",
+                "-- - Integer columns should display without decimal places",
+                "-- =====================================================",
+            ]
+        )
 
         doc = "\n".join(lines)
         logger.debug("Generated column format documentation from data_mapping.json")

@@ -15,6 +15,7 @@ Usage:
     # Queries automatically search: public → app
     result = session.execute(text("SELECT * FROM households"))
 """
+
 from __future__ import annotations
 
 from collections.abc import Generator
@@ -64,11 +65,9 @@ def _create_engine(schema_name: str | None = None) -> Engine:
         "max_overflow": settings.database_max_overflow,
         "pool_timeout": settings.database_pool_timeout,
         "pool_recycle": settings.database_pool_recycle,
-
         # Performance optimizations
         "pool_pre_ping": True,  # Verify connections on checkout (handles DB restarts)
         "echo": False,  # Never echo SQL to stdout; use sqlalchemy.engine logger instead
-
         # PostgreSQL-specific optimizations for bulk inserts
         "executemany_mode": "values_plus_batch",  # Use fast batch mode for executemany
     }
@@ -115,6 +114,7 @@ def get_engine_for_dataset(dataset_name: str) -> Engine:
 
     try:
         from datasets import get_dataset
+
         dataset_config = get_dataset(dataset_name)
         if dataset_config:
             schema_name = dataset_config.schema_name
@@ -200,11 +200,21 @@ def init_db() -> None:
 
 
 def dispose_engines() -> None:
-    """Dispose all SQLAlchemy engines and release connection pools."""
+    """Dispose all SQLAlchemy engines and release connection pools.
+
+    Uses close=False to avoid waiting on connections that may be stuck
+    (e.g., when the database container is already shutting down).
+    """
     global _dataset_engines
-    engine.dispose()
-    for ds_engine in _dataset_engines.values():
-        ds_engine.dispose()
+    try:
+        engine.dispose(close=False)
+    except Exception as e:
+        logger.warning(f"Error disposing default engine: {e}")
+    for name, ds_engine in _dataset_engines.items():
+        try:
+            ds_engine.dispose(close=False)
+        except Exception as e:
+            logger.warning(f"Error disposing engine '{name}': {e}")
     _dataset_engines.clear()
     logger.info("All database engines disposed")
 

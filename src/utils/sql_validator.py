@@ -18,7 +18,7 @@ def is_direct_sql(text: str) -> bool:
         True if text starts with SQL keywords (SELECT, WITH)
     """
     text_stripped = text.strip().upper()
-    return text_stripped.startswith('SELECT') or text_stripped.startswith('WITH')
+    return text_stripped.startswith("SELECT") or text_stripped.startswith("WITH")
 
 
 def validate_readonly_sql(sql: str) -> tuple[bool, str]:
@@ -37,9 +37,19 @@ def validate_readonly_sql(sql: str) -> tuple[bool, str]:
 
     # List of forbidden write operations
     forbidden_keywords = [
-        'INSERT', 'UPDATE', 'DELETE', 'DROP', 'ALTER',
-        'CREATE', 'TRUNCATE', 'REPLACE', 'MERGE', 'GRANT',
-        'REVOKE', 'EXEC', 'EXECUTE'
+        "INSERT",
+        "UPDATE",
+        "DELETE",
+        "DROP",
+        "ALTER",
+        "CREATE",
+        "TRUNCATE",
+        "REPLACE",
+        "MERGE",
+        "GRANT",
+        "REVOKE",
+        "EXEC",
+        "EXECUTE",
     ]
 
     for keyword in forbidden_keywords:

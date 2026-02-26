@@ -3,6 +3,7 @@ Database Integration Tests for Writer and Loader
 
 Tests the complete ETL pipeline with actual PostgreSQL database.
 """
+
 from decimal import Decimal
 from pathlib import Path
 
@@ -81,47 +82,53 @@ def test_session(test_engine):
 @pytest.fixture
 def sample_households_df():
     """Create sample household data"""
-    return pl.DataFrame({
-        "case_id": ["CASE001", "CASE002", "CASE003"],
-        "state_code": ["CA", "TX", "NY"],
-        "state_name": ["California", "Texas", "New York"],
-        "year_month": ["202310", "202310", "202310"],
-        "snap_benefit": [500.00, 750.50, 1200.00],
-        "gross_income": [2000.00, 3000.00, 1500.00],
-        "net_income": [1500.00, 2500.00, 1200.00],
-        "certified_household_size": [2, 3, 4],
-        "snap_unit_size": [2, 3, 4],
-        "household_weight": [1.5, 1.8, 2.1],
-        "fiscal_year_weight": [1.0, 1.0, 1.0],
-    })
+    return pl.DataFrame(
+        {
+            "case_id": ["CASE001", "CASE002", "CASE003"],
+            "state_code": ["CA", "TX", "NY"],
+            "state_name": ["California", "Texas", "New York"],
+            "year_month": ["202310", "202310", "202310"],
+            "snap_benefit": [500.00, 750.50, 1200.00],
+            "gross_income": [2000.00, 3000.00, 1500.00],
+            "net_income": [1500.00, 2500.00, 1200.00],
+            "certified_household_size": [2, 3, 4],
+            "snap_unit_size": [2, 3, 4],
+            "household_weight": [1.5, 1.8, 2.1],
+            "fiscal_year_weight": [1.0, 1.0, 1.0],
+        }
+    )
 
 
 @pytest.fixture
 def sample_members_df():
     """Create sample member data"""
-    return pl.DataFrame({
-        "case_id": ["CASE001", "CASE001", "CASE002", "CASE002", "CASE002", "CASE003"],
-        "member_number": [1, 2, 1, 2, 3, 1],
-        "age": [35, 8, 42, 16, 12, 28],
-        "sex": [2, 1, 1, 2, 1, 2],
-        "snap_affiliation_code": [1, 1, 1, 1, 1, 1],
-        "wages": [1500.00, 0.00, 2000.00, 500.00, 0.00, 1200.00],
-        "social_security": [0.00, 0.00, 0.00, 0.00, 0.00, 0.00],
-        "ssi": [0.00, 0.00, 0.00, 0.00, 0.00, 0.00],
-    })
+    return pl.DataFrame(
+        {
+            "case_id": ["CASE001", "CASE001", "CASE002", "CASE002", "CASE002", "CASE003"],
+            "member_number": [1, 2, 1, 2, 3, 1],
+            "age": [35, 8, 42, 16, 12, 28],
+            "sex": [2, 1, 1, 2, 1, 2],
+            "snap_affiliation_code": [1, 1, 1, 1, 1, 1],
+            "wages": [1500.00, 0.00, 2000.00, 500.00, 0.00, 1200.00],
+            "social_security": [0.00, 0.00, 0.00, 0.00, 0.00, 0.00],
+            "ssi": [0.00, 0.00, 0.00, 0.00, 0.00, 0.00],
+        }
+    )
 
 
 @pytest.fixture
 def sample_errors_df():
     """Create sample QC error data with valid codes from data_mapping.json"""
-    return pl.DataFrame({
-        "case_id": ["CASE002", "CASE003"],
-        "error_number": [1, 1],
-        "element_code": [111, 130],  # Valid: Student status, Citizenship status
-        "nature_code": [6, 7],  # Valid: Eligible person excluded, Ineligible person included
-        "error_amount": [50.00, 100.00],
-        "responsible_agency": [1, 1],
-    })
+    return pl.DataFrame(
+        {
+            "case_id": ["CASE002", "CASE003"],
+            "error_number": [1, 1],
+            "element_code": [111, 130],  # Valid: Student status, Citizenship status
+            "nature_code": [6, 7],  # Valid: Eligible person excluded, Ineligible person included
+            "error_amount": [50.00, 100.00],
+            "responsible_agency": [1, 1],
+        }
+    )
 
 
 @pytest.fixture
@@ -143,10 +150,7 @@ class TestDatabaseWriter:
         writer = DatabaseWriter(session=test_session)
 
         # Write households
-        records_written, case_ids = writer.write_households(
-            sample_households_df,
-            fiscal_year=2023
-        )
+        records_written, case_ids = writer.write_households(sample_households_df, fiscal_year=2023)
 
         # Verify
         assert records_written == 3
@@ -154,15 +158,13 @@ class TestDatabaseWriter:
         assert "CASE001" in case_ids
 
         # Query database - filter by test case_ids to avoid counting data from other tests
-        households = test_session.query(Household).filter(
-            Household.case_id.in_(["CASE001", "CASE002", "CASE003"])
-        ).all()
+        households = (
+            test_session.query(Household).filter(Household.case_id.in_(["CASE001", "CASE002", "CASE003"])).all()
+        )
         assert len(households) == 3
 
         # Check specific household
-        household = test_session.query(Household).filter(
-            Household.case_id == "CASE001"
-        ).first()
+        household = test_session.query(Household).filter(Household.case_id == "CASE001").first()
         assert household is not None
         assert household.state_code == "CA"
         assert household.snap_benefit == Decimal("500.00")
@@ -173,10 +175,7 @@ class TestDatabaseWriter:
         writer = DatabaseWriter(session=test_session)
 
         # Write households first
-        records_written, case_ids = writer.write_households(
-            sample_households_df,
-            fiscal_year=2023
-        )
+        records_written, case_ids = writer.write_households(sample_households_df, fiscal_year=2023)
 
         # Write members (no mapping needed with natural keys!)
         members_written = writer.write_members(sample_members_df, fiscal_year=2023)
@@ -185,17 +184,23 @@ class TestDatabaseWriter:
         assert members_written == 6
 
         # Query database - filter by test case_ids
-        members = test_session.query(HouseholdMember).filter(
-            HouseholdMember.case_id.in_(["CASE001", "CASE002", "CASE003"])
-        ).all()
+        members = (
+            test_session.query(HouseholdMember)
+            .filter(HouseholdMember.case_id.in_(["CASE001", "CASE002", "CASE003"]))
+            .all()
+        )
         assert len(members) == 6
 
         # Check specific member
-        member = test_session.query(HouseholdMember).filter(
-            HouseholdMember.case_id == "CASE001",
-            HouseholdMember.fiscal_year == 2023,
-            HouseholdMember.member_number == 1
-        ).first()
+        member = (
+            test_session.query(HouseholdMember)
+            .filter(
+                HouseholdMember.case_id == "CASE001",
+                HouseholdMember.fiscal_year == 2023,
+                HouseholdMember.member_number == 1,
+            )
+            .first()
+        )
         assert member is not None
         assert member.age == 35
         assert member.wages == Decimal("1500.00")
@@ -205,10 +210,7 @@ class TestDatabaseWriter:
         writer = DatabaseWriter(session=test_session)
 
         # Write households first
-        records_written, case_ids = writer.write_households(
-            sample_households_df,
-            fiscal_year=2023
-        )
+        records_written, case_ids = writer.write_households(sample_households_df, fiscal_year=2023)
 
         # Write errors (no mapping needed with natural keys!)
         errors_written = writer.write_errors(sample_errors_df, fiscal_year=2023)
@@ -217,16 +219,11 @@ class TestDatabaseWriter:
         assert errors_written == 2
 
         # Query database - filter by test case_ids
-        errors = test_session.query(QCError).filter(
-            QCError.case_id.in_(["CASE002", "CASE003"])
-        ).all()
+        errors = test_session.query(QCError).filter(QCError.case_id.in_(["CASE002", "CASE003"])).all()
         assert len(errors) == 2
 
         # Check specific error
-        error = test_session.query(QCError).filter(
-            QCError.case_id == "CASE002",
-            QCError.fiscal_year == 2023
-        ).first()
+        error = test_session.query(QCError).filter(QCError.case_id == "CASE002", QCError.fiscal_year == 2023).first()
         assert error is not None
         assert error.element_code == 111  # Updated to match sample_errors_df fixture
         assert error.error_amount == Decimal("50.00")
@@ -236,12 +233,7 @@ class TestDatabaseWriter:
         writer = DatabaseWriter(session=test_session)
 
         # Write all data
-        stats = writer.write_all(
-            sample_households_df,
-            sample_members_df,
-            sample_errors_df,
-            fiscal_year=2023
-        )
+        stats = writer.write_all(sample_households_df, sample_members_df, sample_errors_df, fiscal_year=2023)
 
         # Verify stats
         assert stats["households_written"] == 3
@@ -264,13 +256,11 @@ class TestDatabaseWriter:
             sample_households_df,
             sample_members_df,
             pl.DataFrame(),  # No errors
-            fiscal_year=2023
+            fiscal_year=2023,
         )
 
         # Query household with members
-        household = test_session.query(Household).filter(
-            Household.case_id == "CASE001"
-        ).first()
+        household = test_session.query(Household).filter(Household.case_id == "CASE001").first()
 
         assert household is not None
         assert len(household.members) == 2
@@ -282,12 +272,7 @@ class TestDatabaseWriter:
         writer = DatabaseWriter(session=test_session)
 
         # Write all data
-        writer.write_all(
-            sample_households_df,
-            sample_members_df,
-            pl.DataFrame(),
-            fiscal_year=2023
-        )
+        writer.write_all(sample_households_df, sample_members_df, pl.DataFrame(), fiscal_year=2023)
 
         test_case_ids = ["CASE001", "CASE002", "CASE003"]
 
@@ -296,15 +281,15 @@ class TestDatabaseWriter:
         assert test_session.query(HouseholdMember).filter(HouseholdMember.case_id.in_(test_case_ids)).count() == 6
 
         # Delete one household
-        household = test_session.query(Household).filter(
-            Household.case_id == "CASE001"
-        ).first()
+        household = test_session.query(Household).filter(Household.case_id == "CASE001").first()
         test_session.delete(household)
         test_session.commit()
 
         # Verify cascade delete worked (filter by test case_ids)
         assert test_session.query(Household).filter(Household.case_id.in_(test_case_ids)).count() == 2
-        assert test_session.query(HouseholdMember).filter(HouseholdMember.case_id.in_(test_case_ids)).count() == 4  # 2 members deleted
+        assert (
+            test_session.query(HouseholdMember).filter(HouseholdMember.case_id.in_(test_case_ids)).count() == 4
+        )  # 2 members deleted
 
 
 class TestETLLoader:
@@ -325,12 +310,7 @@ TEST003,NY,New York,202310,1200.00,1500.00,1200.00,4,4,2.1,1.0,1,28,2,1200.00,0.
     def test_load_from_file(self, test_session, small_test_csv):
         """Test complete ETL pipeline with database"""
         # Create loader
-        loader = ETLLoader(
-            fiscal_year=2023,
-            batch_size=10,
-            strict_validation=False,
-            skip_validation=False
-        )
+        loader = ETLLoader(fiscal_year=2023, batch_size=10, strict_validation=False, skip_validation=False)
 
         # Load data
         status = loader.load_from_file(str(small_test_csv))
@@ -347,9 +327,7 @@ TEST003,NY,New York,202310,1200.00,1500.00,1200.00,4,4,2.1,1.0,1,28,2,1200.00,0.
         assert len(households) >= 3
 
         # Check specific data
-        household = test_session.query(Household).filter(
-            Household.case_id == "TEST001"
-        ).first()
+        household = test_session.query(Household).filter(Household.case_id == "TEST001").first()
         if household:  # May not persist if using different session
             assert household.state_code == "CA"
             assert household.snap_benefit == Decimal("500.00")
@@ -389,12 +367,7 @@ class TestETLIntegration:
 
             # Write to database
             writer = DatabaseWriter(session=session)
-            stats = writer.write_all(
-                households_df,
-                members_df,
-                errors_df,
-                fiscal_year=2023
-            )
+            stats = writer.write_all(households_df, members_df, errors_df, fiscal_year=2023)
 
             # Verify
             assert stats["households_written"] == 10
@@ -427,12 +400,7 @@ class TestETLIntegration:
 
             # Write to database
             writer = DatabaseWriter(session=session, batch_size=25)
-            stats = writer.write_all(
-                households_df,
-                members_df,
-                errors_df,
-                fiscal_year=2023
-            )
+            stats = writer.write_all(households_df, members_df, errors_df, fiscal_year=2023)
 
             # Verify
             assert stats["households_written"] == 50
@@ -482,6 +450,7 @@ class TestETLIntegration:
 
             # Calculate statistics
             from sqlalchemy import func
+
             total_benefit = session.query(func.sum(Household.snap_benefit)).scalar()
             assert total_benefit is not None
 

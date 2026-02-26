@@ -22,9 +22,25 @@ from src.core.logging import get_logger
 logger = get_logger(__name__)
 router = APIRouter(tags=["schema-export"])
 
-# Path to schema file (now in datasets/snap/)
 WORKSPACE_ROOT = Path(__file__).parent.parent.parent.parent
-DATA_MAPPING_PATH = WORKSPACE_ROOT / "datasets" / "snap" / "data_mapping.json"
+
+
+def _get_data_mapping_path() -> Path:
+    """Get data_mapping.json path from active dataset."""
+    from datasets import get_active_dataset
+
+    ds = get_active_dataset()
+    if ds:
+        return ds.get_data_mapping_path()
+    return WORKSPACE_ROOT / "datasets" / "snap" / "data_mapping.json"
+
+
+def _get_export_prefix() -> str:
+    """Get export filename prefix from active dataset."""
+    from datasets import get_active_dataset
+
+    ds = get_active_dataset()
+    return ds.get_export_prefix() if ds else "snapanalyst"
 
 
 def load_json_file(file_path: Path) -> dict[str, Any]:
@@ -34,21 +50,16 @@ def load_json_file(file_path: Path) -> dict[str, Any]:
             return json.load(f)
     except FileNotFoundError:
         logger.error(f"Schema file not found: {file_path}")
-        raise HTTPException(
-            status_code=404,
-            detail=f"Schema file not found: {file_path.name}"
-        )
+        raise HTTPException(status_code=404, detail=f"Schema file not found: {file_path.name}")
     except json.JSONDecodeError as e:
         logger.error(f"Invalid JSON in schema file {file_path}: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Invalid JSON in schema file: {file_path.name}"
-        )
+        raise HTTPException(status_code=500, detail=f"Invalid JSON in schema file: {file_path.name}")
 
 
 # ============================================================================
 # TABLE EXPORTS
 # ============================================================================
+
 
 @router.get("/tables/csv", summary="Export all tables to CSV")
 async def export_tables_csv():
@@ -71,15 +82,13 @@ async def export_tables_csv():
     """
     logger.info("Exporting tables to CSV")
     try:
-        data_mapping = load_json_file(DATA_MAPPING_PATH)
+        data_mapping = load_json_file(_get_data_mapping_path())
         buffer = SchemaExporter.to_csv_buffer(data_mapping, "tables")
 
         return StreamingResponse(
             iter([buffer.getvalue()]),
             media_type="text/csv",
-            headers={
-                "Content-Disposition": "attachment; filename=snapanalyst_tables.csv"
-            }
+            headers={"Content-Disposition": f"attachment; filename={_get_export_prefix()}_tables.csv"},
         )
     except Exception as e:
         logger.error(f"Error exporting tables to CSV: {e}")
@@ -103,15 +112,13 @@ async def export_tables_pdf():
     """
     logger.info("Exporting tables to PDF")
     try:
-        data_mapping = load_json_file(DATA_MAPPING_PATH)
+        data_mapping = load_json_file(_get_data_mapping_path())
         buffer = SchemaExporter.to_pdf_buffer(data_mapping, "tables")
 
         return StreamingResponse(
             iter([buffer.getvalue()]),
             media_type="application/pdf",
-            headers={
-                "Content-Disposition": "attachment; filename=snapanalyst_tables.pdf"
-            }
+            headers={"Content-Disposition": f"attachment; filename={_get_export_prefix()}_tables.pdf"},
         )
     except Exception as e:
         logger.error(f"Error exporting tables to PDF: {e}")
@@ -135,15 +142,13 @@ async def export_tables_markdown():
     """
     logger.info("Exporting tables to Markdown")
     try:
-        data_mapping = load_json_file(DATA_MAPPING_PATH)
+        data_mapping = load_json_file(_get_data_mapping_path())
         markdown = SchemaExporter.to_markdown(data_mapping, "tables")
 
         return Response(
             content=markdown,
             media_type="text/markdown",
-            headers={
-                "Content-Disposition": "attachment; filename=snapanalyst_tables.md"
-            }
+            headers={"Content-Disposition": f"attachment; filename={_get_export_prefix()}_tables.md"},
         )
     except Exception as e:
         logger.error(f"Error exporting tables to Markdown: {e}")
@@ -153,6 +158,7 @@ async def export_tables_markdown():
 # ============================================================================
 # CODE LOOKUP EXPORTS
 # ============================================================================
+
 
 @router.get("/code-lookups/csv", summary="Export code lookups to CSV")
 async def export_code_lookups_csv():
@@ -171,15 +177,13 @@ async def export_code_lookups_csv():
     """
     logger.info("Exporting code lookups to CSV")
     try:
-        data_mapping = load_json_file(DATA_MAPPING_PATH)
+        data_mapping = load_json_file(_get_data_mapping_path())
         buffer = SchemaExporter.to_csv_buffer(data_mapping, "code_lookups")
 
         return StreamingResponse(
             iter([buffer.getvalue()]),
             media_type="text/csv",
-            headers={
-                "Content-Disposition": "attachment; filename=snapanalyst_code_lookups.csv"
-            }
+            headers={"Content-Disposition": f"attachment; filename={_get_export_prefix()}_code_lookups.csv"},
         )
     except Exception as e:
         logger.error(f"Error exporting code lookups to CSV: {e}")
@@ -203,15 +207,13 @@ async def export_code_lookups_pdf():
     """
     logger.info("Exporting code lookups to PDF")
     try:
-        data_mapping = load_json_file(DATA_MAPPING_PATH)
+        data_mapping = load_json_file(_get_data_mapping_path())
         buffer = SchemaExporter.to_pdf_buffer(data_mapping, "code_lookups")
 
         return StreamingResponse(
             iter([buffer.getvalue()]),
             media_type="application/pdf",
-            headers={
-                "Content-Disposition": "attachment; filename=snapanalyst_code_lookups.pdf"
-            }
+            headers={"Content-Disposition": f"attachment; filename={_get_export_prefix()}_code_lookups.pdf"},
         )
     except Exception as e:
         logger.error(f"Error exporting code lookups to PDF: {e}")
@@ -235,15 +237,13 @@ async def export_code_lookups_markdown():
     """
     logger.info("Exporting code lookups to Markdown")
     try:
-        data_mapping = load_json_file(DATA_MAPPING_PATH)
+        data_mapping = load_json_file(_get_data_mapping_path())
         markdown = SchemaExporter.to_markdown(data_mapping, "code_lookups")
 
         return Response(
             content=markdown,
             media_type="text/markdown",
-            headers={
-                "Content-Disposition": "attachment; filename=snapanalyst_code_lookups.md"
-            }
+            headers={"Content-Disposition": f"attachment; filename={_get_export_prefix()}_code_lookups.md"},
         )
     except Exception as e:
         logger.error(f"Error exporting code lookups to Markdown: {e}")
@@ -253,6 +253,7 @@ async def export_code_lookups_markdown():
 # ============================================================================
 # OTHER EXPORTS
 # ============================================================================
+
 
 @router.get("/database-info/pdf", summary="Export database info to PDF")
 async def export_database_info_pdf():
@@ -272,15 +273,13 @@ async def export_database_info_pdf():
     """
     logger.info("Exporting database info to PDF")
     try:
-        data_mapping = load_json_file(DATA_MAPPING_PATH)
+        data_mapping = load_json_file(_get_data_mapping_path())
         buffer = SchemaExporter.to_pdf_buffer(data_mapping, "database_info")
 
         return StreamingResponse(
             iter([buffer.getvalue()]),
             media_type="application/pdf",
-            headers={
-                "Content-Disposition": "attachment; filename=snapanalyst_database_info.pdf"
-            }
+            headers={"Content-Disposition": f"attachment; filename={_get_export_prefix()}_database_info.pdf"},
         )
     except Exception as e:
         logger.error(f"Error exporting database info to PDF: {e}")
@@ -305,15 +304,13 @@ async def export_relationships_csv():
     """
     logger.info("Exporting relationships to CSV")
     try:
-        data_mapping = load_json_file(DATA_MAPPING_PATH)
+        data_mapping = load_json_file(_get_data_mapping_path())
         buffer = SchemaExporter.to_csv_buffer(data_mapping, "relationships")
 
         return StreamingResponse(
             iter([buffer.getvalue()]),
             media_type="text/csv",
-            headers={
-                "Content-Disposition": "attachment; filename=snapanalyst_relationships.csv"
-            }
+            headers={"Content-Disposition": f"attachment; filename={_get_export_prefix()}_relationships.csv"},
         )
     except Exception as e:
         logger.error(f"Error exporting relationships to CSV: {e}")

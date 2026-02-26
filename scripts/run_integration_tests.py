@@ -4,6 +4,7 @@ Run integration tests for SnapAnalyst
 
 This script runs database and API integration tests.
 """
+
 import subprocess
 import sys
 from pathlib import Path
@@ -19,6 +20,7 @@ def run_tests():
 
     # Set PYTHONPATH
     import os
+
     os.environ["PYTHONPATH"] = str(project_root)
 
     # Run database integration tests
@@ -26,26 +28,18 @@ def run_tests():
     print("1. DATABASE INTEGRATION TESTS")
     print("=" * 80)
 
-    result_db = subprocess.run([
-        "pytest",
-        "tests/integration/test_database_integration.py",
-        "-v",
-        "-s",
-        "--tb=short"
-    ], cwd=project_root)
+    result_db = subprocess.run(
+        ["pytest", "tests/integration/test_database_integration.py", "-v", "-s", "--tb=short"], cwd=project_root
+    )
 
     # Run API integration tests
     print("\n" + "=" * 80)
     print("2. API INTEGRATION TESTS")
     print("=" * 80)
 
-    result_api = subprocess.run([
-        "pytest",
-        "tests/integration/test_api_integration.py",
-        "-v",
-        "-s",
-        "--tb=short"
-    ], cwd=project_root)
+    result_api = subprocess.run(
+        ["pytest", "tests/integration/test_api_integration.py", "-v", "-s", "--tb=short"], cwd=project_root
+    )
 
     # Summary
     print("\n" + "=" * 80)
@@ -64,6 +58,7 @@ def run_tests():
     else:
         print("\n❌ SOME TESTS FAILED")
         return 1
+
 
 if __name__ == "__main__":
     sys.exit(run_tests())

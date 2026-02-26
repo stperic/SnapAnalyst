@@ -1,60 +1,45 @@
 """
 Vanna LLM Provider Configuration
 
-Uses LegacyVannaAdapter to bridge Vanna 0.x (with DDL training via ChromaDB)
-to Vanna 2.x Agent architecture.
+Uses Vanna 0.x API with ChromaDB for DDL storage and RAG-based SQL generation.
 
 ARCHITECTURE:
 - Vanna 0.x: ChromaDB_VectorStore stores DDL, documentation, example queries
-- LegacyVannaAdapter: Wraps 0.x instance for 2.x Agent compatibility
 - train(ddl=...) stores schema in ChromaDB for RAG retrieval
-- ask() retrieves relevant DDL via get_related_ddl() before generating SQL
+- generate_sql() retrieves relevant DDL via get_related_ddl() before generating SQL
 
 INITIALIZATION FLOW:
-1. Create Vanna 0.x instance (MyVanna class)
+1. Create Vanna 0.x instance (provider-specific class)
 2. Connect to PostgreSQL database
 3. Train with DDL from database schema
-4. Wrap with LegacyVannaAdapter for 2.x compatibility
 """
 
 from __future__ import annotations
 
-import atexit
 import os
 import threading
+import time
 from contextlib import contextmanager, redirect_stdout
 from io import StringIO
 from typing import TYPE_CHECKING
 
-import pandas as pd
-
 # Configure ONNX Runtime before any Vanna/ChromaDB imports
 # CRITICAL: Multiple settings to completely disable CPU affinity in LXC containers
 # See: https://github.com/chroma-core/chroma/issues/1420
-if not os.environ.get('OMP_NUM_THREADS') or os.environ.get('OMP_NUM_THREADS') == '0':
-    os.environ['OMP_NUM_THREADS'] = '4'
-if not os.environ.get('ORT_DISABLE_CPU_EP_AFFINITY'):
-    os.environ['ORT_DISABLE_CPU_EP_AFFINITY'] = '1'
-if not os.environ.get('ORT_DISABLE_THREAD_AFFINITY'):
-    os.environ['ORT_DISABLE_THREAD_AFFINITY'] = '1'
-if not os.environ.get('OMP_WAIT_POLICY'):
-    os.environ['OMP_WAIT_POLICY'] = 'PASSIVE'
-if not os.environ.get('OMP_PROC_BIND'):
-    os.environ['OMP_PROC_BIND'] = 'false'
+if not os.environ.get("OMP_NUM_THREADS") or os.environ.get("OMP_NUM_THREADS") == "0":
+    os.environ["OMP_NUM_THREADS"] = "4"
+if not os.environ.get("ORT_DISABLE_CPU_EP_AFFINITY"):
+    os.environ["ORT_DISABLE_CPU_EP_AFFINITY"] = "1"
+if not os.environ.get("ORT_DISABLE_THREAD_AFFINITY"):
+    os.environ["ORT_DISABLE_THREAD_AFFINITY"] = "1"
+if not os.environ.get("OMP_WAIT_POLICY"):
+    os.environ["OMP_WAIT_POLICY"] = "PASSIVE"
+if not os.environ.get("OMP_PROC_BIND"):
+    os.environ["OMP_PROC_BIND"] = "false"
 
-# Azure OpenAI support
 from psycopg2 import pool
-
-# Vanna 2.x agent imports
-from vanna import Agent, AgentConfig
-from vanna.core.user import RequestContext, User, UserResolver
-from vanna.integrations.anthropic.llm import AnthropicLlmService
-from vanna.integrations.openai.llm import OpenAILlmService
-from vanna.legacy.adapter import LegacyVannaAdapter
 from vanna.legacy.anthropic.anthropic_chat import Anthropic_Chat
 from vanna.legacy.chromadb.chromadb_vector import ChromaDB_VectorStore
-
-# Vanna 2.x legacy imports (for 0.x-style DDL training with ChromaDB)
 from vanna.legacy.openai.openai_chat import OpenAI_Chat
 
 from src.core.config import settings
@@ -92,7 +77,29 @@ def get_request_custom_prompt() -> str | None:
     Returns:
         Custom prompt for this thread, or None if not set
     """
-    return getattr(_thread_local, 'custom_prompt', None)
+    return getattr(_thread_local, "custom_prompt", None)
+
+
+def set_request_llm_params(params: dict | None):
+    """
+    Set per-request LLM parameters for current thread.
+
+    Thread-safe: Each request gets its own storage.
+
+    Args:
+        params: Dict with temperature, top_p, max_tokens, model (all optional)
+    """
+    _thread_local.llm_params = params
+
+
+def get_request_llm_params() -> dict | None:
+    """
+    Get per-request LLM parameters for current thread.
+
+    Returns:
+        LLM params dict or None if not set
+    """
+    return getattr(_thread_local, "llm_params", None)
 
 
 # =============================================================================
@@ -109,9 +116,15 @@ class PostgresConnectionPool:
     Manages a pool of reusable connections to avoid connection overhead.
     Thread-safe and handles connection lifecycle automatically.
 
+    Features:
+    - Pre-ping: validates connections with SELECT 1 before use, discards stale ones
+    - Connection recycling: replaces connections older than MAX_CONN_AGE_SECONDS
+
     IMPORTANT: Use get_shared_db_pool() instead of creating instances directly
     to ensure connection pool is shared across all agents.
     """
+
+    MAX_CONN_AGE_SECONDS = 3600  # Recycle connections older than 1 hour
 
     def __init__(
         self,
@@ -145,34 +158,70 @@ class PostgresConnectionPool:
             port=port,
             connect_timeout=10,
         )
-        logger.info(
-            f"Created PostgreSQL connection pool: {host}:{port}/{dbname} "
-            f"(min={minconn}, max={maxconn})"
-        )
+        self._conn_created_at: dict[int, float] = {}  # id(conn) -> timestamp
+        self._lock = threading.Lock()
+        logger.info(f"Created PostgreSQL connection pool: {host}:{port}/{dbname} (min={minconn}, max={maxconn})")
+
+    def _is_connection_alive(self, conn: Connection) -> bool:
+        """Test if a connection is still usable with a SELECT 1 pre-ping."""
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+            # Discard any transaction state from the ping
+            conn.rollback()
+            return True
+        except Exception:
+            return False
+
+    def _is_connection_expired(self, conn: Connection) -> bool:
+        """Check if a connection has exceeded the max age."""
+        with self._lock:
+            created = self._conn_created_at.get(id(conn))
+        if created is None:
+            return False
+        return (time.monotonic() - created) > self.MAX_CONN_AGE_SECONDS
 
     @contextmanager
     def get_connection(self) -> Connection:
         """
-        Get a connection from the pool.
+        Get a healthy connection from the pool.
+
+        Pre-pings the connection and discards stale/expired ones.
+        Retries once on failure to get a fresh connection.
 
         Yields:
             Database connection
-
-        Example:
-            with pool.get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT * FROM users")
         """
         conn = self._pool.getconn()
+        with self._lock:
+            self._conn_created_at.setdefault(id(conn), time.monotonic())
+
+        # Check if connection is alive and not expired
+        if not self._is_connection_alive(conn) or self._is_connection_expired(conn):
+            # Discard the bad/old connection and get a fresh one
+            with self._lock:
+                self._conn_created_at.pop(id(conn), None)
+            self._pool.putconn(conn, close=True)
+            conn = self._pool.getconn()
+            with self._lock:
+                self._conn_created_at[id(conn)] = time.monotonic()
+
         try:
             yield conn
         finally:
+            with self._lock:
+                # Clean up tracking if pool will close this connection
+                if conn.closed:
+                    self._conn_created_at.pop(id(conn), None)
             self._pool.putconn(conn)
 
     def close_all(self) -> None:
         """Close all connections in the pool."""
         if self._pool:
             self._pool.closeall()
+            with self._lock:
+                self._conn_created_at.clear()
             logger.info("Closed all PostgreSQL connections")
 
     def health_check(self) -> dict:
@@ -191,13 +240,13 @@ class PostgresConnectionPool:
                 "connections": {
                     "min": self._pool.minconn,
                     "max": self._pool.maxconn,
-                }
+                },
             }
         except Exception as e:
-            return {
-                "healthy": False,
-                "error": str(e)
-            }
+            return {"healthy": False, "error": str(e)}
+
+
+_db_pool_lock = threading.Lock()
 
 
 def get_shared_db_pool() -> PostgresConnectionPool:
@@ -205,26 +254,30 @@ def get_shared_db_pool() -> PostgresConnectionPool:
     Get or create the shared database connection pool.
 
     All agents share ONE connection pool to the database.
-    This prevents memory leaks and optimizes connection usage.
+    Thread-safe: uses double-checked locking for initialization.
 
     Returns:
         Shared PostgresConnectionPool instance
     """
     global _db_pool
-    if _db_pool is None:
+    if _db_pool is not None:
+        return _db_pool
+    with _db_pool_lock:
+        if _db_pool is not None:
+            return _db_pool
         # Parse database_url to extract components
         db_url = str(settings.database_url)
-        # Format: postgresql://user:password@host:port/dbname
-        # Use psycopg2 to parse
-        import re
-        match = re.match(
-            r'postgresql://([^:]+):([^@]+)@([^:]+):(\d+)/(.+)',
-            db_url
-        )
-        if not match:
-            raise ValueError(f"Invalid database_url format: {db_url}")
+        from urllib.parse import urlparse
 
-        user, password, host, port, dbname = match.groups()
+        parsed = urlparse(db_url)
+        if not all([parsed.hostname, parsed.path, parsed.username]):
+            raise ValueError("Invalid database_url format: missing hostname, path, or username")
+
+        user = parsed.username
+        password = parsed.password or ""
+        host = parsed.hostname
+        port = parsed.port or 5432
+        dbname = parsed.path.lstrip("/")
 
         _db_pool = PostgresConnectionPool(
             host=host,
@@ -232,7 +285,7 @@ def get_shared_db_pool() -> PostgresConnectionPool:
             user=user,
             password=password,
             port=int(port),
-            minconn=2,   # Keep 2 warm connections
+            minconn=2,  # Keep 2 warm connections
             maxconn=20,  # Allow up to 20 concurrent queries
         )
     return _db_pool
@@ -242,7 +295,9 @@ def shutdown_db_pool() -> None:
     """
     Shutdown the shared database connection pool.
 
-    Called automatically on application exit via atexit hook.
+    Called from the FastAPI lifespan shutdown handler (with a timeout)
+    rather than via atexit, which can block indefinitely if connections
+    are checked out when SIGTERM arrives.
     """
     global _db_pool
     if _db_pool:
@@ -251,73 +306,19 @@ def shutdown_db_pool() -> None:
         _db_pool = None
 
 
-# Register shutdown hook
-atexit.register(shutdown_db_pool)
-
-
-# =============================================================================
-# SQL RUNNER
-# =============================================================================
-
-
-class PostgresRunner:
-    """
-    PostgreSQL SQL runner for Vanna RunSqlTool.
-
-    Implements the Vanna SqlRunner interface:
-    - async run_sql(args, context) -> DataFrame
-
-    Executes SQL queries using a connection pool for efficiency.
-    """
-
-    def __init__(self, pool: PostgresConnectionPool):
-        """
-        Initialize runner with connection pool.
-
-        Args:
-            pool: PostgreSQL connection pool
-        """
-        self.pool = pool
-
-    async def run_sql(self, args, _context) -> pd.DataFrame:
-        """
-        Execute SQL query and return results as DataFrame.
-
-        This method implements the Vanna SqlRunner interface.
-        Captures SQL BEFORE execution for streaming display.
-
-        Args:
-            args: RunSqlToolArgs with .sql attribute
-            _context: ToolContext (unused but required by interface)
-
-        Returns:
-            pandas DataFrame with query results
-
-        Raises:
-            psycopg2.Error: If query execution fails
-        """
-        sql = args.sql if hasattr(args, 'sql') else str(args)
-
-        with self.pool.get_connection() as conn, conn.cursor() as cursor:
-            cursor.execute(sql)
-
-            # Check if query returns data (SELECT, WITH)
-            if cursor.description:
-                columns = [desc[0] for desc in cursor.description]
-                rows = cursor.fetchall()
-                return pd.DataFrame(rows, columns=columns)
-            else:
-                # DML statement (INSERT, UPDATE, DELETE)
-                conn.commit()
-                return pd.DataFrame([{"rows_affected": cursor.rowcount}])
-
-
 # =============================================================================
 # VANNA 0.x CLASSES (with ChromaDB for DDL storage)
 # =============================================================================
 
 
-class OpenAIVanna(ChromaDB_VectorStore, OpenAI_Chat):
+class _QuietLogMixin:
+    """Override Vanna's log() to use Python logging instead of raw print()."""
+
+    def log(self, message: str, title: str = "Info"):
+        logger.debug("%s: %s", title, message[:200] if len(message) > 200 else message)
+
+
+class OpenAIVanna(_QuietLogMixin, ChromaDB_VectorStore, OpenAI_Chat):
     """Vanna 0.x class using OpenAI + ChromaDB for DDL storage."""
 
     def __init__(self, config=None):
@@ -337,8 +338,22 @@ class OpenAIVanna(ChromaDB_VectorStore, OpenAI_Chat):
             return {"role": "system", "content": combined}
         return {"role": "system", "content": message}
 
+    def submit_prompt(self, prompt, **kwargs):
+        """Override to apply per-request LLM params from thread-local storage.
 
-class AnthropicVanna(ChromaDB_VectorStore, Anthropic_Chat):
+        Note: temperature is passed via kwargs rather than mutating self.temperature
+        to avoid thread-safety issues with the shared singleton instance.
+        """
+        params = get_request_llm_params()
+        if params:
+            if params.get("temperature") is not None:
+                kwargs["temperature"] = params["temperature"]
+            if params.get("top_p") is not None:
+                kwargs["top_p"] = params["top_p"]
+        return super().submit_prompt(prompt, **kwargs)
+
+
+class AnthropicVanna(_QuietLogMixin, ChromaDB_VectorStore, Anthropic_Chat):
     """Vanna 0.x class using Anthropic + ChromaDB for DDL storage."""
 
     def __init__(self, config=None):
@@ -358,8 +373,22 @@ class AnthropicVanna(ChromaDB_VectorStore, Anthropic_Chat):
             return {"role": "system", "content": combined}
         return {"role": "system", "content": message}
 
+    def submit_prompt(self, prompt, **kwargs):
+        """Override to apply per-request LLM params from thread-local storage.
 
-class AzureOpenAIVanna(ChromaDB_VectorStore, OpenAI_Chat):
+        Note: temperature is passed via kwargs rather than mutating self.temperature
+        to avoid thread-safety issues with the shared singleton instance.
+        """
+        params = get_request_llm_params()
+        if params:
+            if params.get("temperature") is not None:
+                kwargs["temperature"] = params["temperature"]
+            if params.get("top_p") is not None:
+                kwargs["top_p"] = params["top_p"]
+        return super().submit_prompt(prompt, **kwargs)
+
+
+class AzureOpenAIVanna(_QuietLogMixin, ChromaDB_VectorStore, OpenAI_Chat):
     """
     Vanna 0.x class using Azure OpenAI-compatible endpoint + ChromaDB for DDL storage.
 
@@ -398,8 +427,22 @@ class AzureOpenAIVanna(ChromaDB_VectorStore, OpenAI_Chat):
             return {"role": "system", "content": combined}
         return {"role": "system", "content": message}
 
+    def submit_prompt(self, prompt, **kwargs):
+        """Override to apply per-request LLM params from thread-local storage.
 
-class OllamaVanna(ChromaDB_VectorStore):
+        Note: temperature is passed via kwargs rather than mutating self.temperature
+        to avoid thread-safety issues with the shared singleton instance.
+        """
+        params = get_request_llm_params()
+        if params:
+            if params.get("temperature") is not None:
+                kwargs["temperature"] = params["temperature"]
+            if params.get("top_p") is not None:
+                kwargs["top_p"] = params["top_p"]
+        return super().submit_prompt(prompt, **kwargs)
+
+
+class OllamaVanna(_QuietLogMixin, ChromaDB_VectorStore):
     """
     Vanna 0.x class using Ollama + ChromaDB for DDL storage.
 
@@ -409,12 +452,26 @@ class OllamaVanna(ChromaDB_VectorStore):
     def __init__(self, config=None):
         ChromaDB_VectorStore.__init__(self, config=config)
         self.config = config or {}
-        self.model = self.config.get('model', 'llama3.1:8b')
-        self.temperature = self.config.get('temperature', 0.7)
+        self.model = self.config.get("model", "llama3.1:8b")
+        self.temperature = self.config.get("temperature", 0.7)
 
         # Import Ollama client
         import ollama
+
         self.client = ollama.Client(host=settings.ollama_base_url)
+
+    def system_message(self, message: str) -> dict:
+        """
+        Override to append per-user custom prompt (from /prompt set) to Vanna's context.
+
+        The base system prompt is already injected via initial_prompt in Vanna config,
+        so it appears BEFORE DDL/docs. This override only adds per-user customizations.
+        """
+        custom_prompt = get_request_custom_prompt()
+        if custom_prompt:
+            combined = f"{message}\n\n{custom_prompt}"
+            return {"role": "system", "content": combined}
+        return {"role": "system", "content": message}
 
     def submit_prompt(self, prompt, **kwargs):
         """Submit prompt to Ollama for completion."""
@@ -425,18 +482,28 @@ class OllamaVanna(ChromaDB_VectorStore):
         messages = prompt if isinstance(prompt, list) else [{"role": "user", "content": prompt}]
 
         # Get model from kwargs or use default
-        model = kwargs.get('model', self.model)
+        model = kwargs.get("model", self.model)
+
+        # Apply per-request LLM params from thread-local storage
+        temperature = self.temperature
+        options = {}
+        params = get_request_llm_params()
+        if params:
+            if params.get("temperature") is not None:
+                temperature = params["temperature"]
+            if params.get("top_p") is not None:
+                options["top_p"] = params["top_p"]
+
+        options["temperature"] = temperature
 
         # Call Ollama
         response = self.client.chat(
             model=model,
             messages=messages,
-            options={
-                'temperature': self.temperature,
-            }
+            options=options,
         )
 
-        return response['message']['content']
+        return response["message"]["content"]
 
     def generate_question(self, sql: str, **kwargs) -> str:
         """Generate a question from SQL (required by Vanna base class)."""
@@ -444,14 +511,17 @@ class OllamaVanna(ChromaDB_VectorStore):
         return self.submit_prompt([{"role": "user", "content": prompt}], **kwargs)
 
 
-# Global Vanna instance (cached)
+# Global Vanna instance (cached, thread-safe)
 _vanna_instance = None
 _vanna_trained = False
+_vanna_lock = threading.Lock()
 
 
 def _get_vanna_instance():
     """
     Get or create the Vanna 0.x instance with ChromaDB.
+
+    Thread-safe: uses double-checked locking to prevent duplicate initialization.
 
     Returns:
         Configured Vanna instance with DDL stored in ChromaDB
@@ -461,77 +531,89 @@ def _get_vanna_instance():
     if _vanna_instance is not None:
         return _vanna_instance
 
+    with _vanna_lock:
+        if _vanna_instance is not None:
+            return _vanna_instance
+
     from src.core.prompts import VANNA_SQL_SYSTEM_PROMPT
 
     provider = settings.llm_provider
     model = settings.sql_model
     chroma_path = f"{settings.vanna_chromadb_path}/vanna_ddl"
 
-    logger.info(f"Creating Vanna 0.x instance with ChromaDB at {chroma_path}")
+    logger.debug(f"Creating Vanna 0.x instance with ChromaDB at {chroma_path}")
 
     # Common config: initial_prompt places our system prompt BEFORE DDL/docs in the LLM context
     base_config = {
-        'path': chroma_path,
-        'model': model,
-        'initial_prompt': VANNA_SQL_SYSTEM_PROMPT,
-        'n_results_sql': 5,
-        'n_results_documentation': 5,
-        'log_level': 'WARNING',
+        "path": chroma_path,
+        "model": model,
+        "initial_prompt": VANNA_SQL_SYSTEM_PROMPT,
+        "n_results_sql": settings.vanna_n_results_sql,
+        "n_results_documentation": settings.vanna_n_results_docs,
+        "log_level": "WARNING",
     }
 
     if provider == "openai":
         if not settings.openai_api_key:
             raise ValueError("OpenAI API key not configured")
 
-        _vanna_instance = OpenAIVanna(config={
-            **base_config,
-            'api_key': settings.openai_api_key,
-        })
-        logger.info(f"Created OpenAI Vanna with model: {model}")
+        _vanna_instance = OpenAIVanna(
+            config={
+                **base_config,
+                "api_key": settings.openai_api_key,
+            }
+        )
+        logger.debug(f"Created OpenAI Vanna with model: {model}")
 
     elif provider == "azure_openai":
         if not settings.azure_openai_api_key or not settings.azure_openai_endpoint:
             raise ValueError("Azure OpenAI endpoint and API key not configured")
 
-        _vanna_instance = AzureOpenAIVanna(config={
-            **base_config,
-        })
-        logger.info(f"Created Azure OpenAI Vanna with model: {model}")
+        _vanna_instance = AzureOpenAIVanna(
+            config={
+                **base_config,
+            }
+        )
+        logger.debug(f"Created Azure OpenAI Vanna with model: {model}")
 
     elif provider == "anthropic":
         if not settings.anthropic_api_key:
             raise ValueError("Anthropic API key not configured")
 
-        _vanna_instance = AnthropicVanna(config={
-            **base_config,
-            'api_key': settings.anthropic_api_key,
-        })
-        logger.info(f"Created Anthropic Vanna with model: {model}")
+        _vanna_instance = AnthropicVanna(
+            config={
+                **base_config,
+                "api_key": settings.anthropic_api_key,
+            }
+        )
+        logger.debug(f"Created Anthropic Vanna with model: {model}")
 
     elif provider == "ollama":
-        _vanna_instance = OllamaVanna(config={
-            **base_config,
-            'temperature': 0.1,
-        })
-        logger.info(f"Created Ollama Vanna with model: {model} at {settings.ollama_base_url}")
+        _vanna_instance = OllamaVanna(
+            config={
+                **base_config,
+                "temperature": 0.1,
+            }
+        )
+        logger.debug(f"Created Ollama Vanna with model: {model} at {settings.ollama_base_url}")
 
     else:
         raise ValueError(f"Unsupported provider for Vanna 0.x: {provider}")
 
     # Connect to PostgreSQL
     db_url = str(settings.database_url)
-    import re
-    match = re.match(r'postgresql://([^:]+):([^@]+)@([^:]+):(\d+)/(.+)', db_url)
-    if match:
-        user, password, host, port, dbname = match.groups()
+    from urllib.parse import urlparse
+
+    parsed = urlparse(db_url)
+    if parsed.hostname and parsed.username:
         _vanna_instance.connect_to_postgres(
-            host=host,
-            dbname=dbname,
-            user=user,
-            password=password,
-            port=int(port)
+            host=parsed.hostname,
+            dbname=parsed.path.lstrip("/"),
+            user=parsed.username,
+            password=parsed.password or "",
+            port=parsed.port or 5432,
         )
-        logger.info(f"Connected Vanna to PostgreSQL: {host}:{port}/{dbname}")
+        logger.debug(f"Connected Vanna to PostgreSQL: {parsed.hostname}:{parsed.port or 5432}/{parsed.path.lstrip('/')}")
 
     return _vanna_instance
 
@@ -557,33 +639,38 @@ def train_vanna_with_ddl(force_retrain: bool = False):
     try:
         # Check if DDL is already in ChromaDB
         existing_data = vn.get_training_data()
-        ddl_count = len(existing_data[existing_data['training_data_type'] == 'ddl']) if not existing_data.empty else 0
+        ddl_count = len(existing_data[existing_data["training_data_type"] == "ddl"]) if not existing_data.empty else 0
 
         if ddl_count > 0 and not force_retrain:
-            logger.info(f"Vanna already has {ddl_count} DDL statements in ChromaDB, skipping training")
+            logger.debug(f"Vanna already has {ddl_count} DDL statements in ChromaDB, skipping training")
             _vanna_trained = True
             return
 
-        logger.info(f"Training Vanna with DDL (existing: {ddl_count}, force: {force_retrain})")
+        logger.debug(f"Training Vanna with DDL (existing: {ddl_count}, force: {force_retrain})")
 
         # Get DDL from database
         from src.database.ddl_extractor import get_all_ddl_statements
 
         ddl_statements = get_all_ddl_statements(include_samples=True)
-        logger.info(f"Training Vanna with {len(ddl_statements)} DDL statements")
+        logger.debug(f"Training Vanna with {len(ddl_statements)} DDL statements")
 
         # Suppress verbose "Adding ddl:" print statements from Vanna
+        ddl_success, ddl_fail = 0, 0
         with redirect_stdout(StringIO()):
             for i, ddl in enumerate(ddl_statements):
                 try:
                     vn.train(ddl=ddl)
-                    logger.debug(f"Trained DDL {i+1}/{len(ddl_statements)}")
+                    ddl_success += 1
                 except Exception as e:
-                    logger.warning(f"Failed to train DDL {i+1}: {e}")
+                    ddl_fail += 1
+                    logger.warning(f"Failed to train DDL {i + 1}: {e}")
+        logger.debug(f"DDL training: {ddl_success} succeeded, {ddl_fail} failed out of {len(ddl_statements)}")
 
         # Add all documentation files from datasets/snap/
         from src.services.kb_chromadb import _chunk_text
         from src.services.llm_training import get_documentation_files
+
+        doc_success, doc_fail = 0, 0
         for doc_path in get_documentation_files():
             try:
                 doc_text = doc_path.read_text(encoding="utf-8")
@@ -591,15 +678,18 @@ def train_vanna_with_ddl(force_retrain: bool = False):
                 with redirect_stdout(StringIO()):
                     for chunk in chunks:
                         vn.train(documentation=chunk)
-                logger.info(f"Trained with {doc_path.name} ({len(chunks)} chunks)")
+                doc_success += len(chunks)
+                logger.debug(f"Trained with {doc_path.name} ({len(chunks)} chunks)")
             except Exception as e:
+                doc_fail += 1
                 logger.warning(f"Failed to train {doc_path.name}: {e}")
 
         # Add query examples from training data folder
         from src.services.llm_training import load_training_examples
+
         examples = load_training_examples()
+        example_success, example_fail = 0, 0
         if examples:
-            trained_count = 0
             with redirect_stdout(StringIO()):
                 for ex in examples:
                     question = ex.get("question", "")
@@ -607,13 +697,17 @@ def train_vanna_with_ddl(force_retrain: bool = False):
                     if question and sql:
                         try:
                             vn.train(question=question, sql=sql)
-                            trained_count += 1
+                            example_success += 1
                         except Exception as e:
+                            example_fail += 1
                             logger.warning(f"Failed to train example '{question[:50]}': {e}")
-            logger.info(f"Trained with {trained_count}/{len(examples)} query examples")
+            logger.debug(f"Query examples: {example_success}/{len(examples)} trained")
 
         _vanna_trained = True
-        logger.info("Vanna training complete - DDL stored in ChromaDB")
+        logger.debug(
+            f"Vanna training complete - DDL: {ddl_success}, docs: {doc_success}, "
+            f"examples: {example_success}, failures: {ddl_fail + doc_fail + example_fail}"
+        )
 
     except Exception as e:
         logger.error(f"Failed to train Vanna: {e}")
@@ -668,7 +762,7 @@ def train_vanna(force_retrain: bool = False, reload_training_data: bool = False)
                 vn.train(ddl=ddl)
                 counts["ddl"] += 1
             except Exception as e:
-                logger.warning(f"Failed to train DDL {i+1}: {e}")
+                logger.warning(f"Failed to train DDL {i + 1}: {e}")
 
     # Optionally reload training data from the training folder
     if reload_training_data:
@@ -684,7 +778,7 @@ def train_vanna(force_retrain: bool = False, reload_training_data: bool = False)
                     for chunk in chunks:
                         vn.train(documentation=chunk)
                 counts["documentation"] += len(chunks)
-                logger.info(f"Trained with {doc_path.name} ({len(chunks)} chunks)")
+                logger.debug(f"Trained with {doc_path.name} ({len(chunks)} chunks)")
             except Exception as e:
                 logger.warning(f"Failed to train {doc_path.name}: {e}")
 
@@ -711,113 +805,19 @@ def train_vanna(force_retrain: bool = False, reload_training_data: bool = False)
 
 
 # =============================================================================
-# AGENT CREATION (using LegacyVannaAdapter)
+# INITIALIZATION
 # =============================================================================
 
 
-class SnapAnalystUserResolver(UserResolver):
-    """User resolver for Vanna 2.x agent."""
-
-    async def resolve_user(self, request_context: RequestContext) -> User:
-        user_id = request_context.get_header("x-user-id") or "guest"
-        return User(
-            id=user_id,
-            username=user_id,
-            email=f"{user_id}@snapanalyst.local",
-            group_memberships=["user"],
-            metadata={"source": "snapanalyst"},
-        )
-
-
-def _create_llm_service(provider: str, model: str):
-    """Create LLM service for Vanna 2.x Agent."""
-    if provider == "openai":
-        if not settings.openai_api_key:
-            raise ValueError("OpenAI API key not configured")
-        return OpenAILlmService(model=model, api_key=settings.openai_api_key)
-
-    elif provider == "azure_openai":
-        # For Azure OpenAI, we don't use the Agent (LegacyVannaAdapter handles it)
-        # Just return a basic OpenAI service for compatibility
-        # The actual Azure calls are made through AzureOpenAIVanna class
-        if not settings.azure_openai_api_key or not settings.azure_openai_endpoint:
-            raise ValueError("Azure OpenAI endpoint and API key not configured")
-
-        # Return OpenAI service with model from settings
-        # This is used for Agent creation but actual SQL gen uses AzureOpenAIVanna
-        return OpenAILlmService(
-            model=model,  # Use the model parameter passed in
-            api_key=settings.azure_openai_api_key
-        )
-
-    elif provider == "anthropic":
-        if not settings.anthropic_api_key:
-            raise ValueError("Anthropic API key not configured")
-        return AnthropicLlmService(model=model, api_key=settings.anthropic_api_key)
-
-    elif provider == "ollama":
-        # For Ollama, we don't use the Agent (LegacyVannaAdapter handles it)
-        # Return a dummy OpenAI service for compatibility
-        # The actual Ollama calls are made through OllamaVanna class
-        return OpenAILlmService(model=model, api_key="dummy-key-not-used")
-
-    else:
-        raise ValueError(f"Unsupported provider: {provider}")
-
-
-def create_agent(dataset: str = "snap_qc", max_memory_items: int = 10000):
+def initialize_vanna():
     """
-    Create a Vanna 2.x Agent using LegacyVannaAdapter.
+    Initialize Vanna: create the 0.x instance and train with DDL.
 
-    This wraps a Vanna 0.x instance (with ChromaDB DDL storage) for use
-    with the Vanna 2.x Agent architecture.
-
-    The LegacyVannaAdapter:
-    - Implements ToolRegistry (exposes vn.run_sql() as run_sql tool)
-    - Implements AgentMemory (exposes training data for RAG retrieval)
-    - Maintains existing ChromaDB training data (DDL, docs, examples)
-
-    Args:
-        dataset: Dataset name (for logging)
-        max_memory_items: Unused (kept for API compatibility)
-
-    Returns:
-        Vanna 2.x Agent with LegacyVannaAdapter
+    This is the main entry point for LLM service initialization.
+    Creates the Vanna instance (with ChromaDB) and trains it with
+    DDL from the database.
     """
-    # 1. Get or create Vanna 0.x instance with ChromaDB
     vn = _get_vanna_instance()
-
-    # 2. Train with DDL from database (only runs once, persisted in ChromaDB)
     train_vanna_with_ddl()
-
-    # 3. Create LegacyVannaAdapter (implements ToolRegistry + AgentMemory)
-    legacy_adapter = LegacyVannaAdapter(vn)
-
-    # 4. Create LLM service for the 2.x Agent
-    llm_service = _create_llm_service(settings.llm_provider, settings.sql_model)
-
-    # 5. Configure agent behavior
-    config = AgentConfig(
-        max_tool_iterations=10,
-        stream_responses=False,
-        auto_save_conversations=False,
-        temperature=settings.llm_temperature,
-        max_tokens=4000,
-    )
-
-    # 6. Create Vanna 2.x Agent with the legacy adapter
-    agent = Agent(
-        llm_service=llm_service,
-        tool_registry=legacy_adapter,      # LegacyVannaAdapter is a ToolRegistry
-        agent_memory=legacy_adapter,       # LegacyVannaAdapter is also AgentMemory
-        user_resolver=SnapAnalystUserResolver(),
-        config=config,
-    )
-
-    logger.info(f"Created Vanna 2.x Agent for dataset '{dataset}'")
-    logger.info(f"  Provider: {settings.llm_provider.upper()}")
-    logger.info(f"  Model: {settings.sql_model}")
-    logger.info("  DDL Storage: ChromaDB (persistent, RAG retrieval)")
-    logger.info("  Adapter: LegacyVannaAdapter (bridges 0.x DDL to 2.x Agent)")
-
-    return agent
+    logger.info(f"Vanna initialized: {settings.llm_provider.upper()} / {settings.sql_model}")
+    return vn

@@ -47,42 +47,28 @@ GROUP BY state_name
 ORDER BY household_count DESC
 ```
 
-### AI-Powered Insights
+### Chat Modes
 
-Get deeper insights from your data using ChromaDB-enhanced analysis:
+Use the mode selector in the chat input to switch between query types:
 
-- **`/?` Full Thread Insight** - Ask questions that consider your entire conversation history
-  ```
-  /? Compare the error patterns across all my previous queries
-  /? What trends do you see in the data I've analyzed so far?
-  ```
+- **SQL** (default) — Natural language to SQL queries
+- **Insights** — Ask questions that consider your entire conversation history
+- **Knowledge** — Query the knowledge base directly for code lookups and documentation
+- **Settings** — Open the Settings sidebar panel
 
-- **`/??` Knowledge Base Lookup** - Query the knowledge base directly without thread context
-  ```
-  /?? What does status code 2 mean?
-  /?? Explain element code 311
-  ```
+### Settings
 
----
+Click the **Settings** toolbar button (or select Settings mode) to access:
 
-## Chat Commands
+| Panel | Description |
+|-------|-------------|
+| **Filters** | Set state and fiscal year filters |
+| **LLM Params** | Configure LLM provider, model, temperature |
+| **Knowledge SQL** | Manage Vanna SQL training data — upload, browse, delete, reset |
+| **Knowledge** | Manage KB documents — upload, browse, delete, reset |
+| **Database** | View database statistics, export data |
 
-Type these commands to access features:
-
-| Command | Description |
-|---------|-------------|
-| `/help` | Show all available commands |
-| `/status` | Show system status |
-| `/database` | View database statistics |
-| `/schema` | Explore database structure |
-| `/llm` | View LLM configuration |
-| `/filter status` | Check active state/year filters |
-| `/export` | Export current results to Excel |
-| `/mem` | Open Knowledge Base management panel |
-| `/memsql` | Open SQL Training management panel |
-| `/prompt sql` | View current SQL generation prompt |
-| `/prompt kb` | View current KB insight prompt |
-| `/clear` | Clear chat history |
+Type `/clear` in the chat to clear your conversation history.
 
 ---
 
@@ -120,6 +106,6 @@ Type these commands to access features:
 
 ---
 
-**Need Help?** Type `/help` for a complete list of commands
+**Need Help?** Use the **Settings** button to access all features, or ask me a question in plain English.
 
-**Last Updated:** February 19, 2026
+**Last Updated:** February 26, 2026

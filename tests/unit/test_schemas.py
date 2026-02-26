@@ -3,6 +3,7 @@ Unit tests for Pydantic Schemas
 
 Tests data validation and serialization for API schemas.
 """
+
 from datetime import datetime
 from decimal import Decimal
 
@@ -29,12 +30,7 @@ class TestHouseholdSchemas:
 
     def test_household_base_valid(self):
         """Test creating valid household base"""
-        household = HouseholdBase(
-            case_id="TEST001",
-            fiscal_year=2023,
-            state_code="CA",
-            snap_benefit=Decimal("284.50")
-        )
+        household = HouseholdBase(case_id="TEST001", fiscal_year=2023, state_code="CA", snap_benefit=Decimal("284.50"))
 
         assert household.case_id == "TEST001"
         assert household.fiscal_year == 2023
@@ -43,10 +39,7 @@ class TestHouseholdSchemas:
 
     def test_household_base_optional_fields(self):
         """Test household with only required fields"""
-        household = HouseholdBase(
-            case_id="TEST001",
-            fiscal_year=2023
-        )
+        household = HouseholdBase(case_id="TEST001", fiscal_year=2023)
 
         assert household.case_id == "TEST001"
         assert household.fiscal_year == 2023
@@ -56,10 +49,7 @@ class TestHouseholdSchemas:
     def test_household_create(self):
         """Test HouseholdCreate schema"""
         household = HouseholdCreate(
-            case_id="TEST001",
-            fiscal_year=2023,
-            gross_income=Decimal("2000.00"),
-            net_income=Decimal("1500.00")
+            case_id="TEST001", fiscal_year=2023, gross_income=Decimal("2000.00"), net_income=Decimal("1500.00")
         )
 
         assert household.case_id == "TEST001"
@@ -75,7 +65,7 @@ class TestHouseholdSchemas:
             certified_household_size=3,
             num_children=2,
             num_elderly=0,
-            created_at=now
+            created_at=now,
         )
 
         assert household.year_month == "202301"
@@ -90,12 +80,7 @@ class TestHouseholdMemberSchemas:
     def test_member_base_valid(self):
         """Test creating valid member"""
         member = HouseholdMemberBase(
-            case_id="TEST001",
-            fiscal_year=2023,
-            member_number=1,
-            age=35,
-            sex=2,
-            wages=Decimal("2000.00")
+            case_id="TEST001", fiscal_year=2023, member_number=1, age=35, sex=2, wages=Decimal("2000.00")
         )
 
         assert member.case_id == "TEST001"
@@ -105,11 +90,7 @@ class TestHouseholdMemberSchemas:
 
     def test_member_base_defaults(self):
         """Test member with default income values"""
-        member = HouseholdMemberBase(
-            case_id="TEST001",
-            fiscal_year=2023,
-            member_number=1
-        )
+        member = HouseholdMemberBase(case_id="TEST001", fiscal_year=2023, member_number=1)
 
         assert member.wages == 0
         assert member.social_security == 0
@@ -121,7 +102,7 @@ class TestHouseholdMemberSchemas:
             HouseholdMemberBase(
                 case_id="TEST001",
                 fiscal_year=2023,
-                member_number=0  # Invalid
+                member_number=0,  # Invalid
             )
 
         assert "member_number" in str(exc_info.value)
@@ -132,7 +113,7 @@ class TestHouseholdMemberSchemas:
             HouseholdMemberBase(
                 case_id="TEST001",
                 fiscal_year=2023,
-                member_number=18  # Invalid
+                member_number=18,  # Invalid
             )
 
         assert "member_number" in str(exc_info.value)
@@ -144,7 +125,7 @@ class TestHouseholdMemberSchemas:
                 case_id="TEST001",
                 fiscal_year=2023,
                 member_number=1,
-                age=-1  # Invalid
+                age=-1,  # Invalid
             )
 
         assert "age" in str(exc_info.value)
@@ -156,19 +137,14 @@ class TestHouseholdMemberSchemas:
                 case_id="TEST001",
                 fiscal_year=2023,
                 member_number=1,
-                age=121  # Invalid
+                age=121,  # Invalid
             )
 
         assert "age" in str(exc_info.value)
 
     def test_member_create(self):
         """Test HouseholdMemberCreate schema"""
-        member = HouseholdMemberCreate(
-            case_id="TEST001",
-            fiscal_year=2023,
-            member_number=1,
-            age=25
-        )
+        member = HouseholdMemberCreate(case_id="TEST001", fiscal_year=2023, member_number=1, age=25)
 
         assert member.case_id == "TEST001"
         assert member.age == 25
@@ -176,13 +152,7 @@ class TestHouseholdMemberSchemas:
     def test_member_response(self):
         """Test HouseholdMemberResponse with created_at"""
         now = datetime.now()
-        member = HouseholdMemberResponse(
-            case_id="TEST001",
-            fiscal_year=2023,
-            member_number=1,
-            age=35,
-            created_at=now
-        )
+        member = HouseholdMemberResponse(case_id="TEST001", fiscal_year=2023, member_number=1, age=35, created_at=now)
 
         assert member.member_number == 1
         assert member.created_at == now
@@ -199,7 +169,7 @@ class TestQCErrorSchemas:
             error_number=1,
             element_code=520,
             nature_code=75,
-            error_amount=Decimal("100.00")
+            error_amount=Decimal("100.00"),
         )
 
         assert error.case_id == "TEST001"
@@ -209,11 +179,7 @@ class TestQCErrorSchemas:
 
     def test_qc_error_base_optional_fields(self):
         """Test QC error with only required fields"""
-        error = QCErrorBase(
-            case_id="TEST001",
-            fiscal_year=2023,
-            error_number=1
-        )
+        error = QCErrorBase(case_id="TEST001", fiscal_year=2023, error_number=1)
 
         assert error.case_id == "TEST001"
         assert error.error_number == 1
@@ -226,7 +192,7 @@ class TestQCErrorSchemas:
             QCErrorBase(
                 case_id="TEST001",
                 fiscal_year=2023,
-                error_number=0  # Invalid
+                error_number=0,  # Invalid
             )
 
         assert "error_number" in str(exc_info.value)
@@ -237,19 +203,14 @@ class TestQCErrorSchemas:
             QCErrorBase(
                 case_id="TEST001",
                 fiscal_year=2023,
-                error_number=10  # Invalid
+                error_number=10,  # Invalid
             )
 
         assert "error_number" in str(exc_info.value)
 
     def test_qc_error_create(self):
         """Test QCErrorCreate schema"""
-        error = QCErrorCreate(
-            case_id="TEST001",
-            fiscal_year=2023,
-            error_number=1,
-            element_code=520
-        )
+        error = QCErrorCreate(case_id="TEST001", fiscal_year=2023, error_number=1, element_code=520)
 
         assert error.error_number == 1
         assert error.element_code == 520
@@ -257,12 +218,7 @@ class TestQCErrorSchemas:
     def test_qc_error_response(self):
         """Test QCErrorResponse with created_at"""
         now = datetime.now()
-        error = QCErrorResponse(
-            case_id="TEST001",
-            fiscal_year=2023,
-            error_number=1,
-            created_at=now
-        )
+        error = QCErrorResponse(case_id="TEST001", fiscal_year=2023, error_number=1, created_at=now)
 
         assert error.error_number == 1
         assert error.created_at == now
@@ -283,11 +239,7 @@ class TestLoadSchemas:
     def test_load_request_with_all_fields(self):
         """Test LoadRequest with all fields"""
         request = LoadRequest(
-            fiscal_year=2023,
-            filename="data.csv",
-            skip_validation=True,
-            batch_size=500,
-            truncate_existing=True
+            fiscal_year=2023, filename="data.csv", skip_validation=True, batch_size=500, truncate_existing=True
         )
 
         assert request.fiscal_year == 2023
@@ -326,12 +278,7 @@ class TestLoadSchemas:
 
     def test_load_response_valid(self):
         """Test valid LoadResponse"""
-        response = LoadResponse(
-            status="queued",
-            job_id="job-123",
-            message="Load started",
-            fiscal_year=2023
-        )
+        response = LoadResponse(status="queued", job_id="job-123", message="Load started", fiscal_year=2023)
 
         assert response.status == "queued"
         assert response.job_id == "job-123"
@@ -346,7 +293,7 @@ class TestLoadSchemas:
             message="Processing",
             fiscal_year=2023,
             estimated_time_seconds=300,
-            progress_url="/api/v1/status/job-123"
+            progress_url="/api/v1/status/job-123",
         )
 
         assert response.estimated_time_seconds == 300
@@ -371,7 +318,7 @@ class TestSchemaValidation:
             HouseholdMemberBase(
                 case_id="TEST001",
                 fiscal_year="not_a_number",  # Should be int
-                member_number=1
+                member_number=1,
             )
 
         assert "fiscal_year" in str(exc_info.value)
@@ -381,13 +328,14 @@ class TestSchemaValidation:
         household = HouseholdBase(
             case_id="TEST001",
             fiscal_year=2023,
-            snap_benefit="284.50"  # String should convert
+            snap_benefit="284.50",  # String should convert
         )
 
         assert household.snap_benefit == Decimal("284.50")
 
     def test_from_orm_mode(self):
         """Test from_attributes config works"""
+
         # Create a mock ORM object
         class MockORM:
             case_id = "TEST001"
