@@ -99,8 +99,8 @@ SnapAnalyst leverages [**Vanna.AI**](https://vanna.ai/) for intelligent natural 
 ### Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) and Docker Compose
-- An LLM provider:
-  - **Azure OpenAI** endpoint + API key (tested), OR
+- An LLM provider (at least one):
+  - **Azure OpenAI** endpoint + API key (recommended, fully tested), OR
   - **OpenAI** API key, OR
   - **Anthropic** API key, OR
   - **Ollama** installed locally (free, no API key needed)
@@ -112,16 +112,16 @@ SnapAnalyst leverages [**Vanna.AI**](https://vanna.ai/) for intelligent natural 
 git clone https://github.com/stperic/SnapAnalyst.git
 cd SnapAnalyst
 
-# Copy environment template (optional - has sensible defaults)
+# Copy environment template and configure (REQUIRED)
 cp .env.example .env
 
-# Edit .env with your settings if needed:
-# - Set your LLM provider (openai, anthropic, or ollama)
-# - Add your API key if using OpenAI or Anthropic
+# Edit .env with your settings:
+# - Set your LLM provider (openai, anthropic, ollama, or azure_openai)
+# - Add your API key if using OpenAI, Anthropic, or Azure OpenAI
 # - Change SECRET_KEY for production
 ```
 
-**Note**: The `.env` file is optional. Without it, the system defaults to Ollama with standard settings.
+**Important**: The `.env` file is required. The application will not start without it. See `.env.example` for all available options.
 
 ### 2. Start Services
 
@@ -165,11 +165,10 @@ The chat input has a mode selector for switching between query types:
 - **SQL** (default) — Natural language to SQL queries
 - **Insights** — Ask questions with full conversation context
 - **Knowledge** — Query the knowledge base directly
-- **Settings** — Open the Settings sidebar panel
 
 ### Settings Sidebar
 
-Click the **Settings** toolbar button (or select Settings mode) to access all configuration panels:
+Click the **Settings** toolbar button in the header to access all configuration panels:
 
 | Panel | Description |
 |-------|-------------|
@@ -409,7 +408,7 @@ Configuration is managed through a `.env` file in the project root (or environme
 | `LLM_PROVIDER` | LLM provider: `openai`, `anthropic`, `ollama`, `azure_openai` | `ollama` |
 | `OPENAI_API_KEY` | OpenAI API key (if using OpenAI) | - |
 | `ANTHROPIC_API_KEY` | Anthropic API key (if using Anthropic) | - |
-| `OLLAMA_BASE_URL` | Ollama server URL | `http://host.docker.internal:11434` |
+| `OLLAMA_BASE_URL` | Ollama server URL | `http://localhost:11434` (Docker overrides to `host.docker.internal`) |
 | `DATABASE_PASSWORD` | PostgreSQL password | Set in `.env` |
 | `SECRET_KEY` | Application secret key | Change in production! |
 | `API_PORT` | API port mapping | `8000` |
@@ -425,7 +424,7 @@ See `.env.example` for all available options.
 
 ### LLM Provider Setup
 
-**OpenAI (Recommended for best results)**
+**OpenAI**
 ```bash
 # In .env file:
 LLM_PROVIDER=openai
@@ -516,7 +515,7 @@ docker-compose up -d postgres
 ./scripts/download_data.sh
 
 # Start all services
-./start_all.sh
+./utils/start_all.sh
 
 # Or start individually:
 # Terminal 1: API
@@ -529,7 +528,7 @@ chainlit run chainlit_app.py --port 8001
 ### Stop Services
 
 ```bash
-./stop_all.sh
+./utils/stop_all.sh
 ```
 
 ## System Requirements
@@ -603,8 +602,9 @@ SnapAnalyst/
 ├── scripts/              # Utility scripts
 │   ├── download_data.sh       # Data download script
 │   └── docker_init_data.py    # Docker initialization
-├── start_all.sh          # Start local development
-├── stop_all.sh           # Stop local development
+├── utils/
+│   ├── start_all.sh      # Start local development
+│   └── stop_all.sh       # Stop local development
 └── requirements/         # Python dependencies
 ```
 
@@ -636,7 +636,7 @@ No. Ask questions in plain English—the AI generates SQL automatically.
 Yes. All queries are read-only and data stays in your local Docker containers.
 
 **Which LLM provider is best?**
-OpenAI GPT-4 (best quality), Anthropic Claude (excellent), or Ollama (free, local, good).
+Azure OpenAI (tested and recommended), OpenAI GPT-4 (excellent), Anthropic Claude (excellent), or Ollama (free, local, good).
 
 **What does it cost?**
 Docker and Ollama are free. OpenAI/Anthropic: ~$0.01-0.10 per query.
@@ -707,7 +707,7 @@ CREATE TABLE ref_county_codes (
 
 **State-Specific Tables**: Use a state abbreviation prefix (e.g., `md_*`, `ca_*`)
 ```sql
--- The md_* tables shipped with SnapAnalyst are Maryland-specific examples
+-- Example: Maryland-specific analysis tables
 CREATE TABLE md_error_cases (
     fiscal_year INT,
     jurisdiction VARCHAR(100),
