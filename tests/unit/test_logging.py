@@ -11,7 +11,6 @@ from src.core.logging import (
     create_rotating_file_handler,
     get_llm_logger,
     get_logger,
-    setup_api_logging,
     setup_llm_logging,
     setup_logging,
 )
@@ -160,61 +159,6 @@ class TestSetupLogging:
             # Should have called getLogger for noisy libraries
             assert mock_get_logger.call_count >= 10  # Many noisy loggers
 
-
-class TestSetupAPILogging:
-    """Test setup_api_logging function"""
-
-    @patch("logging.getLogger")
-    @patch("src.core.logging.create_rotating_file_handler")
-    def test_setup_api_logging(self, mock_create_handler, mock_get_logger):
-        """Test setting up API logger"""
-        mock_logger = Mock()
-        mock_logger.handlers = []
-        mock_get_logger.return_value = mock_logger
-
-        mock_handler = Mock()
-        mock_create_handler.return_value = mock_handler
-
-        logger = setup_api_logging("./logs/custom_api.log")
-
-        assert logger == mock_logger
-        mock_logger.setLevel.assert_called_once_with(logging.INFO)
-        mock_logger.addHandler.assert_called_once_with(mock_handler)
-        mock_create_handler.assert_called_once_with("./logs/custom_api.log")
-
-    @patch("logging.getLogger")
-    @patch("src.core.logging.create_rotating_file_handler")
-    def test_setup_api_logging_avoids_duplicate_handlers(self, mock_create_handler, mock_get_logger):
-        """Test that setup_api_logging doesn't add duplicate handlers"""
-        from logging.handlers import RotatingFileHandler
-
-        mock_logger = Mock()
-        # Create actual RotatingFileHandler instance for isinstance check
-        mock_existing_handler = Mock(spec=RotatingFileHandler)
-        mock_logger.handlers = [mock_existing_handler]
-        mock_get_logger.return_value = mock_logger
-
-        logger = setup_api_logging()
-
-        # Should not add another handler or call create_rotating_file_handler
-        mock_logger.addHandler.assert_not_called()
-        mock_create_handler.assert_not_called()
-
-    @patch("logging.getLogger")
-    @patch("src.core.logging.create_rotating_file_handler")
-    def test_setup_api_logging_default_path(self, mock_create_handler, mock_get_logger):
-        """Test API logging with default path"""
-        mock_logger = Mock()
-        mock_logger.handlers = []
-        mock_get_logger.return_value = mock_logger
-
-        mock_handler = Mock()
-        mock_create_handler.return_value = mock_handler
-
-        setup_api_logging()
-
-        # Should use default path
-        mock_create_handler.assert_called_once_with("./logs/api.log")
 
 
 class TestSetupLLMLogging:

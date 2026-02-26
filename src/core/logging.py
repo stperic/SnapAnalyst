@@ -122,26 +122,6 @@ def setup_logging(log_level: str | None = None) -> None:
     )
 
 
-def setup_api_logging(log_path: str = "./logs/api.log") -> logging.Logger:
-    """
-    Set up a dedicated logger for API requests with rotation.
-
-    Args:
-        log_path: Path to the API log file
-
-    Returns:
-        Configured logger for API
-    """
-    logger = logging.getLogger("api")
-    logger.setLevel(logging.INFO)
-
-    # Avoid duplicate handlers
-    if not any(isinstance(h, RotatingFileHandler) for h in logger.handlers):
-        handler = create_rotating_file_handler(log_path)
-        logger.addHandler(handler)
-
-    return logger
-
 
 def setup_llm_logging(log_path: str = "./logs/llm.log") -> logging.Logger:
     """
