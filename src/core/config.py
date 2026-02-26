@@ -278,27 +278,8 @@ def get_settings() -> Settings:
     Get cached settings instance.
 
     Uses LRU cache to ensure settings are loaded once and reused.
-    Exits if .env file is missing — LLM provider/API key settings are required.
     """
     import logging
-    import sys
-    from pathlib import Path
-
-    if not Path(".env").exists():
-        print(
-            "\n"
-            "ERROR: .env file not found.\n"
-            "\n"
-            "SnapAnalyst requires a .env file for LLM provider and API key configuration.\n"
-            "Create one from the template:\n"
-            "\n"
-            "    cp .env.example .env\n"
-            "\n"
-            "Then edit .env with your LLM provider settings (API keys, model names, etc.).\n"
-            "See .env.example for all available options.\n",
-            file=sys.stderr,
-        )
-        sys.exit(1)
 
     _settings = Settings()
 
