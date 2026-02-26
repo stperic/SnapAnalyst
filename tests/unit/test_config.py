@@ -218,10 +218,11 @@ class TestEffectiveSettings:
             assert settings.effective_sql_temperature == 0.5
 
     def test_effective_kb_temperature_default(self):
-        """Test effective KB temperature uses default"""
+        """Test effective KB temperature uses llm_kb_temperature when set"""
         with patch.dict("os.environ", {"DATABASE_URL": "postgresql://localhost/test", "SECRET_KEY": "test-key"}):
             settings = Settings()
-            assert settings.effective_kb_temperature == settings.llm_temperature
+            # effective_kb_temperature should return llm_kb_temperature (field default or .env)
+            assert settings.effective_kb_temperature == settings.llm_kb_temperature
 
     def test_effective_kb_temperature_custom(self):
         """Test effective KB temperature uses custom value"""
