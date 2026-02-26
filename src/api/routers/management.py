@@ -85,7 +85,7 @@ async def reset_database(request: ResetRequest):
         _, table_names, model_classes = _get_dataset_models()
         session = SessionLocal()
 
-        deleted = {name: 0 for name in table_names}
+        deleted = dict.fromkeys(table_names, 0)
 
         try:
             # The first table is the parent (cascade deletes children)

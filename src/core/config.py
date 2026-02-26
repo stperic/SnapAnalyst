@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     api_workers: int = 1
 
     # Database Configuration
-    database_url: PostgresDsn
+    database_url: PostgresDsn = "postgresql://snapanalyst:snapanalyst_dev_password@localhost:5432/snapanalyst_db"
     database_pool_size: int = 5
     database_max_overflow: int = 10
     database_pool_timeout: int = 30
@@ -52,7 +52,7 @@ class Settings(BaseSettings):
     etl_validation_strict: bool = True
 
     # Security
-    secret_key: str
+    secret_key: str = "change-this-to-a-secure-random-string"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
 

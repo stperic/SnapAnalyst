@@ -30,8 +30,8 @@ services:
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-snapanalyst_dev_password}
       POSTGRES_DB: snapanalyst_db
       POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --no-instructions"
-    # Reduce PostgreSQL log verbosity (suppress checkpoint/shutdown details)
-    command: ["postgres", "-c", "log_min_messages=warning", "-c", "log_checkpoints=off"]
+    # Reduce PostgreSQL log verbosity (suppress routine startup/checkpoint details)
+    command: ["postgres", "-c", "log_min_messages=error", "-c", "log_checkpoints=off", "-c", "log_connections=off", "-c", "log_disconnections=off"]
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -181,7 +181,7 @@ services:
       # Chainlit settings
       CHAINLIT_HOST: 0.0.0.0
       CHAINLIT_PORT: 8001
-      CHAINLIT_AUTH_SECRET: ${CHAINLIT_AUTH_SECRET}
+      CHAINLIT_AUTH_SECRET: ${CHAINLIT_AUTH_SECRET:-snapanalyst-default-auth-secret-change-in-production}
       
       # Suppress verbose logging
       CHAINLIT_DEBUG: "false"

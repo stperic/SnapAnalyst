@@ -23,23 +23,23 @@ import warnings
 
 warnings.filterwarnings("ignore", message="urllib3.*doesn't match a supported version")
 
-import logging as _logging
+import logging as _logging  # noqa: E402
 
 # Suppress config warnings until proper logging is set up
 _logging.getLogger("src.core.config").setLevel(_logging.ERROR)
 
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, Request  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
-from src.core.config import settings
-from src.core.logging import get_logger, setup_logging
+from src.core.config import settings  # noqa: E402
+from src.core.logging import get_logger, setup_logging  # noqa: E402
 
 # Initialize logging (restores src.core.config to inherited level)
 setup_logging()
 _logging.getLogger("src.core.config").setLevel(_logging.WARNING)
 logger = get_logger(__name__)
 
-from src.database.engine import init_db
+from src.database.engine import init_db  # noqa: E402
 
 
 @asynccontextmanager
