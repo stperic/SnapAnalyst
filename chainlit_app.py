@@ -208,12 +208,10 @@ async def auth_callback(email: str, password: str) -> cl.User | None:
 
     if user is None:
         # First login = Registration
-        # Return user object - Chainlit will create the user in DB
-        # Save password hash after Chainlit creates the user record.
+        # Return user object only if we successfully persist the password hash.
         # We retry briefly since the user row is created asynchronously by Chainlit.
-        # IMPORTANT: We await this to ensure the password is saved before returning.
-        # A fire-and-forget approach risks the password never being saved, which would
-        # allow any password on subsequent login via the legacy-user path.
+        # IMPORTANT: If we cannot save the password hash, we MUST fail authentication
+        # and avoid creating an account without a password.
         saved = False
         for _ in range(10):
             await asyncio.sleep(0.3)
@@ -221,30 +219,33 @@ async def auth_callback(email: str, password: str) -> cl.User | None:
                 saved = True
                 break
         if not saved:
-            logging.getLogger(__name__).error(f"Failed to save password hash for new user: {email}")
+            logging.getLogger(__name__).error(
+                "Failed to save password hash for new user %s after multiple attempts; "
+                "blocking registration to avoid creating an account without a password.",
+                email,
+            )
+            # Explicitly fail authentication so Chainlit does NOT create a user row
+            # without a password hash.
+            return None
 
+        # Password hash saved successfully; safe to create the Chainlit user record.
         return cl.User(identifier=email, metadata={"role": "user", "provider": "credentials", "is_new": True})
 
     # Existing user - validate password
     stored_hash = user.get("password_hash")
 
     if stored_hash is None:
-        # Legacy user without password — check if this user was just created (within last 30s)
-        # and the password save may have failed. For safety, only allow password set
-        # for users created by Chainlit's data layer (no password_hash column yet).
-        # Log a warning so admins can investigate.
-        logging.getLogger(__name__).warning(
-            f"User {email} has no password hash — setting password on first post-migration login"
+        # SECURITY: Never accept a login for a user without a password hash.
+        # This can happen if a previous registration failed to persist the hash
+        # or from legacy rows created before password support. In both cases we
+        # must block authentication and require an explicit password reset/admin fix,
+        # rather than silently accepting any password and setting it as the hash.
+        logging.getLogger(__name__).error(
+            "User %s has no password hash; rejecting login to avoid insecure password bootstrap. "
+            "An administrator must reset or delete this account.",
+            email,
         )
-        try:
-            pool = await _get_auth_pool()
-            async with pool.acquire() as conn:
-                password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-                await conn.execute("UPDATE users SET password_hash = $1 WHERE identifier = $2", password_hash, email)
-            return cl.User(identifier=email, metadata={"role": "user", "provider": "credentials"})
-        except Exception as e:
-            logging.getLogger(__name__).error(f"Error updating legacy user: {e}")
-            return None
+        return None
 
     # Validate password
     try:

@@ -46,6 +46,13 @@ sys.path.insert(0, "/app")
 DATA_DIR = Path(os.environ.get("SNAPDATA_PATH", "/data"))
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
+if not DATABASE_URL:
+    print(
+        "[init] ERROR: DATABASE_URL environment variable is required for the data initialization script.\n"
+        "        Please set DATABASE_URL in your environment or .env file before running docker_init_data.py."
+    )
+    sys.exit(1)
+
 
 def load_data_files_config() -> dict[int, dict[str, str]]:
     """Load data file URLs from config.yaml and derive zip/csv patterns."""
